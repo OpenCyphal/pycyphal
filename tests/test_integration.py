@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 
-import pycyphal
-from pycyphal._node import compute_subject_id, EVICTIONS_PINNED_MIN
+import pycyphal2
+from pycyphal2._node import compute_subject_id, EVICTIONS_PINNED_MIN
 from tests.mock_transport import MockTransport, MockNetwork
 from tests.typing_helpers import new_node
 
@@ -21,7 +21,7 @@ async def test_two_nodes_pubsub():
     pub = node_a.advertise("shared/topic")
     sub = node_b.subscribe("shared/topic")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"hello_from_a")
+    await pub(pycyphal2.Instant.now() + 1.0, b"hello_from_a")
     await asyncio.sleep(0.01)
 
     # The message should arrive at node B.
@@ -126,7 +126,7 @@ async def test_subscriber_liveness_timeout():
     sub = node.subscribe("/topic")
     sub.timeout = 0.05  # 50ms
 
-    with pytest.raises(pycyphal.LivenessError):
+    with pytest.raises(pycyphal2.LivenessError):
         await sub.__anext__()
 
     sub.close()

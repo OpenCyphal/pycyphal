@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pycyphal"
+name = "pycyphal2"
 dynamic = ["version"]
 requires-python = ">=3.11"
 dependencies = []  # The core must be dependency-free by design. Transports may add dependencies.
@@ -47,7 +47,7 @@ Homepage = "https://opencyphal.org"
 Repository = "https://github.com/OpenCyphal/pycyphal"
 
 [tool.setuptools.dynamic]
-version = { attr = "pycyphal.__version__" }
+version = { attr = "pycyphal2.__version__" }
 
 [project.optional-dependencies]
 udp = ["ifaddr~=0.2.0"]
@@ -56,7 +56,7 @@ udp = ["ifaddr~=0.2.0"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-pycyphal = ["py.typed"]
+pycyphal2 = ["py.typed"]
 
 [tool.mypy]
 strict = true
@@ -71,7 +71,7 @@ check_untyped_defs = true
 
 [tool.coverage.run]
 branch = true
-source_pkgs = ["pycyphal"]
+source_pkgs = ["pycyphal2"]
 
 [tool.coverage.report]
 show_missing = true

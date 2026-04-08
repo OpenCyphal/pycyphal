@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import time
 
-import pycyphal
-from pycyphal._node import (
+import pycyphal2
+from pycyphal2._node import (
     compute_subject_id,
 )
-from pycyphal._header import GossipHeader, MsgRelHeader
-from pycyphal._transport import TransportArrival
+from pycyphal2._header import GossipHeader, MsgRelHeader
+from pycyphal2._transport import TransportArrival
 from tests.mock_transport import MockTransport, MockNetwork
 from tests.typing_helpers import expect_arrival, expect_mock_writer, new_node, subscribe_impl
 
@@ -139,7 +139,7 @@ async def test_gossip_implicit_topic_creation():
 
     # Send a gossip for a topic matching the pattern.
     topic_name = "sensor/temp"
-    from pycyphal._hash import rapidhash
+    from pycyphal2._hash import rapidhash
 
     topic_hash = rapidhash(topic_name)
 
@@ -151,8 +151,8 @@ async def test_gossip_implicit_topic_creation():
     )
     gossip_data = gossip_hdr.serialize() + topic_name.encode("utf-8")
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=99,
         message=gossip_data,
     )
@@ -176,7 +176,7 @@ async def test_implicit_topic_creation_sets_up_gossip_shard_listener():
     sub = node.subscribe("/sensor/>")
 
     topic_name = "sensor/temp"
-    from pycyphal._hash import rapidhash
+    from pycyphal2._hash import rapidhash
 
     topic_hash = rapidhash(topic_name)
     gossip_hdr = GossipHeader(
@@ -186,8 +186,8 @@ async def test_implicit_topic_creation_sets_up_gossip_shard_listener():
         name_len=len(topic_name),
     )
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=99,
         message=gossip_hdr.serialize() + topic_name.encode("utf-8"),
     )
@@ -211,7 +211,7 @@ async def test_gossip_implicit_topic_creation_couples_all_matching_pattern_roots
     await asyncio.sleep(0)
 
     topic_name = "sensor/temp"
-    from pycyphal._hash import rapidhash
+    from pycyphal2._hash import rapidhash
 
     topic_hash = rapidhash(topic_name)
     gossip_hdr = GossipHeader(
@@ -221,8 +221,8 @@ async def test_gossip_implicit_topic_creation_couples_all_matching_pattern_roots
         name_len=len(topic_name),
     )
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=99,
         message=gossip_hdr.serialize() + topic_name.encode("utf-8"),
     )
@@ -235,11 +235,11 @@ async def test_gossip_implicit_topic_creation_couples_all_matching_pattern_roots
     tr.unicast_log.clear()
     node.on_unicast_arrival(
         TransportArrival(
-            timestamp=pycyphal.Instant.now(),
-            priority=pycyphal.Priority.NOMINAL,
+            timestamp=pycyphal2.Instant.now(),
+            priority=pycyphal2.Priority.NOMINAL,
             remote_id=99,
             message=MsgRelHeader(
-                topic_log_age=topic.lage(pycyphal.Instant.now().s),
+                topic_log_age=topic.lage(pycyphal2.Instant.now().s),
                 topic_evictions=topic.evictions,
                 topic_hash=topic.hash,
                 tag=topic.next_tag(),
@@ -298,8 +298,8 @@ async def test_gossip_known_same_evictions_suppress():
     )
     gossip_data = gossip_hdr.serialize() + topic.name.encode("utf-8")
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=99,
         message=gossip_data,
     )
@@ -333,8 +333,8 @@ async def test_gossip_known_divergence_we_win():
     )
     gossip_data = gossip_hdr.serialize()
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=99,
         message=gossip_data,
     )
@@ -360,8 +360,8 @@ async def test_gossip_unknown_no_collision():
     )
     gossip_data = gossip_hdr.serialize()
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=99,
         message=gossip_data,
     )
@@ -383,7 +383,7 @@ async def test_topic_collision_during_allocate():
     sid_a = topic_a.subject_id
 
     # Find a name that collides with topic_a's subject-ID.
-    from pycyphal._hash import rapidhash
+    from pycyphal2._hash import rapidhash
 
     modulus = tr.subject_id_modulus
     for suffix in range(10000):
@@ -410,20 +410,20 @@ async def test_rsp_ack_sent_for_reliable_response():
     pub = node.advertise("/rpc")
 
     topic = list(node.topics_by_name.values())[0]
-    from pycyphal._publisher import ResponseStreamImpl
+    from pycyphal2._publisher import ResponseStreamImpl
 
     msg_tag = 555
     stream = ResponseStreamImpl(node=node, topic=topic, message_tag=msg_tag, response_timeout=5.0)
     topic.request_futures[msg_tag] = stream
 
     # Send RSP_REL (reliable response).
-    from pycyphal._header import RspRelHeader
+    from pycyphal2._header import RspRelHeader
 
     rsp_hdr = RspRelHeader(tag=0xFF, seqno=0, topic_hash=topic.hash, message_tag=msg_tag)
     rsp_data = rsp_hdr.serialize() + b"reliable_rsp"
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=rsp_data,
     )

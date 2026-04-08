@@ -1,4 +1,4 @@
-"""Comprehensive tests for pycyphal.udp -- Cyphal/UDP transport."""
+"""Comprehensive tests for pycyphal2.udp -- Cyphal/UDP transport."""
 
 from __future__ import annotations
 
@@ -10,21 +10,21 @@ from unittest.mock import patch
 
 import pytest
 
-from pycyphal import (
+from pycyphal2 import (
     eui64,
     Instant,
     Priority,
     SendError,
     TransportArrival,
 )
-from pycyphal._hash import (
+from pycyphal2._hash import (
     CRC32C_INITIAL,
     CRC32C_OUTPUT_XOR,
     CRC32C_RESIDUE,
     crc32c_add,
     crc32c_full,
 )
-from pycyphal.udp import (
+from pycyphal2.udp import (
     HEADER_SIZE,
     HEADER_VERSION,
     IPv4_MCAST_PREFIX,

@@ -14,23 +14,23 @@ import logging
 import time
 from pathlib import Path
 
-import pycyphal
-import pycyphal.udp
+import pycyphal2
+import pycyphal2.udp
 
 PUBLISH_TIMEOUT = 10.0
 HOME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random ID will be added.
 
 
 async def run(topic: str, reliable: bool, count: int) -> None:
-    transport = pycyphal.udp.new()
-    node = pycyphal.new(transport, home=HOME)
+    transport = pycyphal2.udp.new()
+    node = pycyphal2.new(transport, home=HOME)
     pub = node.advertise(topic)
     logging.info("Publishing on %r via %s (reliable=%s)", topic, transport, reliable)
     try:
         published = 0
         while count == 0 or published < count:
             payload = json.dumps({"t": round(time.time(), 6)}).encode()
-            deadline = pycyphal.Instant.now() + PUBLISH_TIMEOUT
+            deadline = pycyphal2.Instant.now() + PUBLISH_TIMEOUT
             await pub(deadline, payload, reliable=reliable)
             published += 1
             logging.debug("Published #%d: %s", published, payload.decode())

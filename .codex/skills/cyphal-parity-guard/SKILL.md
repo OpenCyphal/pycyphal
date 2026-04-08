@@ -1,13 +1,13 @@
 ---
 name: cyphal-parity-guard
-description: Keep the Python Cyphal rewrite in wire-visible behavioral parity with the C reference at `reference/cy`. Use when auditing/reviewing parity drift, identifying wire/state-machine discrepancies, updating `src/pycyphal/` to match reference behavior, replacing conflicting Python tests with C-parity expectations, and adding regression tests for every discovered divergence. API-level discrepancies are by design and are to be ignored; this skill focuses on wire-visible and state-machine behavior only.
+description: Keep the Python Cyphal rewrite in wire-visible behavioral parity with the C reference at `reference/cy`. Use when auditing/reviewing parity drift, identifying wire/state-machine discrepancies, updating `src/pycyphal2/` to match reference behavior, replacing conflicting Python tests with C-parity expectations, and adding regression tests for every discovered divergence. API-level discrepancies are by design and are to be ignored; this skill focuses on wire-visible and state-machine behavior only.
 ---
 
 # Cyphal Parity Guard
 
 ## Overview
 
-Run a deterministic parity workflow for `pycyphal` against `reference/cy` in two modes:
+Run a deterministic parity workflow for `pycyphal2` against `reference/cy` in two modes:
 - `sync` mode: identify divergences, patch Python implementation, and add/adjust regression tests.
 - `review` mode: report parity findings only, no edits.
 
@@ -30,7 +30,7 @@ Use this precedence:
 1. `reference/cy/cy/cy.h` for constants/API semantics.
 2. `reference/cy/cy/cy.c` for wire-visible and state-machine behavior.
 3. `reference/cy/model/` when C code intent is ambiguous.
-4. `src/pycyphal/` and existing tests as implementation artifacts, not normative authority.
+4. `src/pycyphal2/` and existing tests as implementation artifacts, not normative authority.
 
 ## Workflow
 
@@ -40,7 +40,7 @@ Use this precedence:
 - Load `references/parity-checklist.md` and use it as the audit checklist.
 
 2. Build a discrepancy matrix.
-- Compare `reference/cy` behavior with `src/pycyphal/_node.py`, `_wire.py`, and related modules.
+- Compare `reference/cy` behavior with `src/pycyphal2/_node.py`, `_wire.py`, and related modules.
 - Ignore differences that are not visible on the wire or in state machines (e.g., differences in API design, error handling style, etc).
 - Keep in mind that error handling differs significantly between C and Python; therefore, certain error-path-related
   discrepancies may be expected and should be noted as such in the matrix (e.g., where C would clamp invalid
@@ -58,7 +58,7 @@ Use this precedence:
   - Include exact file/line anchors and missing regression tests.
   - Do not edit code.
 - In `sync` mode:
-  - Implement fixes in `src/pycyphal/`.
+  - Implement fixes in `src/pycyphal2/`.
   - Update/remove conflicting test expectations when they contradict `cy.c`.
   - Add at least one regression test per divergence under `tests/`.
 

@@ -1,6 +1,6 @@
 # Parity Checklist
 
-Use this file to drive fast, repeatable parity analysis between `reference/cy` and `src/pycyphal/`.
+Use this file to drive fast, repeatable parity analysis between `reference/cy` and `src/pycyphal2/`.
 
 ## High-Risk Areas
 
@@ -19,7 +19,7 @@ Use one row per confirmed divergence.
 
 | ID | Area | C Anchor | Python Anchor | Divergence | Severity | Fix Plan / Action | Regression Test |
 |---|---|---|---|---|---|---|---|
-| P-001 | ACK acceptance | `reference/cy/cy/cy.c:4448` | `src/pycyphal/_node.py:...` | Describe exact behavioral mismatch | High | Adjust ACK acceptance rules and slack handling | `tests/test_pubsub.py::...` |
+| P-001 | ACK acceptance | `reference/cy/cy/cy.c:4448` | `src/pycyphal2/_node.py:...` | Describe exact behavioral mismatch | High | Adjust ACK acceptance rules and slack handling | `tests/test_pubsub.py::...` |
 
 ## Review Quality Bar
 

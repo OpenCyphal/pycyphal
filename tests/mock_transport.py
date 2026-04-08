@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from collections.abc import Callable
 
-from pycyphal import Closable, Instant, Priority, SubjectWriter, Transport, TransportArrival
+from pycyphal2 import Closable, Instant, Priority, SubjectWriter, Transport, TransportArrival
 
 # A small prime modulus suitable for testing.
 DEFAULT_MODULUS = 122743

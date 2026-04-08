@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import asyncio
 
-import pycyphal
-from pycyphal._node import REORDERING_CAPACITY, SESSION_LIFETIME
-from pycyphal._subscriber import BreadcrumbImpl, SubscriberImpl
+import pycyphal2
+from pycyphal2._node import REORDERING_CAPACITY, SESSION_LIFETIME
+from pycyphal2._subscriber import BreadcrumbImpl, SubscriberImpl
 from tests.mock_transport import MockTransport, MockNetwork
 from tests.typing_helpers import expect_arrival, new_node, subscribe_impl
 
 ORDERED_WINDOW = 0.05
 
 
-def _make_arrival(ts_offset: float, breadcrumb: BreadcrumbImpl, payload: bytes = b"") -> pycyphal.Arrival:
-    return pycyphal.Arrival(
-        timestamp=pycyphal.Instant.now() + ts_offset,
+def _make_arrival(ts_offset: float, breadcrumb: BreadcrumbImpl, payload: bytes = b"") -> pycyphal2.Arrival:
+    return pycyphal2.Arrival(
+        timestamp=pycyphal2.Instant.now() + ts_offset,
         breadcrumb=breadcrumb,
         message=payload,
     )
@@ -43,7 +43,9 @@ async def test_reorder_in_order():
     sub = subscribe_impl(node, "test/topic", reordering_window=ORDERED_WINDOW)
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     base_tag = 1000
     for i in range(5):
@@ -69,7 +71,9 @@ async def test_reorder_out_of_order():
     sub = subscribe_impl(node, "test/topic", reordering_window=ORDERED_WINDOW)
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     base_tag = 1000
     await _bootstrap_ordered(sub, bc, base_tag, 99, b"first")
@@ -93,7 +97,9 @@ async def test_reorder_late_message_dropped():
     sub = subscribe_impl(node, "test/topic", reordering_window=ORDERED_WINDOW)
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     base_tag = 1000
     await _bootstrap_ordered(sub, bc, base_tag, 99, b"m0")
@@ -115,7 +121,9 @@ async def test_reorder_timeout_ejects():
     sub = subscribe_impl(node, "test/topic", reordering_window=ORDERED_WINDOW)
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     base_tag = 1000
     sub.deliver(_make_arrival(0.0, bc, b"m0"), base_tag, 99)
@@ -135,7 +143,9 @@ async def test_reorder_capacity_overflow():
     sub = subscribe_impl(node, "test/topic", reordering_window=ORDERED_WINDOW)
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     base_tag = 1000
     await _bootstrap_ordered(sub, bc, base_tag, 99, b"m0")
@@ -167,7 +177,9 @@ async def test_reorder_gap_closure():
     sub = subscribe_impl(node, "test/topic", reordering_window=ORDERED_WINDOW)
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     base_tag = 1000
     await _bootstrap_ordered(sub, bc, base_tag, 99, b"m0")
@@ -196,7 +208,9 @@ async def test_reorder_no_reordering():
     sub = subscribe_impl(node, "test/topic")  # No reordering window.
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     # Deliver out-of-order.
     sub.deliver(_make_arrival(0.0, bc, b"m2"), 1002, 99)
@@ -222,10 +236,10 @@ async def test_reorder_multiple_remotes():
 
     topic = list(node.topics_by_name.values())[0]
     bc1 = BreadcrumbImpl(
-        node=node, remote_id=10, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL
+        node=node, remote_id=10, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
     )
     bc2 = BreadcrumbImpl(
-        node=node, remote_id=20, topic=topic, message_tag=2, initial_priority=pycyphal.Priority.NOMINAL
+        node=node, remote_id=20, topic=topic, message_tag=2, initial_priority=pycyphal2.Priority.NOMINAL
     )
 
     await _bootstrap_ordered(sub, bc1, 100, 10, b"r10-m0")
@@ -255,7 +269,9 @@ async def test_reorder_state_expires_after_session_lifetime():
     sub = subscribe_impl(node, "test/topic", reordering_window=ORDERED_WINDOW)
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     base_tag = 1000
     await _bootstrap_ordered(sub, bc, base_tag, 99, b"first")

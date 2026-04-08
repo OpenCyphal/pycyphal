@@ -13,6 +13,9 @@ The new version offers a significantly simplified API (the total surface is abou
 and supports Cyphal v1.1, which adds decentralized named topics, tunable reliability, and service discovery
 on top of Cyphal v1.0.
 
+Due to the significant changes, the new version is published under a different name ``pycyphal2`` to allow coexistence
+with v1 in the same Python environment.
+
 Changelog v1
 ============
 

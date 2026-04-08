@@ -1,5 +1,5 @@
 import struct
-from pycyphal._header import *
+from pycyphal2._header import *
 
 # =====================================================================================================================
 # MsgBeHeader (TYPE=0) and MsgRelHeader (TYPE=1)

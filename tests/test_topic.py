@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import time
 
-from pycyphal import SUBJECT_ID_PINNED_MAX
-from pycyphal._node import left_wins
-from pycyphal._hash import rapidhash
-from pycyphal._node import (
+from pycyphal2 import SUBJECT_ID_PINNED_MAX
+from pycyphal2._node import left_wins
+from pycyphal2._hash import rapidhash
+from pycyphal2._node import (
     EVICTIONS_PINNED_MIN,
     GossipScope,
     compute_subject_id,

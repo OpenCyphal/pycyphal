@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
-import pycyphal
-from pycyphal import LivenessError, SendError
-from pycyphal._node import resolve_name
+import pycyphal2
+from pycyphal2 import LivenessError, SendError
+from pycyphal2._node import resolve_name
 from tests.mock_transport import MockTransport, MockNetwork
 from tests.typing_helpers import new_node
 
@@ -26,7 +26,7 @@ async def test_basic_best_effort_pubsub():
     pub = node.advertise("my/topic")
     sub = node.subscribe("my/topic")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"hello")
+    await pub(pycyphal2.Instant.now() + 1.0, b"hello")
     arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
     assert arrival.message == b"hello"
 
@@ -45,7 +45,7 @@ async def test_publish_multiple_messages():
     sub = node.subscribe("my/topic")
 
     for i in range(5):
-        await pub(pycyphal.Instant.now() + 1.0, f"msg{i}".encode())
+        await pub(pycyphal2.Instant.now() + 1.0, f"msg{i}".encode())
 
     for i in range(5):
         arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
@@ -65,7 +65,7 @@ async def test_publish_empty_message():
     pub = node.advertise("my/topic")
     sub = node.subscribe("my/topic")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"")
+    await pub(pycyphal2.Instant.now() + 1.0, b"")
     arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
     assert arrival.message == b""
 
@@ -83,7 +83,7 @@ async def test_arrival_has_breadcrumb():
     pub = node.advertise("my/topic")
     sub = node.subscribe("my/topic")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"data")
+    await pub(pycyphal2.Instant.now() + 1.0, b"data")
     arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
     assert arrival.breadcrumb is not None
     assert arrival.breadcrumb.remote_id == 1  # sender's node_id
@@ -110,7 +110,7 @@ async def test_multiple_subscribers_same_topic():
     sub1 = node.subscribe("shared/topic")
     sub2 = node.subscribe("shared/topic")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"broadcast")
+    await pub(pycyphal2.Instant.now() + 1.0, b"broadcast")
 
     arr1 = await asyncio.wait_for(sub1.__anext__(), timeout=1.0)
     arr2 = await asyncio.wait_for(sub2.__anext__(), timeout=1.0)
@@ -133,8 +133,8 @@ async def test_multiple_subscribers_independent_queues():
     sub1 = node.subscribe("shared/topic")
     sub2 = node.subscribe("shared/topic")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"msg1")
-    await pub(pycyphal.Instant.now() + 1.0, b"msg2")
+    await pub(pycyphal2.Instant.now() + 1.0, b"msg1")
+    await pub(pycyphal2.Instant.now() + 1.0, b"msg2")
 
     # Consume from sub1 only.
     arr1a = await asyncio.wait_for(sub1.__anext__(), timeout=1.0)
@@ -169,7 +169,7 @@ async def test_pattern_subscriber_star():
     pub = node.advertise("~/sensor/data")
     sub = node.subscribe("test_node/*/data")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"reading")
+    await pub(pycyphal2.Instant.now() + 1.0, b"reading")
     arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
     assert arrival.message == b"reading"
 
@@ -188,7 +188,7 @@ async def test_pattern_subscriber_chevron():
     pub = node.advertise("~/deep/nested/topic")
     sub = node.subscribe("test_node/>")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"deep_msg")
+    await pub(pycyphal2.Instant.now() + 1.0, b"deep_msg")
     arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
     assert arrival.message == b"deep_msg"
 
@@ -206,7 +206,7 @@ async def test_pattern_subscriber_no_match():
     sub = node.subscribe("other_prefix/*/data")
     pub = node.advertise("~/sensor/data")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"no_match")
+    await pub(pycyphal2.Instant.now() + 1.0, b"no_match")
 
     # The subscriber should not receive anything.
     with pytest.raises(asyncio.TimeoutError):
@@ -304,7 +304,7 @@ async def test_subscriber_timeout_resets_on_message():
     sub.timeout = 0.5
 
     # Send a message and receive it before timeout.
-    await pub(pycyphal.Instant.now() + 1.0, b"ok")
+    await pub(pycyphal2.Instant.now() + 1.0, b"ok")
     arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
     assert arrival.message == b"ok"
 
@@ -365,7 +365,7 @@ async def test_publisher_closed_rejects_publish():
     pub.close()
 
     with pytest.raises(SendError):
-        await pub(pycyphal.Instant.now() + 1.0, b"fail")
+        await pub(pycyphal2.Instant.now() + 1.0, b"fail")
 
     node.close()
 
@@ -493,7 +493,7 @@ async def test_two_node_pubsub():
     pub = node1.advertise("shared/topic")
     sub = node2.subscribe("shared/topic")
 
-    await pub(pycyphal.Instant.now() + 1.0, b"cross_node")
+    await pub(pycyphal2.Instant.now() + 1.0, b"cross_node")
     arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
     assert arrival.message == b"cross_node"
     assert arrival.breadcrumb.remote_id == 1
@@ -516,10 +516,10 @@ async def test_publisher_priority():
     node = new_node(tr, home="test_node")
 
     pub = node.advertise("my/topic")
-    assert pub.priority == pycyphal.Priority.NOMINAL
+    assert pub.priority == pycyphal2.Priority.NOMINAL
 
-    pub.priority = pycyphal.Priority.HIGH
-    assert pub.priority == pycyphal.Priority.HIGH
+    pub.priority = pycyphal2.Priority.HIGH
+    assert pub.priority == pycyphal2.Priority.HIGH
 
     pub.close()
     node.close()
@@ -533,12 +533,12 @@ async def test_publisher_ack_timeout():
 
     pub = node.advertise("my/topic")
     default_timeout = pub.ack_timeout
-    assert default_timeout == pytest.approx(0.016 * (1 << int(pycyphal.Priority.NOMINAL)))
+    assert default_timeout == pytest.approx(0.016 * (1 << int(pycyphal2.Priority.NOMINAL)))
 
     pub.ack_timeout = 2.0
     assert pub.ack_timeout == pytest.approx(2.0)
 
-    pub.priority = pycyphal.Priority.HIGH
+    pub.priority = pycyphal2.Priority.HIGH
     assert pub.ack_timeout == pytest.approx(1.0)
 
     pub.close()

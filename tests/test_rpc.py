@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 
-import pycyphal
-from pycyphal._publisher import ResponseStreamImpl
-from pycyphal._subscriber import BreadcrumbImpl
-from pycyphal._header import RspBeHeader, RspRelHeader, HEADER_SIZE
-from pycyphal._transport import TransportArrival
+import pycyphal2
+from pycyphal2._publisher import ResponseStreamImpl
+from pycyphal2._subscriber import BreadcrumbImpl
+from pycyphal2._header import RspBeHeader, RspRelHeader, HEADER_SIZE
+from pycyphal2._transport import TransportArrival
 from tests.mock_transport import MockTransport, MockNetwork
 from tests.typing_helpers import new_node
 
@@ -26,14 +26,14 @@ async def test_breadcrumb_best_effort_response():
         remote_id=42,
         topic=topic,
         message_tag=12345,
-        initial_priority=pycyphal.Priority.NOMINAL,
+        initial_priority=pycyphal2.Priority.NOMINAL,
     )
 
     assert bc.remote_id == 42
     assert bc.topic is topic
     assert bc.tag == 12345
 
-    deadline = pycyphal.Instant.now() + 1.0
+    deadline = pycyphal2.Instant.now() + 1.0
     await bc(deadline, b"response_data")
 
     # Unicast should have been sent.
@@ -62,10 +62,10 @@ async def test_breadcrumb_seqno_increments():
         remote_id=42,
         topic=topic,
         message_tag=100,
-        initial_priority=pycyphal.Priority.NOMINAL,
+        initial_priority=pycyphal2.Priority.NOMINAL,
     )
 
-    deadline = pycyphal.Instant.now() + 1.0
+    deadline = pycyphal2.Instant.now() + 1.0
     await bc(deadline, b"r0")
     await bc(deadline, b"r1")
     await bc(deadline, b"r2")
@@ -95,10 +95,10 @@ async def test_breadcrumb_shared_across_subscribers():
         remote_id=42,
         topic=topic,
         message_tag=200,
-        initial_priority=pycyphal.Priority.NOMINAL,
+        initial_priority=pycyphal2.Priority.NOMINAL,
     )
 
-    deadline = pycyphal.Instant.now() + 1.0
+    deadline = pycyphal2.Instant.now() + 1.0
     # "Subscriber A" responds.
     await bc(deadline, b"from_A")
     # "Subscriber B" responds.
@@ -140,8 +140,8 @@ async def test_response_stream_receives_responses():
     rsp_hdr = RspBeHeader(tag=0xFF, seqno=0, topic_hash=topic.hash, message_tag=message_tag)
     rsp_data = rsp_hdr.serialize() + b"response_payload"
     rsp_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=rsp_data,
     )
@@ -177,8 +177,8 @@ async def test_response_stream_dedup():
 
     rsp_hdr = RspBeHeader(tag=0xFF, seqno=0, topic_hash=topic.hash, message_tag=message_tag)
     rsp_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=rsp_hdr.serialize() + b"data",
     )
@@ -217,8 +217,8 @@ async def test_response_stream_reliable_dedup():
 
     rsp_hdr = RspRelHeader(tag=0xAA, seqno=0, topic_hash=topic.hash, message_tag=message_tag)
     rsp_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=rsp_hdr.serialize() + b"data",
     )
@@ -253,8 +253,8 @@ async def test_response_stream_multiple_remotes():
     for remote_id in (10, 20):
         rsp_hdr = RspBeHeader(tag=0xFF, seqno=0, topic_hash=topic.hash, message_tag=message_tag)
         rsp_arrival = TransportArrival(
-            timestamp=pycyphal.Instant.now(),
-            priority=pycyphal.Priority.NOMINAL,
+            timestamp=pycyphal2.Instant.now(),
+            priority=pycyphal2.Priority.NOMINAL,
             remote_id=remote_id,
             message=rsp_hdr.serialize() + b"data",
         )
@@ -286,7 +286,7 @@ async def test_response_stream_timeout():
 
     import pytest
 
-    with pytest.raises(pycyphal.LivenessError):
+    with pytest.raises(pycyphal2.LivenessError):
         await stream.__anext__()
 
     stream.close()

@@ -1,11 +1,11 @@
-"""Tests for name resolution and pattern matching in pycyphal._node."""
+"""Tests for name resolution and pattern matching in pycyphal2._node."""
 
 from __future__ import annotations
 
 import pytest
 
-from pycyphal import SUBJECT_ID_PINNED_MAX
-from pycyphal._node import (
+from pycyphal2 import SUBJECT_ID_PINNED_MAX
+from pycyphal2._node import (
     TOPIC_NAME_MAX,
     _name_consume_pin_suffix,
     _name_normalize,

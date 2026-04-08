@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import assert_type
 
-import pycyphal
-from pycyphal._node import NodeImpl, TopicImpl
-from pycyphal._publisher import PublisherImpl, ResponseStreamImpl
-from pycyphal._subscriber import SubscriberImpl
+import pycyphal2
+from pycyphal2._node import NodeImpl, TopicImpl
+from pycyphal2._publisher import PublisherImpl, ResponseStreamImpl
+from pycyphal2._subscriber import SubscriberImpl
 from tests.mock_transport import MockSubjectWriter
 
 
-def new_node(transport: pycyphal.Transport, *, home: str = "", namespace: str = "") -> NodeImpl:
-    node = pycyphal.new(transport, home=home, namespace=namespace)
+def new_node(transport: pycyphal2.Transport, *, home: str = "", namespace: str = "") -> NodeImpl:
+    node = pycyphal2.new(transport, home=home, namespace=namespace)
     assert isinstance(node, NodeImpl)
     return node
 
@@ -36,8 +36,8 @@ def subscribe_impl(node: NodeImpl, name: str, *, reordering_window: float | None
 
 
 async def request_stream(
-    pub: pycyphal.Publisher,
-    delivery_deadline: pycyphal.Instant,
+    pub: pycyphal2.Publisher,
+    delivery_deadline: pycyphal2.Instant,
     response_timeout: float,
     message: memoryview | bytes,
 ) -> ResponseStreamImpl:
@@ -46,16 +46,16 @@ async def request_stream(
     return stream
 
 
-def expect_arrival(item: pycyphal.Arrival | BaseException) -> pycyphal.Arrival:
-    assert isinstance(item, pycyphal.Arrival)
+def expect_arrival(item: pycyphal2.Arrival | BaseException) -> pycyphal2.Arrival:
+    assert isinstance(item, pycyphal2.Arrival)
     return item
 
 
-def expect_response(item: pycyphal.Response | BaseException) -> pycyphal.Response:
-    assert isinstance(item, pycyphal.Response)
+def expect_response(item: pycyphal2.Response | BaseException) -> pycyphal2.Response:
+    assert isinstance(item, pycyphal2.Response)
     return item
 
 
-def expect_mock_writer(writer: pycyphal.SubjectWriter | None) -> MockSubjectWriter:
+def expect_mock_writer(writer: pycyphal2.SubjectWriter | None) -> MockSubjectWriter:
     assert isinstance(writer, MockSubjectWriter)
     return writer

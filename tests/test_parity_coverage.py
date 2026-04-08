@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 import pytest
 
-import pycyphal
-from pycyphal._hash import rapidhash
-from pycyphal._header import (
+import pycyphal2
+from pycyphal2._hash import rapidhash
+from pycyphal2._header import (
     HEADER_SIZE,
     GossipHeader,
     MsgAckHeader,
@@ -22,7 +22,7 @@ from pycyphal._header import (
     ScoutHeader,
     deserialize_header,
 )
-from pycyphal._node import (
+from pycyphal2._node import (
     ASSOC_SLACK_LIMIT,
     IMPLICIT_TOPIC_TIMEOUT,
     REORDERING_CAPACITY,
@@ -30,18 +30,18 @@ from pycyphal._node import (
     Association,
     DedupState,
 )
-from pycyphal._publisher import REQUEST_FUTURE_HISTORY, ResponseRemoteState, ResponseStreamImpl
-from pycyphal._subscriber import BreadcrumbImpl
-from pycyphal._transport import TransportArrival
+from pycyphal2._publisher import REQUEST_FUTURE_HISTORY, ResponseRemoteState, ResponseStreamImpl
+from pycyphal2._subscriber import BreadcrumbImpl
+from pycyphal2._transport import TransportArrival
 from tests.mock_transport import MockNetwork, MockTransport
 from tests.typing_helpers import advertise_impl, expect_mock_writer, new_node, request_stream, subscribe_impl
 
 
-class _FailingWriter(pycyphal.SubjectWriter):
+class _FailingWriter(pycyphal2.SubjectWriter):
     async def __call__(
         self,
-        deadline: pycyphal.Instant,
-        priority: pycyphal.Priority,
+        deadline: pycyphal2.Instant,
+        priority: pycyphal2.Priority,
         message: bytes | memoryview,
     ) -> None:
         del deadline, priority, message
@@ -77,8 +77,8 @@ async def test_request_closed_publisher_raises_send_error() -> None:
     pub = node.advertise("/rpc")
     pub.close()
 
-    with pytest.raises(pycyphal.SendError):
-        await pub.request(pycyphal.Instant.now() + 1.0, 1.0, b"request")
+    with pytest.raises(pycyphal2.SendError):
+        await pub.request(pycyphal2.Instant.now() + 1.0, 1.0, b"request")
 
     node.close()
 
@@ -88,12 +88,12 @@ async def test_request_stream_close_cancels_publish_without_queuing_error() -> N
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
     pub = node.advertise("/rpc")
-    pub.priority = pycyphal.Priority.EXCEPTIONAL
+    pub.priority = pycyphal2.Priority.EXCEPTIONAL
     pub.ack_timeout = 0.05
     topic = node.topics_by_name["rpc"]
     topic.associations[42] = Association(remote_id=42, last_seen=0.0)
 
-    stream = await request_stream(pub, pycyphal.Instant.now() + 1.0, 1.0, b"request")
+    stream = await request_stream(pub, pycyphal2.Instant.now() + 1.0, 1.0, b"request")
     assert stream.__aiter__() is stream
     assert len(topic.request_futures) == 1
 
@@ -128,8 +128,8 @@ async def test_response_stream_control_items_raise_through_iterator() -> None:
         await stop_stream.__anext__()
 
     error_stream = ResponseStreamImpl(node=node, topic=topic, message_tag=2, response_timeout=1.0)
-    error_stream.queue.put_nowait(pycyphal.DeliveryError("synthetic"))
-    with pytest.raises(pycyphal.DeliveryError):
+    error_stream.queue.put_nowait(pycyphal2.DeliveryError("synthetic"))
+    with pytest.raises(pycyphal2.DeliveryError):
         await error_stream.__anext__()
 
     error_stream.on_publish_error(asyncio.CancelledError())
@@ -143,18 +143,18 @@ async def test_request_publish_ack_completes_without_queuing_error() -> None:
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
     pub = node.advertise("/rpc")
-    pub.priority = pycyphal.Priority.EXCEPTIONAL
+    pub.priority = pycyphal2.Priority.EXCEPTIONAL
     topic = node.topics_by_name["rpc"]
     topic.associations[42] = Association(remote_id=42, last_seen=0.0)
 
-    stream = await request_stream(pub, pycyphal.Instant.now() + 0.5, 0.5, b"request")
+    stream = await request_stream(pub, pycyphal2.Instant.now() + 0.5, 0.5, b"request")
     assert stream._publish_task is not None
     await asyncio.sleep(0.02)
 
     node.on_unicast_arrival(
         TransportArrival(
-            timestamp=pycyphal.Instant.now(),
-            priority=pycyphal.Priority.NOMINAL,
+            timestamp=pycyphal2.Instant.now(),
+            priority=pycyphal2.Priority.NOMINAL,
             remote_id=42,
             message=MsgAckHeader(topic_hash=topic.hash, tag=stream._message_tag).serialize(),
         )
@@ -177,8 +177,8 @@ async def test_response_stream_reliable_history_rollover_and_closed_best_effort_
 
     seq0 = RspRelHeader(tag=0xFF, seqno=0, topic_hash=topic.hash, message_tag=1)
     arrival0 = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=seq0.serialize() + b"first",
     )
@@ -186,8 +186,8 @@ async def test_response_stream_reliable_history_rollover_and_closed_best_effort_
 
     seq_far = RspRelHeader(tag=0xFF, seqno=REQUEST_FUTURE_HISTORY, topic_hash=topic.hash, message_tag=1)
     arrival_far = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=seq_far.serialize() + b"far",
     )
@@ -215,7 +215,7 @@ async def test_prepare_publish_tracker_skips_saturated_associations_and_release_
     topic.associations = {10: live, 11: saturated}
 
     tag = topic.next_tag()
-    tracker = node.prepare_publish_tracker(topic, tag, (pycyphal.Instant.now() + 1.0).ns, b"data")
+    tracker = node.prepare_publish_tracker(topic, tag, (pycyphal2.Instant.now() + 1.0).ns, b"data")
 
     assert tracker.remaining == {10}
     assert tracker.associations == [live]
@@ -243,7 +243,7 @@ async def test_publish_tracker_release_compromised_does_not_penalize_association
     assoc = Association(remote_id=10, last_seen=0.0, slack=ASSOC_SLACK_LIMIT - 1)
     topic.associations = {10: assoc}
     tag = topic.next_tag()
-    tracker = node.prepare_publish_tracker(topic, tag, (pycyphal.Instant.now() + 1.0).ns, b"data")
+    tracker = node.prepare_publish_tracker(topic, tag, (pycyphal2.Instant.now() + 1.0).ns, b"data")
     tracker.compromised = True
 
     node.publish_tracker_release(topic, tracker)
@@ -265,7 +265,7 @@ async def test_reliable_publish_scheduler_lag_does_not_penalize_association() ->
     assoc = Association(remote_id=10, last_seen=0.0)
     topic.associations = {10: assoc}
     tag = topic.next_tag()
-    deadline = pycyphal.Instant(ns=1_000_000_000)
+    deadline = pycyphal2.Instant(ns=1_000_000_000)
     tracker = pub._prepare_reliable_publish_tracker(tag, deadline.ns, b"data")
     tracker.ack_timeout = 0.2
 
@@ -285,13 +285,13 @@ async def test_reliable_publish_scheduler_lag_does_not_penalize_association() ->
     async def fake_send(*_: object, **__: object) -> None:
         return None
 
-    def fake_now() -> pycyphal.Instant:
-        return pycyphal.Instant(ns=now_ns)
+    def fake_now() -> pycyphal2.Instant:
+        return pycyphal2.Instant(ns=now_ns)
 
-    with patch("pycyphal._publisher.Instant.now", side_effect=fake_now):
-        with patch("pycyphal._publisher.asyncio.wait_for", side_effect=fake_wait_for):
+    with patch("pycyphal2._publisher.Instant.now", side_effect=fake_now):
+        with patch("pycyphal2._publisher.asyncio.wait_for", side_effect=fake_wait_for):
             with patch.object(pub, "_send_reliable_publish", side_effect=fake_send):
-                with pytest.raises(pycyphal.DeliveryError):
+                with pytest.raises(pycyphal2.DeliveryError):
                     await pub._reliable_publish_continue(deadline, tag, b"data", tracker, (200_000_000, False))
 
     pub._release_reliable_publish_tracker(tag, tracker)
@@ -318,8 +318,8 @@ async def test_gossip_control_send_failures_are_swallowed() -> None:
     await node.send_gossip(topic, broadcast=False)
 
     async def bad_unicast(
-        deadline: pycyphal.Instant,
-        priority: pycyphal.Priority,
+        deadline: pycyphal2.Instant,
+        priority: pycyphal2.Priority,
         remote_id: int,
         message: bytes | memoryview,
     ) -> None:
@@ -392,8 +392,8 @@ async def test_invalid_gossip_and_scout_payloads_are_ignored() -> None:
 
     invalid_gossip = GossipHeader(topic_log_age=0, topic_hash=0xDEAD, topic_evictions=0, name_len=2)
     gossip_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=invalid_gossip.serialize() + b"x",
     )
@@ -401,8 +401,8 @@ async def test_invalid_gossip_and_scout_payloads_are_ignored() -> None:
 
     invalid_scout = ScoutHeader(pattern_len=3)
     scout_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=invalid_scout.serialize() + b"x",
     )
@@ -424,8 +424,8 @@ async def test_accept_message_without_subscribers_cleans_stale_dedup_state() -> 
 
     topic.dedup[42] = DedupState(tag_frontier=123, bitmap=1, last_active=0.0)
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now() + SESSION_LIFETIME + 1.0,
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now() + SESSION_LIFETIME + 1.0,
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=b"",
     )
@@ -445,8 +445,8 @@ async def test_idle_nack_forgets_association_and_unknown_ack_is_ignored() -> Non
     topic = node.topics_by_name["topic"]
 
     unknown_ack = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=MsgAckHeader(topic_hash=0xDEADBEEF, tag=0).serialize(),
     )
@@ -455,8 +455,8 @@ async def test_idle_nack_forgets_association_and_unknown_ack_is_ignored() -> Non
     tag = topic.next_tag()
     topic.associations[42] = Association(remote_id=42, last_seen=0.0, pending_count=0)
     nack_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=MsgNackHeader(topic_hash=topic.hash, tag=tag).serialize(),
     )
@@ -474,8 +474,8 @@ async def test_unknown_reliable_response_is_nacked_and_rsp_ack_without_future_is
     node = new_node(tr, home="n1")
 
     rsp_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=RspRelHeader(tag=0xFF, seqno=0, topic_hash=0xDEAD, message_tag=1).serialize() + b"payload",
     )
@@ -487,8 +487,8 @@ async def test_unknown_reliable_response_is_nacked_and_rsp_ack_without_future_is
     assert isinstance(deserialize_header(ack_data[:HEADER_SIZE]), RspNackHeader)
 
     ack_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=RspAckHeader(tag=0xFF, seqno=0, topic_hash=0xDEAD, message_tag=1).serialize(),
     )
@@ -507,8 +507,8 @@ async def test_sharded_gossip_does_not_create_implicit_topics_and_hash_mismatch_
     topic_hash = rapidhash(name)
     shard_sid = node.gossip_shard_subject_id(topic_hash)
     sharded_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=GossipHeader(topic_log_age=0, topic_hash=topic_hash, topic_evictions=0, name_len=len(name)).serialize()
         + name.encode(),
@@ -538,8 +538,8 @@ async def test_middle_chevron_scout_is_literal_and_matches_nothing() -> None:
 
     pattern = "sensor/>/data"
     scout_arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.OPTIONAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.OPTIONAL,
         remote_id=99,
         message=ScoutHeader(pattern_len=len(pattern)).serialize() + pattern.encode(),
     )
@@ -639,9 +639,9 @@ async def test_subscriber_iterator_control_items_and_closed_delivery() -> None:
         remote_id=42,
         topic=topic,
         message_tag=1,
-        initial_priority=pycyphal.Priority.NOMINAL,
+        initial_priority=pycyphal2.Priority.NOMINAL,
     )
-    arrival = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"payload")
+    arrival = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"payload")
 
     assert sub.__aiter__() is sub
     sub.queue.put_nowait(StopAsyncIteration())
@@ -649,8 +649,8 @@ async def test_subscriber_iterator_control_items_and_closed_delivery() -> None:
         await sub.__anext__()
 
     sub_err = subscribe_impl(node, "/topic_2")
-    sub_err.queue.put_nowait(pycyphal.DeliveryError("synthetic"))
-    with pytest.raises(pycyphal.DeliveryError):
+    sub_err.queue.put_nowait(pycyphal2.DeliveryError("synthetic"))
+    with pytest.raises(pycyphal2.DeliveryError):
         await sub_err.__anext__()
 
     sub.close()
@@ -671,15 +671,15 @@ async def test_subscriber_wraparound_drop_and_head_of_line_rearm() -> None:
         remote_id=42,
         topic=topic,
         message_tag=1,
-        initial_priority=pycyphal.Priority.NOMINAL,
+        initial_priority=pycyphal2.Priority.NOMINAL,
     )
 
-    first = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"first")
+    first = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"first")
     assert sub.deliver(first, 1000, 42)
     assert sub.queue.empty()
 
     baseline = 1000 - (REORDERING_CAPACITY // 2)
-    late = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"late")
+    late = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"late")
     assert not sub.deliver(late, baseline - 1, 42)
 
     key = (42, topic.hash)
@@ -688,7 +688,7 @@ async def test_subscriber_wraparound_drop_and_head_of_line_rearm() -> None:
     assert first_handle is not None
 
     await asyncio.sleep(0.15)
-    gap = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"gap")
+    gap = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"gap")
     assert sub.deliver(gap, 999, 42)
     second_handle = state.timeout_handle
     assert second_handle is not None
@@ -712,14 +712,14 @@ async def test_breadcrumb_reliable_initial_send_failure_raises_send_error() -> N
         remote_id=42,
         topic=topic,
         message_tag=123,
-        initial_priority=pycyphal.Priority.NOMINAL,
+        initial_priority=pycyphal2.Priority.NOMINAL,
     )
 
     call_count = 0
 
     async def flaky_unicast(
-        deadline: pycyphal.Instant,
-        priority: pycyphal.Priority,
+        deadline: pycyphal2.Instant,
+        priority: pycyphal2.Priority,
         remote_id: int,
         message: bytes | memoryview,
     ) -> None:
@@ -730,13 +730,13 @@ async def test_breadcrumb_reliable_initial_send_failure_raises_send_error() -> N
 
     tr.unicast = flaky_unicast  # type: ignore[assignment]
 
-    with pytest.raises(pycyphal.SendError):
-        await bc(pycyphal.Instant.now() + 0.2, b"response", reliable=True)
+    with pytest.raises(pycyphal2.SendError):
+        await bc(pycyphal2.Instant.now() + 0.2, b"response", reliable=True)
 
     node.on_unicast_arrival(
         TransportArrival(
-            timestamp=pycyphal.Instant.now(),
-            priority=pycyphal.Priority.NOMINAL,
+            timestamp=pycyphal2.Instant.now(),
+            priority=pycyphal2.Priority.NOMINAL,
             remote_id=42,
             message=RspAckHeader(tag=0, seqno=0, topic_hash=topic.hash, message_tag=123).serialize(),
         )
@@ -758,22 +758,22 @@ async def test_breadcrumb_reliable_nack_raises() -> None:
         remote_id=42,
         topic=topic,
         message_tag=124,
-        initial_priority=pycyphal.Priority.NOMINAL,
+        initial_priority=pycyphal2.Priority.NOMINAL,
     )
 
-    task = asyncio.create_task(bc(pycyphal.Instant.now() + 0.2, b"response", reliable=True))
+    task = asyncio.create_task(bc(pycyphal2.Instant.now() + 0.2, b"response", reliable=True))
     await asyncio.sleep(0.02)
     tag = next(iter(node.respond_futures.values())).tag
     node.on_unicast_arrival(
         TransportArrival(
-            timestamp=pycyphal.Instant.now(),
-            priority=pycyphal.Priority.NOMINAL,
+            timestamp=pycyphal2.Instant.now(),
+            priority=pycyphal2.Priority.NOMINAL,
             remote_id=42,
             message=RspNackHeader(tag=tag, seqno=0, topic_hash=topic.hash, message_tag=124).serialize(),
         )
     )
 
-    with pytest.raises(pycyphal.NackError):
+    with pytest.raises(pycyphal2.NackError):
         await task
 
     assert node.respond_futures == {}
@@ -789,8 +789,8 @@ async def test_reliable_publish_initial_attempt_stays_multicast() -> None:
     topic.associations[42] = Association(remote_id=42, last_seen=0.0)
     writer = topic.ensure_writer()
 
-    with pytest.raises(pycyphal.DeliveryError):
-        await pub(pycyphal.Instant.now() + 0.03, b"payload", reliable=True)
+    with pytest.raises(pycyphal2.DeliveryError):
+        await pub(pycyphal2.Instant.now() + 0.03, b"payload", reliable=True)
 
     assert len(tr.unicast_log) == 0
     assert expect_mock_writer(writer).send_count > 0
@@ -811,21 +811,21 @@ async def test_breadcrumb_reliable_key_collision_increments_tag() -> None:
         remote_id=42,
         topic=topic,
         message_tag=123,
-        initial_priority=pycyphal.Priority.NOMINAL,
+        initial_priority=pycyphal2.Priority.NOMINAL,
     )
     bc_b = BreadcrumbImpl(
         node=node,
         remote_id=42,
         topic=topic,
         message_tag=123,
-        initial_priority=pycyphal.Priority.NOMINAL,
+        initial_priority=pycyphal2.Priority.NOMINAL,
     )
 
-    task_a = asyncio.create_task(bc_a(pycyphal.Instant.now() + 0.2, b"a", reliable=True))
+    task_a = asyncio.create_task(bc_a(pycyphal2.Instant.now() + 0.2, b"a", reliable=True))
     await asyncio.sleep(0.02)
     tag_a = next(iter(node.respond_futures.values())).tag
 
-    task_b = asyncio.create_task(bc_b(pycyphal.Instant.now() + 0.2, b"b", reliable=True))
+    task_b = asyncio.create_task(bc_b(pycyphal2.Instant.now() + 0.2, b"b", reliable=True))
     await asyncio.sleep(0.02)
     tags = {tracker.tag for tracker in node.respond_futures.values()}
     assert tags == {tag_a, tag_a + 1}
@@ -833,8 +833,8 @@ async def test_breadcrumb_reliable_key_collision_increments_tag() -> None:
     for tracker in list(node.respond_futures.values()):
         node.on_unicast_arrival(
             TransportArrival(
-                timestamp=pycyphal.Instant.now(),
-                priority=pycyphal.Priority.NOMINAL,
+                timestamp=pycyphal2.Instant.now(),
+                priority=pycyphal2.Priority.NOMINAL,
                 remote_id=42,
                 message=RspAckHeader(
                     tag=tracker.tag,
@@ -859,7 +859,7 @@ async def test_gossip_scheduler_first_periodic_is_broadcast_and_suppression_dela
     node._cancel_gossip(topic)
     topic.gossip_counter = 10
 
-    with patch("pycyphal._node.random.uniform", side_effect=lambda a, b: a):
+    with patch("pycyphal2._node.random.uniform", side_effect=lambda a, b: a):
         node._reschedule_gossip_periodic(topic, suppressed=False)
         baseline_deadline = topic.gossip_deadline
         assert baseline_deadline is not None

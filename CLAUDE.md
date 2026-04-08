@@ -16,11 +16,11 @@ especially the formal models and the reference implementation in C.
 
 ## Architecture and code layout
 
-Source is in `src/pycyphal/`, tests in `tests/`. The package is extremely compact by design and has very few modules.
+Source is in `src/pycyphal2/`, tests in `tests/`. The package is extremely compact by design and has very few modules.
 
 Concrete transports are in top-level submodules:
-- `pycyphal.udp` — Cyphal/UDP transport implementation.
-- `pycyphal.can` (coming soon, not yet in the codebase) — Cyphal/CAN transport implementation.
+- `pycyphal2.udp` — Cyphal/UDP transport implementation.
+- `pycyphal2.can` (coming soon, not yet in the codebase) — Cyphal/CAN transport implementation.
 
 The core must be dependency-free.
 Transports may introduce (optional) dependencies that MUST be kept to the bare minimum.
@@ -31,11 +31,11 @@ The correct handling of malformed inputs is to silently drop and debug-log.
 
 Internal implementation modules use leading underscores.
 Keep public symbols explicit through `__init__.py`; keep private helpers in underscore-prefixed modules.
-The application is expected to `import pycyphal` only, without reaching out for any submodules directly;
+The application is expected to `import pycyphal2` only, without reaching out for any submodules directly;
 one exception applies to the transport modules mentioned above because the application will only import the transports
 that it needs.
 
-Since the entirety of the library API is explicitly exposed through `pycyphal/__init__.py`,
+Since the entirety of the library API is explicitly exposed through `pycyphal2/__init__.py`,
 internally the library is free to use public visibility for all symbols/members that may require shared access
 between modules, even if they are not intended for external use.
 

@@ -1060,11 +1060,10 @@ class NodeImpl(Node):
         payload: bytes,
         tag: int,
     ) -> bool:
+        from ._api import Arrival
         from ._subscriber import SubscriberImpl
 
-        import pycyphal
-
-        arr = pycyphal.Arrival(
+        arr = Arrival(
             timestamp=arrival.timestamp,
             breadcrumb=breadcrumb,
             message=payload,

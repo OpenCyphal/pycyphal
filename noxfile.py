@@ -35,7 +35,7 @@ def test(session: nox.Session) -> None:
 @nox.session(python=PYTHONS[0])
 def mypy(session: nox.Session) -> None:
     session.install(".[udp]", "mypy", "pytest", "pytest-asyncio")
-    session.run("mypy", "src/pycyphal", "tests")
+    session.run("mypy", "src/pycyphal2", "tests")
 
 
 @nox.session(python=PYTHONS[0])

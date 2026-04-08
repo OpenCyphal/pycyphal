@@ -11,10 +11,10 @@ import time
 
 import pytest
 
-import pycyphal
-from pycyphal import SUBJECT_ID_PINNED_MAX
-from pycyphal._hash import rapidhash
-from pycyphal._node import (
+import pycyphal2
+from pycyphal2 import SUBJECT_ID_PINNED_MAX
+from pycyphal2._hash import rapidhash
+from pycyphal2._node import (
     ASSOC_SLACK_LIMIT,
     DEDUP_HISTORY,
     SESSION_LIFETIME,
@@ -23,10 +23,10 @@ from pycyphal._node import (
     compute_subject_id,
     resolve_name,
 )
-from pycyphal._header import HEADER_SIZE, MsgAckHeader, MsgBeHeader, MsgNackHeader, MsgRelHeader, deserialize_header
-from pycyphal._publisher import ResponseStreamImpl
-from pycyphal._subscriber import BreadcrumbImpl
-from pycyphal._transport import TransportArrival
+from pycyphal2._header import HEADER_SIZE, MsgAckHeader, MsgBeHeader, MsgNackHeader, MsgRelHeader, deserialize_header
+from pycyphal2._publisher import ResponseStreamImpl
+from pycyphal2._subscriber import BreadcrumbImpl
+from pycyphal2._transport import TransportArrival
 from tests.mock_transport import MockTransport, MockNetwork, DEFAULT_MODULUS
 from tests.typing_helpers import expect_arrival, expect_mock_writer, new_node, subscribe_impl
 
@@ -91,11 +91,11 @@ async def test_association_slack_nack_capped():
     # Pre-register an association and a publish tracker.
     topic.associations[42] = Association(remote_id=42, last_seen=time.monotonic(), pending_count=1)
     tag = topic.next_tag()
-    from pycyphal._node import PublishTracker
+    from pycyphal2._node import PublishTracker
 
     tracker = PublishTracker(
         tag=tag,
-        deadline_ns=(pycyphal.Instant.now() + 10.0).ns,
+        deadline_ns=(pycyphal2.Instant.now() + 10.0).ns,
         remaining={42},
         ack_event=asyncio.Event(),
     )
@@ -104,8 +104,8 @@ async def test_association_slack_nack_capped():
     # Send a NACK.
     nack_hdr = MsgNackHeader(topic_hash=topic.hash, tag=tag)
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=nack_hdr.serialize(),
     )
@@ -132,11 +132,11 @@ async def test_association_ack_resets_slack():
     # Pre-register an association with slack already at limit.
     topic.associations[42] = Association(remote_id=42, last_seen=0.0, slack=ASSOC_SLACK_LIMIT)
     tag = topic.next_tag()
-    from pycyphal._node import PublishTracker
+    from pycyphal2._node import PublishTracker
 
     tracker = PublishTracker(
         tag=tag,
-        deadline_ns=(pycyphal.Instant.now() + 10.0).ns,
+        deadline_ns=(pycyphal2.Instant.now() + 10.0).ns,
         remaining={42},
         ack_event=asyncio.Event(),
     )
@@ -145,8 +145,8 @@ async def test_association_ack_resets_slack():
     # Send an ACK.
     ack_hdr = MsgAckHeader(topic_hash=topic.hash, tag=tag)
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=42,
         message=ack_hdr.serialize(),
     )
@@ -206,8 +206,8 @@ async def test_msg_header_merges_lage():
         tag=topic.next_tag(),
     )
     arrival = TransportArrival(
-        timestamp=pycyphal.Instant.now(),
-        priority=pycyphal.Priority.NOMINAL,
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
         remote_id=99,
         message=hdr.serialize() + b"payload",
     )
@@ -275,24 +275,26 @@ async def test_reorder_duplicate_interned_only_once():
     sub = subscribe_impl(node, "test/topic", reordering_window=0.05)
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     base_tag = 2000
-    arr0 = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"m0")
+    arr0 = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"m0")
     sub.deliver(arr0, base_tag, 99)
     assert sub.queue.empty()
     await asyncio.sleep(0.1)
     assert expect_arrival(sub.queue.get_nowait()).message == b"m0"
 
     # Deliver tag+2 twice (out of order, duplicate).
-    arr2a = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"m2_first")
-    arr2b = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"m2_dup")
+    arr2a = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"m2_first")
+    arr2b = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"m2_dup")
     sub.deliver(arr2a, base_tag + 2, 99)
     sub.deliver(arr2b, base_tag + 2, 99)  # duplicate
     assert sub.queue.empty()  # both interned/dropped
 
     # Now deliver the gap-closing tag+1.
-    arr1 = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"m1")
+    arr1 = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"m1")
     sub.deliver(arr1, base_tag + 1, 99)
 
     items = []
@@ -320,18 +322,20 @@ async def test_subscriber_close_ejects_interned():
     sub = subscribe_impl(node, "test/topic", reordering_window=0.05)
 
     topic = list(node.topics_by_name.values())[0]
-    bc = BreadcrumbImpl(node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal.Priority.NOMINAL)
+    bc = BreadcrumbImpl(
+        node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
+    )
 
     base_tag = 3000
-    arr0 = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"m0")
+    arr0 = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"m0")
     sub.deliver(arr0, base_tag, 99)
     assert sub.queue.empty()
     await asyncio.sleep(0.1)
     assert expect_arrival(sub.queue.get_nowait()).message == b"m0"
 
     # Intern some out-of-order messages.
-    arr3 = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"m3")
-    arr5 = pycyphal.Arrival(timestamp=pycyphal.Instant.now(), breadcrumb=bc, message=b"m5")
+    arr3 = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"m3")
+    arr5 = pycyphal2.Arrival(timestamp=pycyphal2.Instant.now(), breadcrumb=bc, message=b"m5")
     sub.deliver(arr3, base_tag + 3, 99)
     sub.deliver(arr5, base_tag + 5, 99)
     assert sub.queue.empty()
@@ -368,7 +372,7 @@ async def test_best_effort_full_pipeline():
     sub = subscribe_impl(node, "/pipeline")
     topic = node.topics_by_name["pipeline"]
 
-    await pub(pycyphal.Instant.now() + 1.0, b"test_payload")
+    await pub(pycyphal2.Instant.now() + 1.0, b"test_payload")
 
     # Verify the transport writer was invoked.
     writer = tr.writers.get(topic.subject_id)
@@ -464,8 +468,8 @@ async def test_multiple_pinned_topics_share_subject_id():
     assert tr.subject_writer_creations.get(42) == 1
 
     writer = expect_mock_writer(topic_a.pub_writer)
-    await pub_a(pycyphal.Instant.now() + 1.0, b"alpha")
-    await pub_b(pycyphal.Instant.now() + 1.0, b"beta")
+    await pub_a(pycyphal2.Instant.now() + 1.0, b"alpha")
+    await pub_b(pycyphal2.Instant.now() + 1.0, b"beta")
     assert writer.send_count == 2
 
     pub_a.close()
@@ -502,8 +506,8 @@ async def test_pinned_cohabitation_uses_one_listener_and_acks_once():
     tr.deliver_subject(
         42,
         TransportArrival(
-            timestamp=pycyphal.Instant.now(),
-            priority=pycyphal.Priority.NOMINAL,
+            timestamp=pycyphal2.Instant.now(),
+            priority=pycyphal2.Priority.NOMINAL,
             remote_id=99,
             message=be_hdr.serialize() + b"alpha-be",
         ),
@@ -523,8 +527,8 @@ async def test_pinned_cohabitation_uses_one_listener_and_acks_once():
     tr.deliver_subject(
         42,
         TransportArrival(
-            timestamp=pycyphal.Instant.now(),
-            priority=pycyphal.Priority.NOMINAL,
+            timestamp=pycyphal2.Instant.now(),
+            priority=pycyphal2.Priority.NOMINAL,
             remote_id=99,
             message=rel_hdr.serialize() + b"alpha-rel",
         ),

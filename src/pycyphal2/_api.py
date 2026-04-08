@@ -387,7 +387,7 @@ def new(transport: Transport, *, home: str = "", namespace: str = "") -> Node:
     """
     Construct a new node using the specified transport. This is the main entry point of the library.
 
-    The transport is constructed using one of the stock transport implementations like ``pycyphal.udp``,
+    The transport is constructed using one of the stock transport implementations like ``pycyphal2.udp``,
     depending on the needs of the application, or it could be custom.
 
     Every node needs a unique nonempty home. If the home string is not provided, a random home will be generated.
