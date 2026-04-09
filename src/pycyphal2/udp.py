@@ -18,7 +18,7 @@ from ipaddress import IPv4Address
 
 import ifaddr
 
-from . import Closable, Instant, Priority, SendError, eui64
+from . import Closable, ClosedError, Instant, Priority, SendError, eui64
 from ._api import SUBJECT_ID_PINNED_MAX
 from ._hash import CRC32C_INITIAL, CRC32C_OUTPUT_XOR, CRC32C_RESIDUE, crc32c_add, crc32c_full
 from ._transport import SUBJECT_ID_MODULUS_23bit, SubjectWriter, Transport, TransportArrival
@@ -480,9 +480,9 @@ class _UDPSubjectWriter(SubjectWriter):
 
     async def __call__(self, deadline: Instant, priority: Priority, message: bytes | memoryview) -> None:
         if self._closed:
-            raise SendError("Writer closed")
+            raise ClosedError("Writer closed")
         if self._transport.closed:
-            raise SendError("Transport closed")
+            raise ClosedError("Transport closed")
 
         mcast_ip, port = _make_subject_endpoint(self._subject_id)
         transfer_id = self._transfer_id & TRANSFER_ID_MASK
@@ -802,7 +802,7 @@ class _UDPTransportImpl(UDPTransport):
 
     async def unicast(self, deadline: Instant, priority: Priority, remote_id: int, message: bytes | memoryview) -> None:
         if self._closed:
-            raise SendError("Transport closed")
+            raise ClosedError("Transport closed")
         transfer_id = self._next_unicast_transfer_id & TRANSFER_ID_MASK
         self._next_unicast_transfer_id += 1
         _logger.debug("Unicast tx start rid=%016x tid=%d bytes=%d", remote_id, transfer_id, len(message))

@@ -26,7 +26,7 @@ def clean(session):
 
 @nox.session(python=PYTHONS)
 def test(session: nox.Session) -> None:
-    session.install(".[udp]", "pytest", "pytest-asyncio", "coverage")
+    session.install("-e", ".[udp]", "pytest", "pytest-asyncio", "coverage")
     session.run("coverage", "run", "-m", "pytest", "tests/", *session.posargs)
     session.run("coverage", "report")
     session.run("coverage", "html")
@@ -54,30 +54,39 @@ def format(session: nox.Session) -> None:
 def examples(session: nox.Session) -> None:
     import json as _json
     import subprocess
+    import sys
     import time
 
     session.install(".[udp]")
     topic = "demo/time"
     python = str(Path(session.bin) / "python")
 
-    sub_proc = subprocess.Popen(
-        [python, "examples/subscribe.py", topic, "--timeout", "10"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
-    time.sleep(1)  # let the subscriber set up
+    def run_case(label: str, extra_args: list[str]) -> None:
+        session.log(f"--- examples smoke: {label} ---")
+        sub_proc = subprocess.Popen(
+            [python, "examples/subscribe.py", topic, "--timeout", "10", *extra_args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(1)  # let the subscriber set up
 
-    session.run(python, "examples/publish_time.py", topic, "--count", "3", external=True)
-    time.sleep(1)  # let the last message propagate
+        session.run(python, "examples/publish_time.py", topic, "--count", "3", *extra_args, external=True)
+        time.sleep(1)  # let the last message propagate
 
-    sub_proc.terminate()
-    stdout, _ = sub_proc.communicate(timeout=5)
-    lines = [ln for ln in stdout.decode().splitlines() if ln.strip()]
-    session.log(f"Subscriber captured {len(lines)} line(s)")
-    assert len(lines) >= 1, f"Expected at least 1 JSONL line, got {len(lines)}"
-    for ln in lines:
-        obj = _json.loads(ln)
-        assert "ts" in obj
-        assert "remote_id" in obj
-        assert "topic" in obj
-        assert "message_b64" in obj
+        sub_proc.terminate()
+        stdout, _ = sub_proc.communicate(timeout=5)
+        lines = [ln for ln in stdout.decode().splitlines() if ln.strip()]
+        session.log(f"Subscriber captured {len(lines)} line(s)")
+        assert len(lines) >= 1, f"Expected at least 1 JSONL line, got {len(lines)}"
+        for ln in lines:
+            obj = _json.loads(ln)
+            assert "ts" in obj
+            assert "remote_id" in obj
+            assert "topic" in obj
+            assert "message_b64" in obj
+
+    run_case("udp", [])
+    if sys.platform == "linux" and Path("/sys/class/net/vcan0").exists():
+        run_case("socketcan:vcan0", ["--transport", "socketcan:vcan0"])
+    else:
+        session.log("Skipping socketcan:vcan0 case (vcan0 not available)")

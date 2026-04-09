@@ -34,6 +34,10 @@ class SendError(Error):
     """Message could not be sent before the deadline."""
 
 
+class ClosedError(SendError):
+    """The operation cannot proceed because the object has been closed permanently."""
+
+
 class DeliveryError(Error):
     """Message was sent, but the remote did not acknowledge. The remote might be unreachable or dysfunctional."""
 

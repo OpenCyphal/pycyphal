@@ -19,6 +19,23 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
+      - name: Configure vcan0
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -euxo pipefail
+          if ! ip link show vcan0 >/dev/null 2>&1; then
+            sudo ip link add dev vcan0 type vcan || {
+              if ! modinfo vcan >/dev/null 2>&1; then
+                sudo apt-get update
+                sudo apt-get install -y "linux-modules-extra-$(uname -r)" || sudo apt-get install -y linux-modules-extra-azure
+              fi
+              sudo modprobe can
+              sudo modprobe vcan
+              sudo ip link add dev vcan0 type vcan
+            }
+          fi
+          sudo ip link set up vcan0
+          ip -details link show vcan0
       - run: pip install nox
       - run: nox -s test --python ${{ matrix.python }}
       - uses: actions/upload-artifact@v7

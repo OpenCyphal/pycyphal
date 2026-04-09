@@ -66,6 +66,7 @@ Expected usage patterns:
 - Topic name strings are whitespace-stripped, while the reference implementation does not do that at the time of
   writing. This behavior may be introduced in the reference as well at a later stage.
 - Additional minor intentional deviations may be documented directly in the codebase.
+  Such intentional deviations should be marked with `REFERENCE PARITY` comments in the code.
 
 ## Testing
 

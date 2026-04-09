@@ -120,7 +120,7 @@ def resolve_name(name: str, home: str, namespace: str) -> tuple[str, int | None,
     Resolve a topic name to (resolved_name, pin_or_None, is_verbatim).
     Raises ValueError on invalid names.
     """
-    # Python-only ergonomic deviation from the C reference: outer whitespace is trimmed before validation.
+    # REFERENCE PARITY: Python-only ergonomic deviation -- outer whitespace is trimmed before validation.
     # The reference resolver rejects such names because spaces are invalid topic-name characters.
     name = name.strip()
     if not name:
@@ -170,8 +170,8 @@ def match_pattern(pattern: str, name: str) -> list[tuple[str, int]] | None:
     Returns substitutions list on match, None on no match.
     Empty list for verbatim match (pattern == name).
 
-    Intentional deviation from the current C reference: only a terminal '>' acts as an any-segment wildcard.
-    Non-terminal '>' is treated literally until the reference behavior converges.
+    REFERENCE PARITY: Intentional deviation from the current C reference -- only a terminal '>' acts as an
+    any-segment wildcard. Non-terminal '>' is treated literally until the reference behavior converges.
     """
     if pattern == name:
         return []

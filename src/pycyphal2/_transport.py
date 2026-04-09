@@ -55,8 +55,10 @@ class Transport(Closable):
         Subscribe to a subject to receive messages from it until the returned closable handle is closed.
         The session layer may request at most one listener per subject at any given time, similar to the reference impl.
         Duplicate requests for the same subject should raise ValueError.
-        Unlike the reference implementation, our listeners do not have the extent setting -- the extent mostly matters
-        for high-reliability/real-time applications; this Python implementation assumes infinite extent.
+
+        REFERENCE PARITY: Unlike the reference implementation, our listeners do not have the extent setting --
+        the extent mostly matters for high-reliability/real-time applications; this Python implementation
+        assumes infinite extent.
         """
         raise NotImplementedError
 
