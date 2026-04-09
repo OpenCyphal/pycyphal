@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
 
 import pycyphal2
-from pycyphal2 import LivenessError, SendError
+from pycyphal2 import Arrival, Error, LivenessError, SendError
 from pycyphal2._node import resolve_name
 from tests.mock_transport import MockTransport, MockNetwork
-from tests.typing_helpers import new_node
+from tests.typing_helpers import new_node, subscribe_impl
 
 # =====================================================================================================================
 # Basic publish and subscribe
@@ -555,5 +556,194 @@ async def test_subscriber_pattern_property():
     resolved, _, _ = resolve_name("my/topic", "test_node", "")
     assert sub.pattern == resolved
 
+    sub.close()
+    node.close()
+
+
+# =====================================================================================================================
+# Subscriber.listen(callback)
+# =====================================================================================================================
+
+
+async def test_listen_sync_callback():
+    """A sync callback should receive every published Arrival."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+
+    pub = node.advertise("my/topic")
+    sub = node.subscribe("my/topic")
+
+    received: list[Arrival | Error] = []
+    task = sub.listen(received.append)
+
+    for i in range(3):
+        await pub(pycyphal2.Instant.now() + 1.0, f"msg{i}".encode())
+    # Let the listen loop drain the queue.
+    for _ in range(20):
+        if len(received) >= 3:
+            break
+        await asyncio.sleep(0.01)
+
+    sub.close()
+    await asyncio.wait_for(task, timeout=1.0)
+
+    assert len(received) == 3
+    assert [r.message for r in received if isinstance(r, Arrival)] == [b"msg0", b"msg1", b"msg2"]
+
+    pub.close()
+    node.close()
+
+
+async def test_listen_async_callback():
+    """An async callback should be awaited for every published Arrival."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+
+    pub = node.advertise("my/topic")
+    sub = node.subscribe("my/topic")
+
+    received: list[Arrival | Error] = []
+
+    async def cb(item: Arrival | Error) -> None:
+        # A real await between receive and store exercises the await-path.
+        await asyncio.sleep(0)
+        received.append(item)
+
+    task = sub.listen(cb)
+
+    for i in range(3):
+        await pub(pycyphal2.Instant.now() + 1.0, f"msg{i}".encode())
+    for _ in range(20):
+        if len(received) >= 3:
+            break
+        await asyncio.sleep(0.01)
+
+    sub.close()
+    await asyncio.wait_for(task, timeout=1.0)
+
+    assert len(received) == 3
+    assert [r.message for r in received if isinstance(r, Arrival)] == [b"msg0", b"msg1", b"msg2"]
+
+    pub.close()
+    node.close()
+
+
+async def test_listen_liveness_error_delivered_as_value():
+    """LivenessError from __anext__ should be delivered to the callback; the loop keeps running."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+
+    pub = node.advertise("my/topic")
+    sub = node.subscribe("my/topic")
+    sub.timeout = 0.03
+
+    received: list[Arrival | Error] = []
+    task = sub.listen(received.append)
+
+    # Give the loop time to fire at least one LivenessError before any message arrives.
+    await asyncio.sleep(0.1)
+    await pub(pycyphal2.Instant.now() + 1.0, b"after_timeout")
+    for _ in range(20):
+        if any(isinstance(r, Arrival) for r in received):
+            break
+        await asyncio.sleep(0.01)
+
+    sub.close()
+    await asyncio.wait_for(task, timeout=1.0)
+
+    assert any(isinstance(r, LivenessError) for r in received)
+    assert any(isinstance(r, Arrival) and r.message == b"after_timeout" for r in received)
+    assert task.exception() is None
+
+    pub.close()
+    node.close()
+
+
+async def test_listen_non_error_exception_fails_task(caplog: pytest.LogCaptureFixture) -> None:
+    """A non-Error exception from __anext__ should propagate out and fail the task."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+
+    sub = subscribe_impl(node, "my/topic")
+
+    received: list[Arrival | Error] = []
+    with caplog.at_level(logging.ERROR, logger="pycyphal2._api"):
+        task = sub.listen(received.append)
+        # Inject a non-Error exception into the receive queue; __anext__ will re-raise it.
+        sub.queue.put_nowait(OSError("boom"))
+        with pytest.raises(OSError, match="boom"):
+            await asyncio.wait_for(task, timeout=1.0)
+
+    assert received == []
+    assert any("terminated" in rec.message for rec in caplog.records)
+
+    sub.close()
+    node.close()
+
+
+async def test_listen_task_cancellation():
+    """Cancelling the returned task should stop the loop cleanly."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+
+    sub = node.subscribe("my/topic")
+    received: list[Arrival | Error] = []
+    task = sub.listen(received.append)
+
+    # Give the loop a chance to enter its first await.
+    await asyncio.sleep(0.01)
+    task.cancel()
+    results = await asyncio.gather(task, return_exceptions=True)
+    assert isinstance(results[0], asyncio.CancelledError)
+    assert task.cancelled()
+
+    sub.close()
+    node.close()
+
+
+async def test_listen_close_stops_task_cleanly():
+    """Closing the subscriber should terminate the task with no exception."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+
+    sub = node.subscribe("my/topic")
+    task = sub.listen(lambda _item: None)
+
+    await asyncio.sleep(0.01)
+    sub.close()
+    await asyncio.wait_for(task, timeout=1.0)
+    assert task.done()
+    assert task.exception() is None
+
+    node.close()
+
+
+async def test_listen_callback_exception_fails_task(caplog: pytest.LogCaptureFixture) -> None:
+    """A callback that raises should fail the task; the error should be logged."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+
+    pub = node.advertise("my/topic")
+    sub = node.subscribe("my/topic")
+
+    def cb(_item: Arrival | Error) -> None:
+        raise ValueError("callback bug")
+
+    with caplog.at_level(logging.ERROR, logger="pycyphal2._api"):
+        task = sub.listen(cb)
+        await pub(pycyphal2.Instant.now() + 1.0, b"trigger")
+        with pytest.raises(ValueError, match="callback bug"):
+            await asyncio.wait_for(task, timeout=1.0)
+
+    assert any("terminated" in rec.message for rec in caplog.records)
+
+    pub.close()
     sub.close()
     node.close()

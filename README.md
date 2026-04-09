@@ -25,13 +25,13 @@ pip install pycyphal2
 ```
 
 ```python
-import pycyphal2
-import pycyphal2.udp
+from pycyphal2 import Node
+from pycyphal2.udp import UDPTransport
 
 async def main():
     # Set up the local node.
-    transport = pycyphal2.udp.new()
-    node = pycyphal2.new(transport, home="my_node")
+    transport = UDPTransport.new()
+    node = Node.new(transport, home="my_node")
     
     # Subscribe to a topic.
     sub = node.subscribe("my/topic")

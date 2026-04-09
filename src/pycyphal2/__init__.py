@@ -6,7 +6,8 @@ implementations of the public interfaces are hidden and private.
 One exception applies to transport-specific direct submodules like ``pycyphal2.udp``, ``pycyphal2.can`` --
 the user should import only the needed transports manually.
 
-To start using the library, the application will invoke ``pycyphal2.new()``.
+To start using the library, the application will invoke ``pycyphal2.Node.new()`` after constructing a transport,
+such as ``pycyphal2.udp.UDPTransport.new()``.
 """
 
 from __future__ import annotations

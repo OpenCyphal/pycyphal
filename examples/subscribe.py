@@ -16,15 +16,15 @@ import logging
 import sys
 from pathlib import Path
 
-import pycyphal2
-import pycyphal2.udp
+from pycyphal2 import Node, LivenessError
+from pycyphal2.udp import UDPTransport
 
 HOME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random ID will be added.
 
 
 async def run(topic: str, timeout: float) -> None:
-    transport = pycyphal2.udp.new()
-    node = pycyphal2.new(transport, home=HOME)
+    transport = UDPTransport.new()
+    node = Node.new(transport, home=HOME)
     sub = node.subscribe(topic)
     if timeout > 0:
         sub.timeout = timeout
@@ -41,7 +41,7 @@ async def run(topic: str, timeout: float) -> None:
             )
             sys.stdout.write(line + "\n")
             sys.stdout.flush()
-    except pycyphal2.LivenessError:
+    except LivenessError:
         logging.info("Liveness timeout — no messages for %.1f s", timeout)
     finally:
         sub.close()

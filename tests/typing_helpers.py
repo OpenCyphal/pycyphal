@@ -12,7 +12,7 @@ from tests.mock_transport import MockSubjectWriter
 
 
 def new_node(transport: pycyphal2.Transport, *, home: str = "", namespace: str = "") -> NodeImpl:
-    node = pycyphal2.new(transport, home=home, namespace=namespace)
+    node = pycyphal2.Node.new(transport, home=home, namespace=namespace)
     assert isinstance(node, NodeImpl)
     return node
 

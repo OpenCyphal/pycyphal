@@ -20,7 +20,6 @@ from pycyphal2 import (
 from pycyphal2._hash import (
     CRC32C_INITIAL,
     CRC32C_OUTPUT_XOR,
-    CRC32C_RESIDUE,
     crc32c_add,
     crc32c_full,
 )
@@ -32,6 +31,7 @@ from pycyphal2.udp import (
     TRANSFER_ID_MASK,
     UDP_PORT,
     Interface,
+    UDPTransport,
     _FrameHeader,
     _RxReassembler,
     _SUBJECT_ID_MODULUS_MAX,
@@ -41,47 +41,7 @@ from pycyphal2.udp import (
     _make_subject_endpoint,
     _segment_transfer,
     _UDPTransportImpl,
-    list_interfaces,
-    new,
 )
-
-# =====================================================================================================================
-# CRC-32C Tests
-# =====================================================================================================================
-
-
-class TestCRC32C:
-    def test_known_vector(self):
-        """Standard CRC-32C test vector."""
-        assert crc32c_full(b"123456789") == 0xE3069283
-
-    def test_empty(self):
-        assert crc32c_full(b"") == 0x00000000
-
-    def test_single_byte(self):
-        assert crc32c_full(b"\x00") != 0
-        assert isinstance(crc32c_full(b"\xff"), int)
-
-    def test_residue_property(self):
-        """CRC of (data + CRC in LE) equals the residue constant."""
-        for data in [b"hello", b"", b"123456789", os.urandom(256)]:
-            c = crc32c_full(data)
-            combined = data + c.to_bytes(4, "little")
-            assert crc32c_full(combined) == CRC32C_RESIDUE, f"Residue check failed for data of len {len(data)}"
-
-    def test_incremental(self):
-        """_crc_add composes correctly: crc(a+b) == crc_add(crc_add(init, a), b) ^ xor."""
-        data = os.urandom(100)
-        full_crc = crc32c_full(data)
-        split = 37
-        state = crc32c_add(CRC32C_INITIAL, data[:split])
-        state = crc32c_add(state, data[split:])
-        assert (state ^ CRC32C_OUTPUT_XOR) == full_crc
-
-    def test_memoryview(self):
-        data = b"test data"
-        assert crc32c_full(memoryview(data)) == crc32c_full(data)
-
 
 # =====================================================================================================================
 # Header Tests
@@ -651,21 +611,21 @@ class TestUID:
 
 class TestInterfaces:
     def test_list_interfaces(self):
-        ifaces = list_interfaces()
+        ifaces = UDPTransport.list_interfaces()
         assert len(ifaces) >= 1, "At least one interface (loopback) expected"
 
     def test_loopback_present(self):
-        ifaces = list_interfaces()
+        ifaces = UDPTransport.list_interfaces()
         loopback = [i for i in ifaces if i.address.is_loopback]
         assert len(loopback) >= 1, "Loopback interface expected"
 
     def test_loopback_last(self):
-        ifaces = list_interfaces()
+        ifaces = UDPTransport.list_interfaces()
         if len(ifaces) > 1:
             assert ifaces[-1].address.is_loopback, "Loopback should be sorted last"
 
     def test_mtu_valid(self):
-        ifaces = list_interfaces()
+        ifaces = UDPTransport.list_interfaces()
         for iface in ifaces:
             assert iface.mtu_link >= 576, f"MTU too small: {iface.mtu_link}"
             assert iface.mtu_cyphal > 0
@@ -727,11 +687,6 @@ class TestWireCompatibility:
         assert hdr is not None
         assert frame[HEADER_SIZE:] == payload
 
-    def test_known_crc_value(self):
-        """Verify CRC-32C against a known value to ensure table correctness."""
-        # CRC-32C("123456789") = 0xE3069283 is the standard test vector
-        assert crc32c_full(b"123456789") == 0xE3069283
-
     def test_multiframe_reassembly_matches_segmentation(self):
         """Segment then reassemble via the RX path; verify byte-identical output."""
         payload = os.urandom(1000)
@@ -755,7 +710,7 @@ class TestWireCompatibility:
 
 
 def _get_loopback_iface() -> Interface:
-    ifaces = list_interfaces()
+    ifaces = UDPTransport.list_interfaces()
     lo = [i for i in ifaces if i.address.is_loopback]
     if not lo:
         pytest.skip("No loopback interface available")
@@ -769,10 +724,10 @@ def loopback_iface():
 
 class TestIntegrationPubSub:
     @pytest.mark.asyncio
-    async def test_single_frame_pubsub(self, loopback_iface):
+    async def test_single_frame_pubsub(self):
         """Two transports on loopback: one publishes, the other subscribes."""
-        pub = new(interfaces=[loopback_iface])
-        sub = new(interfaces=[loopback_iface])
+        pub = UDPTransport.new_loopback()
+        sub = UDPTransport.new_loopback()
         try:
             received: list[TransportArrival] = []
             sub.subject_listen(42, received.append)
@@ -797,8 +752,8 @@ class TestIntegrationPubSub:
         """Send payload larger than MTU, verify correct reassembly."""
         small_iface = Interface(address=loopback_iface.address, mtu_link=608)
         # mtu_cyphal = 508, so payload of 2000 bytes -> 4 frames
-        pub = new(interfaces=[small_iface])
-        sub = new(interfaces=[small_iface])
+        pub = UDPTransport.new(interfaces=[small_iface])
+        sub = UDPTransport.new(interfaces=[small_iface])
         try:
             received: list[TransportArrival] = []
             sub.subject_listen(100, received.append)
@@ -818,10 +773,10 @@ class TestIntegrationPubSub:
             sub.close()
 
     @pytest.mark.asyncio
-    async def test_multiple_messages(self, loopback_iface):
+    async def test_multiple_messages(self):
         """Send several messages, all received in order."""
-        pub = new(interfaces=[loopback_iface])
-        sub = new(interfaces=[loopback_iface])
+        pub = UDPTransport.new_loopback()
+        sub = UDPTransport.new_loopback()
         try:
             received: list[TransportArrival] = []
             sub.subject_listen(7, received.append)
@@ -842,9 +797,9 @@ class TestIntegrationPubSub:
             sub.close()
 
     @pytest.mark.asyncio
-    async def test_empty_payload(self, loopback_iface):
-        pub = new(interfaces=[loopback_iface])
-        sub = new(interfaces=[loopback_iface])
+    async def test_empty_payload(self):
+        pub = UDPTransport.new_loopback()
+        sub = UDPTransport.new_loopback()
         try:
             received: list[TransportArrival] = []
             sub.subject_listen(99, received.append)
@@ -863,10 +818,10 @@ class TestIntegrationPubSub:
 
 class TestIntegrationUnicast:
     @pytest.mark.asyncio
-    async def test_unicast_roundtrip(self, loopback_iface):
+    async def test_unicast_roundtrip(self):
         """A publishes subject message -> B learns A's endpoint -> B unicasts to A."""
-        a = new(interfaces=[loopback_iface])
-        b = new(interfaces=[loopback_iface])
+        a = UDPTransport.new_loopback()
+        b = UDPTransport.new_loopback()
         try:
             # B subscribes to subject 50 (to learn A's endpoint)
             subject_received: list[TransportArrival] = []
@@ -901,10 +856,10 @@ class TestIntegrationUnicast:
 
 class TestIntegrationListenerLifecycle:
     @pytest.mark.asyncio
-    async def test_listener_close_stops_delivery(self, loopback_iface):
+    async def test_listener_close_stops_delivery(self):
         """After closing a listener, no more messages are delivered to it."""
-        pub = new(interfaces=[loopback_iface])
-        sub = new(interfaces=[loopback_iface])
+        pub = UDPTransport.new_loopback()
+        sub = UDPTransport.new_loopback()
         try:
             received: list[TransportArrival] = []
             listener = sub.subject_listen(60, received.append)
@@ -926,8 +881,8 @@ class TestIntegrationListenerLifecycle:
             sub.close()
 
     @pytest.mark.asyncio
-    async def test_duplicate_listener_same_subject_raises(self, loopback_iface):
-        sub = new(interfaces=[loopback_iface])
+    async def test_duplicate_listener_same_subject_raises(self):
+        sub = UDPTransport.new_loopback()
         try:
             listener = sub.subject_listen(70, lambda a: None)
             with pytest.raises(ValueError, match="active listener"):
@@ -937,9 +892,9 @@ class TestIntegrationListenerLifecycle:
             sub.close()
 
     @pytest.mark.asyncio
-    async def test_listener_close_allows_relisten(self, loopback_iface):
-        pub = new(interfaces=[loopback_iface])
-        sub = new(interfaces=[loopback_iface])
+    async def test_listener_close_allows_relisten(self):
+        pub = UDPTransport.new_loopback()
+        sub = UDPTransport.new_loopback()
         try:
             received_before: list[TransportArrival] = []
             received_after: list[TransportArrival] = []
@@ -964,8 +919,8 @@ class TestIntegrationListenerLifecycle:
             sub.close()
 
     @pytest.mark.asyncio
-    async def test_duplicate_writer_same_subject_raises(self, loopback_iface):
-        t = new(interfaces=[loopback_iface])
+    async def test_duplicate_writer_same_subject_raises(self):
+        t = UDPTransport.new_loopback()
         try:
             writer = t.subject_advertise(81)
             with pytest.raises(ValueError, match="active writer"):
@@ -975,9 +930,9 @@ class TestIntegrationListenerLifecycle:
             t.close()
 
     @pytest.mark.asyncio
-    async def test_writer_close_allows_readvertise(self, loopback_iface):
-        pub = new(interfaces=[loopback_iface])
-        sub = new(interfaces=[loopback_iface])
+    async def test_writer_close_allows_readvertise(self):
+        pub = UDPTransport.new_loopback()
+        sub = UDPTransport.new_loopback()
         try:
             received: list[TransportArrival] = []
             sub.subject_listen(82, received.append)
@@ -1002,8 +957,8 @@ class TestIntegrationListenerLifecycle:
 
 class TestIntegrationTransportClose:
     @pytest.mark.asyncio
-    async def test_close_cleans_up(self, loopback_iface):
-        t = new(interfaces=[loopback_iface])
+    async def test_close_cleans_up(self):
+        t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         t.subject_listen(90, lambda a: None)
         t.subject_advertise(90)
@@ -1017,14 +972,14 @@ class TestIntegrationTransportClose:
         assert t.closed
 
     @pytest.mark.asyncio
-    async def test_close_idempotent(self, loopback_iface):
-        t = new(interfaces=[loopback_iface])
+    async def test_close_idempotent(self):
+        t = UDPTransport.new_loopback()
         t.close()
         t.close()  # Should not raise
 
     @pytest.mark.asyncio
-    async def test_operations_after_close_fail(self, loopback_iface):
-        t = new(interfaces=[loopback_iface])
+    async def test_operations_after_close_fail(self):
+        t = UDPTransport.new_loopback()
         writer = t.subject_advertise(91)
         t.close()
         with pytest.raises(SendError):
@@ -1032,20 +987,20 @@ class TestIntegrationTransportClose:
 
     @pytest.mark.asyncio
     async def test_subject_id_modulus(self, loopback_iface):
-        t = new(interfaces=[loopback_iface], subject_id_modulus=_SUBJECT_ID_MODULUS_MAX)
+        t = UDPTransport.new(interfaces=[loopback_iface], subject_id_modulus=_SUBJECT_ID_MODULUS_MAX)
         assert t.subject_id_modulus == _SUBJECT_ID_MODULUS_MAX
         t.close()
 
     @pytest.mark.asyncio
     async def test_subject_id_modulus_too_large_rejected(self, loopback_iface):
         with pytest.raises(ValueError, match="subject_id_modulus"):
-            new(interfaces=[loopback_iface], subject_id_modulus=_SUBJECT_ID_MODULUS_MAX + 1)
+            UDPTransport.new(interfaces=[loopback_iface], subject_id_modulus=_SUBJECT_ID_MODULUS_MAX + 1)
 
 
 class TestIntegrationRXParity:
     @pytest.mark.asyncio
-    async def test_malformed_frame_does_not_learn_endpoint(self, loopback_iface):
-        t = new(interfaces=[loopback_iface])
+    async def test_malformed_frame_does_not_learn_endpoint(self):
+        t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
             frame = _segment_transfer(4, 1, 0xAA, b"hello", mtu=1400)[0]
@@ -1056,8 +1011,8 @@ class TestIntegrationRXParity:
             t.close()
 
     @pytest.mark.asyncio
-    async def test_transfer_failure_still_learns_endpoint(self, loopback_iface):
-        t = new(interfaces=[loopback_iface])
+    async def test_transfer_failure_still_learns_endpoint(self):
+        t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
             frames = _segment_transfer(4, 1, 0xAB, os.urandom(200), mtu=100)
@@ -1069,8 +1024,8 @@ class TestIntegrationRXParity:
             t.close()
 
     @pytest.mark.asyncio
-    async def test_transport_arrival_timestamp_uses_first_frame(self, loopback_iface):
-        t = new(interfaces=[loopback_iface])
+    async def test_transport_arrival_timestamp_uses_first_frame(self):
+        t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
             received: list[TransportArrival] = []
@@ -1090,9 +1045,9 @@ class TestIntegrationRXParity:
 
 class TestIntegrationSelfSendFilter:
     @pytest.mark.asyncio
-    async def test_self_send_filtered(self, loopback_iface):
+    async def test_self_send_filtered(self):
         """A transport should NOT receive its own multicast messages."""
-        t = new(interfaces=[loopback_iface])
+        t = UDPTransport.new_loopback()
         try:
             received: list[TransportArrival] = []
             t.subject_listen(55, received.append)
@@ -1106,10 +1061,10 @@ class TestIntegrationSelfSendFilter:
 
 class TestIntegrationDifferentSubjects:
     @pytest.mark.asyncio
-    async def test_messages_isolated_by_subject(self, loopback_iface):
+    async def test_messages_isolated_by_subject(self):
         """Messages on different subjects don't cross-deliver."""
-        pub = new(interfaces=[loopback_iface])
-        sub = new(interfaces=[loopback_iface])
+        pub = UDPTransport.new_loopback()
+        sub = UDPTransport.new_loopback()
         try:
             received_10: list[TransportArrival] = []
             received_20: list[TransportArrival] = []
@@ -1141,7 +1096,7 @@ class TestEmptyInterfaces:
     @pytest.mark.asyncio
     async def test_empty_list_auto_discovers(self):
         """Empty list is treated as None — auto-discovers interfaces."""
-        t = new(interfaces=[])
+        t = UDPTransport.new(interfaces=[])
         try:
             assert len(t.interfaces) >= 1
         finally:
@@ -1155,8 +1110,8 @@ class TestEmptyInterfaces:
 
 class TestAsyncSendto:
     @pytest.mark.asyncio
-    async def test_deadline_already_expired(self, loopback_iface):
-        t = new(interfaces=[loopback_iface])
+    async def test_deadline_already_expired(self):
+        t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
             sock = t._tx_socks[0]
@@ -1167,8 +1122,8 @@ class TestAsyncSendto:
             t.close()
 
     @pytest.mark.asyncio
-    async def test_sendto_immediate_success(self, loopback_iface):
-        t = new(interfaces=[loopback_iface])
+    async def test_sendto_immediate_success(self):
+        t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
             sock = t._tx_socks[0]
@@ -1178,9 +1133,9 @@ class TestAsyncSendto:
             t.close()
 
     @pytest.mark.asyncio
-    async def test_sendto_delegates_to_loop(self, loopback_iface):
+    async def test_sendto_delegates_to_loop(self):
         """Verify _async_sendto delegates to loop.sock_sendto."""
-        t = new(interfaces=[loopback_iface])
+        t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
             sock = t._tx_socks[0]
@@ -1198,9 +1153,9 @@ class TestAsyncSendto:
             t.close()
 
     @pytest.mark.asyncio
-    async def test_deadline_exceeded_during_wait(self, loopback_iface):
+    async def test_deadline_exceeded_during_wait(self):
         """sock_sendto hangs forever, short deadline -> SendError."""
-        t = new(interfaces=[loopback_iface])
+        t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
             sock = t._tx_socks[0]
@@ -1216,9 +1171,9 @@ class TestAsyncSendto:
             t.close()
 
     @pytest.mark.asyncio
-    async def test_sendto_os_error_propagates(self, loopback_iface):
+    async def test_sendto_os_error_propagates(self):
         """Non-BlockingIOError OSError propagated correctly."""
-        t = new(interfaces=[loopback_iface])
+        t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
             sock = t._tx_socks[0]

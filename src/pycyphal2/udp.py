@@ -546,71 +546,6 @@ class _UDPSubjectListener(Closable):
 # =====================================================================================================================
 
 
-def new(
-    interfaces: Iterable[Interface] | None = None,
-    uid: int | None = None,
-    *,
-    subject_id_modulus: int = SUBJECT_ID_MODULUS_23bit,
-) -> UDPTransport:
-    """
-    Constructs a new Cyphal/UDP transport instance that will operate over the specified local network interfaces.
-
-    If no interfaces are given (empty list or None, which is default), suitable interfaces will be automatically
-    detected. You can also use list_interfaces() for a semi-automatic approach.
-
-    The UID is a globally unique 64-bit identifier of the local node. If not given, one will be generated randomly.
-    """
-    # Resolve interfaces.
-    if not interfaces:
-        ifaces = list_interfaces()
-        if not ifaces:
-            raise RuntimeError("No suitable network interfaces found")
-        interfaces = [ifaces[0]]
-    else:
-        interfaces = list(interfaces)
-    if not isinstance(interfaces, list) or not all(isinstance(i, Interface) for i in interfaces):
-        raise ValueError("interfaces must be an iterable of Interface instances")
-
-    # Resolve UID.
-    uid = uid or eui64()
-    if not isinstance(uid, int) or not (0 < uid < 2**64):
-        raise ValueError("uid must be a positive 64-bit integer")
-
-    return _UDPTransportImpl(interfaces=interfaces, uid=uid, subject_id_modulus=subject_id_modulus)
-
-
-def list_interfaces() -> list[Interface]:
-    """List usable IPv4 network interfaces. Default interface first, loopback last."""
-    default_ip = _get_default_iface_ip()
-    result: list[Interface] = []
-    for adapter in ifaddr.get_adapters():
-        for ip in adapter.ips:
-            if not isinstance(ip.ip, str):
-                _logger.info("Skipping non-string IP on %s: %r", adapter.name, ip.ip)
-                continue
-            try:
-                addr = IPv4Address(ip.ip)
-            except ValueError:
-                _logger.info("Skipping non-IPv4 address on %s: %s", adapter.name, ip.ip)
-                continue
-            mtu = _get_iface_mtu(adapter.name)
-            if mtu < _CYPHAL_MTU_LINK_MIN:
-                _logger.info("Skipping %s (%s): MTU %d < %d", adapter.name, addr, mtu, _CYPHAL_MTU_LINK_MIN)
-                continue
-            _logger.info("Found interface %s: %s, MTU=%d", adapter.name, addr, mtu)
-            result.append(Interface(address=addr, mtu_link=mtu))
-
-    def sort_key(iface: Interface) -> tuple[int, str]:
-        if default_ip is not None and iface.address == default_ip:
-            return 0, str(iface.address)
-        if iface.address.is_loopback:
-            return 2, str(iface.address)
-        return 1, str(iface.address)
-
-    result.sort(key=sort_key)
-    return result
-
-
 class UDPTransport(Transport, ABC):
     """
     The public API of the Cyphal/UDP transport.
@@ -627,6 +562,76 @@ class UDPTransport(Transport, ABC):
     def interfaces(self) -> list[Interface]:
         """List of (redundant) interfaces that the transport is operating over. Never empty."""
         raise NotImplementedError
+
+    @staticmethod
+    def new(
+        interfaces: Iterable[Interface] | None = None,
+        uid: int | None = None,
+        *,
+        subject_id_modulus: int = SUBJECT_ID_MODULUS_23bit,
+    ) -> UDPTransport:
+        """
+        Constructs a new Cyphal/UDP transport instance that will operate over the specified local network interfaces.
+
+        If no interfaces are given (empty list or None, which is default), suitable interfaces will be automatically
+        detected. You can also use ``UDPTransport.list_interfaces()`` for a semi-automatic approach.
+
+        The UID is a globally unique 64-bit identifier of the local node. If not given, one will be generated randomly.
+        """
+        # Resolve interfaces.
+        if not interfaces:
+            ifaces = UDPTransport.list_interfaces()
+            if not ifaces:
+                raise RuntimeError("No suitable network interfaces found")
+            interfaces = [ifaces[0]]
+        else:
+            interfaces = list(interfaces)
+        if not isinstance(interfaces, list) or not all(isinstance(i, Interface) for i in interfaces):
+            raise ValueError("interfaces must be an iterable of Interface instances")
+
+        # Resolve UID.
+        uid = uid or eui64()
+        if not isinstance(uid, int) or not (0 < uid < 2**64):
+            raise ValueError("uid must be a positive 64-bit integer")
+
+        return _UDPTransportImpl(interfaces=interfaces, uid=uid, subject_id_modulus=subject_id_modulus)
+
+    @staticmethod
+    def new_loopback() -> UDPTransport:
+        """A simple wrapper that uses the local loopback interface."""
+        return UDPTransport.new([Interface(IPv4Address("127.0.0.1"), mtu_link=1500)])
+
+    @staticmethod
+    def list_interfaces() -> list[Interface]:
+        """List usable IPv4 network interfaces. Default interface first, loopback last."""
+        default_ip = _get_default_iface_ip()
+        result: list[Interface] = []
+        for adapter in ifaddr.get_adapters():
+            for ip in adapter.ips:
+                if not isinstance(ip.ip, str):
+                    _logger.info("Skipping non-string IP on %s: %r", adapter.name, ip.ip)
+                    continue
+                try:
+                    addr = IPv4Address(ip.ip)
+                except ValueError:
+                    _logger.info("Skipping non-IPv4 address on %s: %s", adapter.name, ip.ip)
+                    continue
+                mtu = _get_iface_mtu(adapter.name)
+                if mtu < _CYPHAL_MTU_LINK_MIN:
+                    _logger.info("Skipping %s (%s): MTU %d < %d", adapter.name, addr, mtu, _CYPHAL_MTU_LINK_MIN)
+                    continue
+                _logger.info("Found interface %s: %s, MTU=%d", adapter.name, addr, mtu)
+                result.append(Interface(address=addr, mtu_link=mtu))
+
+        def sort_key(iface: Interface) -> tuple[int, str]:
+            if default_ip is not None and iface.address == default_ip:
+                return 0, str(iface.address)
+            if iface.address.is_loopback:
+                return 2, str(iface.address)
+            return 1, str(iface.address)
+
+        result.sort(key=sort_key)
+        return result
 
 
 class _UDPTransportImpl(UDPTransport):

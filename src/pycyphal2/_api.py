@@ -7,16 +7,21 @@ There is also the downward-facing contract for the transport layer in the adjace
 
 from __future__ import annotations
 
+import asyncio
+import inspect
+import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
 import random
 import platform
-from typing import Any, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ._transport import Transport as Transport
+
+_logger = logging.getLogger(__name__)
 
 SUBJECT_ID_PINNED_MAX = 0x1FFF
 
@@ -344,6 +349,48 @@ class Subscriber(Closable, ABC):
         """
         raise NotImplementedError
 
+    def listen(
+        self,
+        callback: Callable[[Arrival | Error], Awaitable[None] | None],
+    ) -> asyncio.Task[None]:
+        """
+        Launch a background task that forwards every received message to ``callback``.
+        The callback may be sync or async and is invoked with either an :class:`Arrival` or a library-level
+        :class:`Error` raised by the receive side (e.g. :class:`LivenessError`).
+        Such errors are delivered as values and the loop keeps running; the callback decides how to react.
+
+        The task terminates cleanly when the subscriber is closed or when the caller cancels the task.
+        Any non-:class:`Error` exception from ``__anext__``, or any exception raised by the callback itself,
+        fails the task and is logged.
+
+        The caller must retain a reference to the returned task; otherwise the event loop may garbage-collect it.
+        """
+
+        async def loop() -> None:
+            while True:
+                item: Arrival | Error
+                try:
+                    item = await self.__anext__()
+                except StopAsyncIteration:
+                    return
+                except Error as exc:  # Library-level errors are delivered as values.
+                    item = exc
+                result = callback(item)
+                if inspect.isawaitable(result):
+                    await result
+
+        task = asyncio.create_task(loop(), name=f"pycyphal2.listen:{self.pattern}")
+
+        def on_done(t: asyncio.Task[None]) -> None:
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc is not None:
+                _logger.error("listen() task for %r terminated with %r", self.pattern, exc)
+
+        task.add_done_callback(on_done)
+        return task
+
     def __repr__(self) -> str:
         return f"Subscriber(pattern={self.pattern!r}, verbatim={self.verbatim}, timeout={self.timeout})"
 
@@ -382,28 +429,28 @@ class Node(Closable, ABC):
     def __repr__(self) -> str:
         return f"Node(home={self.home!r}, namespace={self.namespace!r})"
 
+    @staticmethod
+    def new(transport: Transport, *, home: str = "", namespace: str = "") -> Node:
+        """
+        Construct a new node using the specified transport. This is the main entry point of the library.
 
-def new(transport: Transport, *, home: str = "", namespace: str = "") -> Node:
-    """
-    Construct a new node using the specified transport. This is the main entry point of the library.
+        The transport is constructed using one of the stock transport implementations like ``pycyphal2.udp``,
+        depending on the needs of the application, or it could be custom.
 
-    The transport is constructed using one of the stock transport implementations like ``pycyphal2.udp``,
-    depending on the needs of the application, or it could be custom.
+        Every node needs a unique nonempty home. If the home string is not provided, a random home will be generated.
+        If home ends with a `/`, a unique string will be automatically appended to generate a prefixed unique home;
+        e.g., `my_node` stays as-is; `my_node/` becomes like `my_node/abcdef0123456789`,
+        an empty string becomes a random string.
 
-    Every node needs a unique nonempty home. If the home string is not provided, a random home will be generated.
-    If home ends with a `/`, a unique string will be automatically appended to generate a prefixed unique home;
-    e.g., `my_node` stays as-is; `my_node/` becomes like `my_node/abcdef0123456789`,
-    an empty string becomes a random string.
+        If namespace is not set, it is read from the CYPHAL_NAMESPACE environment variable if available,
+        otherwise it remains empty.
+        """
+        from ._node import NodeImpl
 
-    If namespace is not set, it is read from the CYPHAL_NAMESPACE environment variable if available,
-    otherwise it remains empty.
-    """
-    from ._node import NodeImpl
-
-    # Add random suffix if requested or generate pure random home. Leading/trailing separators will be normalized away.
-    home = home.strip() or "/"
-    home = f"{home}{eui64():016x}" if home.endswith("/") else home
-    return NodeImpl(transport, home=home, namespace=namespace)
+        # Add random suffix if requested or generate pure random home. Leading/trailing separators will be normalized away.
+        home = home.strip() or "/"
+        home = f"{home}{eui64():016x}" if home.endswith("/") else home
+        return NodeImpl(transport, home=home, namespace=namespace)
 
 
 def eui64() -> int:
