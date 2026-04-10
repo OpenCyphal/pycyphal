@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 _RX_POLL_TIMEOUT = 0.1
 _RX_PAUSE_SLEEP_INTERVAL = 0.001
-_RX_PAUSE_TIMEOUT_MULTIPLIER = 2.0
+_RX_PAUSE_TIMEOUT_MULTIPLIER = 10.0
 _CAN_EXT_ID_MASK = (1 << 29) - 1
 
 
@@ -220,7 +220,8 @@ class PythonCANInterface(Interface):
         if not self._rx_thread.is_alive() or threading.current_thread() is self._rx_thread:
             return
         self._rx_pause_request.set()
-        self._rx_pause_ack.wait(timeout=_RX_POLL_TIMEOUT * _RX_PAUSE_TIMEOUT_MULTIPLIER)
+        if not self._rx_pause_ack.wait(timeout=_RX_POLL_TIMEOUT * _RX_PAUSE_TIMEOUT_MULTIPLIER):
+            _logger.warning("PythonCAN rx pause timeout iface=%s", self._name)
 
     def _resume_rx_thread(self) -> None:
         self._rx_pause_request.clear()
