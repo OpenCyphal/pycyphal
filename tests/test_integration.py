@@ -290,3 +290,80 @@ async def test_advertise_pattern_rejected():
         node.advertise("/sensor/*/data")
 
     node.close()
+
+
+async def test_remap_string_parsing():
+    """Remap from a whitespace-separated string of from=to pairs."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="h", namespace="ns")
+
+    node.remap("foo=bar baz=qux")
+    pub = node.advertise("foo")
+    topic = list(node.topics_by_name.values())[0]
+    assert topic.name == "ns/bar"
+
+    pub.close()
+    node.close()
+
+
+async def test_remap_dict():
+    """Remap from a dict."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="h", namespace="ns")
+
+    node.remap({"foo": "/absolute"})
+    pub = node.advertise("foo")
+    topic = list(node.topics_by_name.values())[0]
+    assert topic.name == "absolute"
+
+    pub.close()
+    node.close()
+
+
+async def test_remap_incremental():
+    """Multiple remap calls merge incrementally; later entries override."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="h", namespace="ns")
+
+    node.remap({"a": "b"})
+    node.remap({"a": "c"})
+    pub = node.advertise("a")
+    topic = list(node.topics_by_name.values())[0]
+    assert topic.name == "ns/c"
+
+    pub.close()
+    node.close()
+
+
+async def test_remap_advertise_pinned():
+    """Remap target with pin suffix applies pin to the topic."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="h", namespace="ns")
+
+    node.remap({"my/topic": "remapped#42"})
+    pub = node.advertise("my/topic")
+    topic = list(node.topics_by_name.values())[0]
+    assert topic.name == "ns/remapped"
+    assert topic.subject_id == 42
+
+    pub.close()
+    node.close()
+
+
+async def test_remap_from_env(monkeypatch):
+    """CYPHAL_REMAP environment variable should be applied at node construction."""
+    monkeypatch.setenv("CYPHAL_REMAP", "sensor=mapped")
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="h", namespace="ns")
+
+    pub = node.advertise("sensor")
+    topic = list(node.topics_by_name.values())[0]
+    assert topic.name == "ns/mapped"
+
+    pub.close()
+    node.close()

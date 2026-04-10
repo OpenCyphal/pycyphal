@@ -503,3 +503,57 @@ def test_match_star_then_chevron_too_short() -> None:
 def test_match_second_chevron_is_literal() -> None:
     assert match_pattern("a/>/>/c", "a/>/>/c") == []
     assert match_pattern("a/>/>/c", "a/>/d/c") is None
+
+
+# =====================================================================================================================
+# resolve_name -- remapping
+# =====================================================================================================================
+
+
+def test_remap_relative() -> None:
+    """Docstring row 1: foo/bar  foo/bar  zoo  ns  me  ns/zoo  -  relative remap."""
+    resolved, pin, verbatim = resolve_name("foo/bar", "me", "ns", {"foo/bar": "zoo"})
+    assert resolved == "ns/zoo"
+    assert pin is None
+    assert verbatim is True
+
+
+def test_remap_pinned_target() -> None:
+    """Docstring row 2: foo/bar  foo/bar  zoo#123  ns  me  ns/zoo  123  pinned relative remap."""
+    resolved, pin, _ = resolve_name("foo/bar", "me", "ns", {"foo/bar": "zoo#123"})
+    assert resolved == "ns/zoo"
+    assert pin == 123
+
+
+def test_remap_user_pin_discarded() -> None:
+    """Docstring row 3: foo/bar#456  foo/bar  zoo  ns  me  ns/zoo  -  matched rule discards user pin."""
+    resolved, pin, _ = resolve_name("foo/bar#456", "me", "ns", {"foo/bar": "zoo"})
+    assert resolved == "ns/zoo"
+    assert pin is None
+
+
+def test_remap_absolute_target() -> None:
+    """Docstring row 4: foo/bar  foo/bar  /zoo  ns  me  zoo  -  absolute remap (ns ignored)."""
+    resolved, pin, _ = resolve_name("foo/bar", "me", "ns", {"foo/bar": "/zoo"})
+    assert resolved == "zoo"
+    assert pin is None
+
+
+def test_remap_homeful_target() -> None:
+    """Docstring row 5: foo/bar  foo/bar  ~/zoo  ns  me  me/zoo  -  homeful remap (home expanded)."""
+    resolved, pin, _ = resolve_name("foo/bar", "me", "ns", {"foo/bar": "~/zoo"})
+    assert resolved == "me/zoo"
+    assert pin is None
+
+
+def test_remap_no_match() -> None:
+    """Unmatched names pass through unchanged."""
+    resolved, pin, _ = resolve_name("other", "me", "ns", {"foo/bar": "zoo"})
+    assert resolved == "ns/other"
+    assert pin is None
+
+
+def test_remap_normalized_lookup() -> None:
+    """Lookup key is normalized, so extra slashes in the user's input still match."""
+    resolved, _, _ = resolve_name("/foo//bar", "me", "ns", {"foo/bar": "zoo"})
+    assert resolved == "ns/zoo"

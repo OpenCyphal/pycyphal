@@ -115,7 +115,9 @@ def _name_is_homeful(name: str) -> bool:
     return name == "~" or name.startswith("~/")
 
 
-def resolve_name(name: str, home: str, namespace: str) -> tuple[str, int | None, bool]:
+def resolve_name(
+    name: str, home: str, namespace: str, remaps: dict[str, str] | None = None
+) -> tuple[str, int | None, bool]:
     """
     Resolve a topic name to (resolved_name, pin_or_None, is_verbatim).
     Raises ValueError on invalid names.
@@ -128,6 +130,13 @@ def resolve_name(name: str, home: str, namespace: str) -> tuple[str, int | None,
 
     # Strip pin suffix first.
     name, pin = _name_consume_pin_suffix(name)
+
+    # Apply remapping: lookup on normalized pin-free name; matched rule replaces both name and pin.
+    if remaps:
+        lookup = _name_normalize(name)
+        if lookup in remaps:
+            name = remaps[lookup]
+            name, pin = _name_consume_pin_suffix(name)
 
     # Classify and construct.
     if name.startswith("/"):
@@ -156,7 +165,7 @@ def resolve_name(name: str, home: str, namespace: str) -> tuple[str, int | None,
     verbatim = "*" not in resolved and ">" not in resolved
     if pin is not None and not verbatim:
         raise ValueError("Pattern names cannot be pinned")
-    return (resolved, pin, verbatim)
+    return resolved, pin, verbatim
 
 
 # =====================================================================================================================
@@ -449,6 +458,7 @@ class NodeImpl(Node):
         self.transport = transport
         self._home = home
         self._namespace = namespace
+        self._remaps: dict[str, str] = {}
         self._closed = False
         self.loop = asyncio.get_running_loop()
         self._now_mono = time.monotonic()
@@ -511,10 +521,18 @@ class NodeImpl(Node):
     def namespace(self) -> str:
         return self._namespace
 
+    def remap(self, spec: str | dict[str, str]) -> None:
+        if isinstance(spec, str):
+            spec = dict(x.split("=", 1) for x in spec.split() if "=" in x)
+        assert isinstance(spec, dict)
+        for from_name, to_name in spec.items():
+            if key := _name_normalize(from_name):
+                self._remaps[key] = to_name
+
     def advertise(self, name: str) -> Publisher:
         from ._publisher import PublisherImpl
 
-        resolved, pin, verbatim = resolve_name(name, self._home, self._namespace)
+        resolved, pin, verbatim = resolve_name(name, self._home, self._namespace, self._remaps)
         if not verbatim:
             raise ValueError("Cannot advertise on a pattern name")
         topic = self.topic_ensure(resolved, pin)
@@ -527,7 +545,7 @@ class NodeImpl(Node):
     def subscribe(self, name: str, *, reordering_window: float | None = None) -> Subscriber:
         from ._subscriber import SubscriberImpl
 
-        resolved, pin, verbatim = resolve_name(name, self._home, self._namespace)
+        resolved, pin, verbatim = resolve_name(name, self._home, self._namespace, self._remaps)
         if pin is not None and not verbatim:
             raise ValueError("Pattern names cannot be pinned")
 

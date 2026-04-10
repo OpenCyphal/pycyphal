@@ -403,6 +403,17 @@ class Subscriber(Closable, ABC):
 class Node(Closable, ABC):
     """
     The top-level entity that represents a node in the network.
+
+    Conventionally, topic names are hardcoded in the application.
+    Integration of a node into a network requires some way of altering such hardcoded names to match the actual network
+    configuration. Several facilities are provided to that end (readers familiar with ROS will feel right at home):
+
+    - Namespacing. When a node is created, the namespace is specified; if not given explicitly, it defaults to the
+      ``CYPHAL_NAMESPACE`` environment variable. This name is added to all relative topic names.
+    - Home, aka node name. Topic names starting with `~/` are updated to replace `~` with the home.
+    - Remapping. A set of replacements is provided that matches hardcoded names and replaces them with arbitrary
+      target names. These are configured via a dedicated method after the node is created; the initial remapping
+      configuration is seeded from the ``CYPHAL_REMAP`` environment variable (whitespace-separated pairs of `from=to`).
     """
 
     @property
@@ -413,6 +424,27 @@ class Node(Closable, ABC):
     @property
     @abstractmethod
     def namespace(self) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def remap(self, spec: str | dict[str, str]) -> None:
+        """
+        Accepts either a string containing ASCII whitespace-separated remapping pairs, where each pair is formed like
+        `from=to`, or a dict where keys match hardcoded names and the values are their replacements.
+        If invoked multiple times, the effect is incremental. Newer entries override older ones in case of conflict.
+
+        When the node is constructed, the default remapping set is configured immediately as
+        ``self.remap(os.getenv("CYPHAL_REMAP", ""))`` (no need to do it manually).
+
+        Remapping examples:
+
+            NAME        FROM    TO      NAMESPACE   HOME    RESOLVED    PINNING REMARK
+            foo/bar     foo/bar zoo     ns          me      ns/zoo      -       relative remap
+            foo/bar     foo/bar zoo#123 ns          me      ns/zoo      123     pinned relative remap
+            foo/bar#456 foo/bar zoo     ns          me      ns/zoo      -       matched rule discards user pin
+            foo/bar     foo/bar /zoo    ns          me      zoo         -       absolute remap (ns ignored)
+            foo/bar     foo/bar ~/zoo   ns          me      me/zoo      -       homeful remap (home expanded)
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -462,7 +494,16 @@ class Node(Closable, ABC):
         # Initialize the namespace: if not given explicitly, read it from the standard environment.
         namespace = namespace.strip() or os.getenv("CYPHAL_NAMESPACE", "").strip()
 
-        return NodeImpl(transport, home=home, namespace=namespace)
+        # Construct the node.
+        node = NodeImpl(transport, home=home, namespace=namespace)
+        _logger.info("Constructed %s", node)
+
+        # Set up default name remapping.
+        try:
+            node.remap(os.getenv("CYPHAL_REMAP", ""))
+        except Exception as ex:
+            _logger.exception("Failed to set up default remapping from CYPHAL_REMAP: %s", ex)
+        return node
 
 
 def eui64() -> int:
