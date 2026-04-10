@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum, auto
 from typing import Iterable
 import itertools
 
@@ -75,13 +74,6 @@ class Filter:
         return filters
 
 
-class State(Enum):
-    ACTIVE = auto()
-    WARNING = auto()
-    PASSIVE = auto()
-    BUS_OFF = auto()
-
-
 class Interface(Closable, ABC):
     """
     A local CAN controller interface.
@@ -96,11 +88,6 @@ class Interface(Closable, ABC):
     @property
     @abstractmethod
     def fd(self) -> bool:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def state(self) -> State:
         raise NotImplementedError
 
     @abstractmethod

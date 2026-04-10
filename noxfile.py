@@ -26,7 +26,7 @@ def clean(session):
 
 @nox.session(python=PYTHONS)
 def test(session: nox.Session) -> None:
-    session.install("-e", ".[udp]", "pytest", "pytest-asyncio", "coverage")
+    session.install("-e", ".[udp,pythoncan]", "pytest", "pytest-asyncio", "coverage")
     session.run("coverage", "run", "-m", "pytest", "tests/", *session.posargs)
     session.run("coverage", "report")
     session.run("coverage", "html")
@@ -34,7 +34,7 @@ def test(session: nox.Session) -> None:
 
 @nox.session(python=PYTHONS[0])
 def mypy(session: nox.Session) -> None:
-    session.install(".[udp]", "mypy", "pytest", "pytest-asyncio")
+    session.install(".[udp,pythoncan]", "mypy", "pytest", "pytest-asyncio")
     session.run("mypy", "src/pycyphal2", "tests")
 
 

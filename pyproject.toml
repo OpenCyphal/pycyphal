@@ -51,6 +51,7 @@ version = { attr = "pycyphal2.__version__" }
 
 [project.optional-dependencies]
 udp = ["ifaddr~=0.2.0"]
+pythoncan = ["python-can~=4.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

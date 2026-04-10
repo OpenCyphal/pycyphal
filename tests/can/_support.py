@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from pycyphal2 import ClosedError, Instant
-from pycyphal2.can import Filter, Frame, Interface, State, TimestampedFrame
+from pycyphal2.can import Filter, Frame, Interface, TimestampedFrame
 from pycyphal2.can._wire import match_filters
 
 
@@ -65,10 +65,6 @@ class MockCANInterface(Interface):
     @property
     def fd(self) -> bool:
         return self._fd
-
-    @property
-    def state(self) -> State:
-        return State.BUS_OFF if self.closed else State.ACTIVE
 
     def filter(self, filters: Iterable[Filter]) -> None:
         if self.closed:

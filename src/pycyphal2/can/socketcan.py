@@ -12,7 +12,7 @@ import struct
 import sys
 
 from .._api import ClosedError, Instant
-from ._interface import Filter, Interface, State, TimestampedFrame
+from ._interface import Filter, Interface, TimestampedFrame
 
 if sys.platform != "linux" or not hasattr(socket, "AF_CAN"):
     raise ImportError("SocketCAN is available only on Linux with AF_CAN support")
@@ -27,13 +27,7 @@ _CANFD_FDF = getattr(socket, "CANFD_FDF", 0)
 _CAN_FRAME_STRUCT = struct.Struct("=IB3x8s")
 _CANFD_FRAME_STRUCT = struct.Struct("=IBBBB64s")
 _CAN_FILTER_STRUCT = struct.Struct("=II")
-_TRANSIENT_TX_ERRNO = {
-    errno.EAGAIN,
-    errno.EWOULDBLOCK,
-    errno.ENOBUFS,
-    errno.ENOMEM,
-    errno.EBUSY,
-}
+_TRANSIENT_TX_ERRNO = {errno.EAGAIN, errno.EWOULDBLOCK, errno.ENOBUFS, errno.ENOMEM, errno.EBUSY}
 
 
 class SocketCANInterface(Interface):
@@ -59,11 +53,6 @@ class SocketCANInterface(Interface):
     @property
     def fd(self) -> bool:
         return self._fd
-
-    @property
-    def state(self) -> State:
-        # TODO: Implement this correctly: source the bus state from the SocketCAN API. Currently this is a stub.
-        return State.ACTIVE
 
     def filter(self, filters: Iterable[Filter]) -> None:
         self._raise_if_closed()

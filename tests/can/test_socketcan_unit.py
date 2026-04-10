@@ -167,7 +167,6 @@ def test_socketcan_init_fd_and_classic_paths(monkeypatch: pytest.MonkeyPatch) ->
     fd_sock = created[-1]
     assert fd_iface.name == "vcan0"
     assert fd_iface.fd is True
-    assert fd_iface.state is module.State.ACTIVE
     assert ("setsockopt", fake_socket.SOL_CAN_RAW, fake_socket.CAN_RAW_FD_FRAMES, 1) in fd_sock.calls
     assert "vcan0" in repr(fd_iface)
 

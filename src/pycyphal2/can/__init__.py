@@ -21,8 +21,10 @@ from __future__ import annotations
 from ._interface import Filter as Filter
 from ._interface import Frame as Frame
 from ._interface import Interface as Interface
-from ._interface import State as State
 from ._interface import TimestampedFrame as TimestampedFrame
 from ._transport import CANTransport as CANTransport
 
-__all__ = ["CANTransport", "Frame", "TimestampedFrame", "Filter", "State", "Interface"]
+# Backend submodules importable via pycyphal2.can.pythoncan / pycyphal2.can.socketcan;
+# they are not eagerly imported here because they pull in optional dependencies.
+
+__all__ = ["CANTransport", "Frame", "TimestampedFrame", "Filter", "Interface"]
