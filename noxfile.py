@@ -26,8 +26,8 @@ def clean(session):
 
 @nox.session(python=PYTHONS)
 def test(session: nox.Session) -> None:
-    session.install("-e", ".[udp,pythoncan]", "pytest", "pytest-asyncio", "coverage")
-    session.run("coverage", "run", "-m", "pytest", "tests/", *session.posargs)
+    session.install("-e", ".[udp,pythoncan]", "pytest", "pytest-asyncio", "pytest-timeout", "coverage")
+    session.run("coverage", "run", "-m", "pytest", "--timeout=60", "tests/", *session.posargs)
     session.run("coverage", "report")
     session.run("coverage", "html")
 
