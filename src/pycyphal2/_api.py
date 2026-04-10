@@ -11,6 +11,7 @@ import asyncio
 import inspect
 import logging
 import time
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
@@ -446,14 +447,21 @@ class Node(Closable, ABC):
         e.g., `my_node` stays as-is; `my_node/` becomes like `my_node/abcdef0123456789`,
         an empty string becomes a random string.
 
-        If namespace is not set, it is read from the CYPHAL_NAMESPACE environment variable if available,
-        otherwise it remains empty.
+        If the namespace is not set, it is read from the CYPHAL_NAMESPACE environment variable,
+        which is the main intended use case. Direct assignment might be considered an anti-pattern in most cases.
         """
         from ._node import NodeImpl
 
-        # Add random suffix if requested or generate pure random home. Leading/trailing separators will be normalized away.
+        # Add random suffix if requested or generate pure random home.
+        # Leading/trailing separators will be normalized away.
         home = home.strip() or "/"
-        home = f"{home}{eui64():016x}" if home.endswith("/") else home
+        if home.endswith("/"):
+            uid = transport.uid if hasattr(transport, "uid") else eui64()
+            home += f"{uid:016x}"
+
+        # Initialize the namespace: if not given explicitly, read it from the standard environment.
+        namespace = namespace.strip() or os.getenv("CYPHAL_NAMESPACE", "").strip()
+
         return NodeImpl(transport, home=home, namespace=namespace)
 
 

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from pycyphal2 import Node, LivenessError, Transport
 
-HOME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random ID will be added.
+NAME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random ID will be added.
 
 
 async def run(transport_spec: str, topic: str, timeout: float) -> None:
@@ -36,7 +36,7 @@ async def run(transport_spec: str, topic: str, timeout: float) -> None:
     else:
         raise ValueError(f"Unknown transport {transport_spec!r}")
 
-    node = Node.new(transport, home=HOME)
+    node = Node.new(transport, NAME)
     sub = node.subscribe(topic)
     if timeout > 0:
         sub.timeout = timeout

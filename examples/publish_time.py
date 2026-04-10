@@ -18,7 +18,7 @@ from pathlib import Path
 from pycyphal2 import Node, Instant, Transport
 
 PUBLISH_TIMEOUT = 10.0
-HOME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random ID will be added.
+NAME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random ID will be added.
 
 
 async def run(transport_spec: str, topic: str, reliable: bool, count: int) -> None:
@@ -35,7 +35,7 @@ async def run(transport_spec: str, topic: str, reliable: bool, count: int) -> No
     else:
         raise ValueError(f"Unknown transport {transport_spec!r}")
 
-    node = Node.new(transport, home=HOME)
+    node = Node.new(transport, NAME)
     pub = node.advertise(topic)
     logging.info("Publishing on %r via %s (reliable=%s)", topic, transport, reliable)
     try:

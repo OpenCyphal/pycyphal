@@ -31,7 +31,7 @@ from pycyphal2.udp import UDPTransport
 async def main():
     # Set up the local node.
     transport = UDPTransport.new()
-    node = Node.new(transport, home="my_node")
+    node = Node.new(transport, "my_node")
     
     # Subscribe to a topic.
     sub = node.subscribe("my/topic")

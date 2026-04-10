@@ -63,6 +63,42 @@ async def test_node_namespace():
     node.close()
 
 
+async def test_node_namespace_from_env(monkeypatch):
+    """When namespace is not provided, it should be read from the CYPHAL_NAMESPACE environment variable."""
+    monkeypatch.setenv("CYPHAL_NAMESPACE", "env_ns")
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="h")
+    assert node.namespace == "env_ns"
+
+    pub = node.advertise("topic")
+    topic = list(node.topics_by_name.values())[0]
+    assert topic.name == "env_ns/topic"
+
+    pub.close()
+    node.close()
+
+
+async def test_node_namespace_from_env_whitespace(monkeypatch):
+    """CYPHAL_NAMESPACE value should be stripped of whitespace."""
+    monkeypatch.setenv("CYPHAL_NAMESPACE", "  spaced_ns  ")
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="h")
+    assert node.namespace == "spaced_ns"
+    node.close()
+
+
+async def test_node_namespace_explicit_overrides_env(monkeypatch):
+    """Explicitly provided namespace should take precedence over the environment variable."""
+    monkeypatch.setenv("CYPHAL_NAMESPACE", "env_ns")
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="h", namespace="explicit_ns")
+    assert node.namespace == "explicit_ns"
+    node.close()
+
+
 async def test_node_homeful_topic():
     """Homeful topic names should expand ~ to home."""
     net = MockNetwork()
