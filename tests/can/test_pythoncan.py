@@ -811,13 +811,13 @@ async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     done = threading.Event()
-    failure: list[BaseException] = []
+    failures: list[BaseException] = []
 
     def worker() -> None:
         try:
             itf.filter([Filter(id=0x123, mask=0x1FFFFFFF)])
         except BaseException as ex:
-            failure.append(ex)
+            failures.append(ex)
         finally:
             done.set()
 
@@ -826,7 +826,7 @@ async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
         thread.start()
         await wait_for(lambda: itf._rx_pause_ack.is_set() or done.is_set(), timeout=1.0)
         assert done.wait(1.0)
-        assert not failure
+        assert not failures
     finally:
         itf.close()
 
