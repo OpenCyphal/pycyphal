@@ -807,7 +807,7 @@ async def test_unit_rx_thread_stops_on_close() -> None:
     assert not itf._rx_thread.is_alive()
 
 
-async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
+async def test_filter_reconfiguration_completes_during_active_rx_polling() -> None:
     """ThreadSafeBus filter reconfiguration should complete promptly while RX is polling."""
     ch = _unique_channel()
     bus = _can.ThreadSafeBus(interface="virtual", channel=ch)
@@ -819,13 +819,14 @@ async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
         return orig_recv(*args, **kwargs)
 
     done = threading.Event()
-    failures: list[BaseException] = []
+    failure: BaseException | None = None
 
     def worker() -> None:
+        nonlocal failure
         try:
             itf.filter([Filter(id=0x123, mask=0x1FFFFFFF)])
         except BaseException as ex:
-            failures.append(ex)
+            failure = ex
         finally:
             done.set()
 
@@ -836,7 +837,7 @@ async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
             thread = threading.Thread(target=worker, daemon=True)
             thread.start()
             await wait_for(done.is_set, timeout=_FILTER_RECONFIGURATION_TIMEOUT)
-            assert not failures
+            assert failure is None
         finally:
             itf.close()
 

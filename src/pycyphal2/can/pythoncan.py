@@ -217,12 +217,13 @@ class PythonCANInterface(Interface):
             raise ClosedError(f"PythonCAN interface {self._name} closed")
 
     def _pause_rx_thread(self) -> None:
+        # REFERENCE PARITY: Defensive future-proofing only; current call sites are outside the RX thread.
         # Defensive future-proofing: avoid self-deadlock if this helper ever gets reused from the RX thread.
         if not self._rx_thread.is_alive() or threading.current_thread() is self._rx_thread:
             return
         self._rx_pause_request.set()
         if not self._rx_pause_ack.wait(timeout=_RX_POLL_TIMEOUT * _RX_PAUSE_TIMEOUT_MULTIPLIER):
-            _logger.warning("PythonCAN rx pause timeout iface=%s", self._name)
+            _logger.warning("PythonCAN rx pause ack timeout, proceeding anyway iface=%s", self._name)
 
     def _resume_rx_thread(self) -> None:
         self._rx_pause_request.clear()
