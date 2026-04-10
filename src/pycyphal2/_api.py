@@ -434,7 +434,7 @@ class Node(Closable, ABC):
         return f"Node(home={self.home!r}, namespace={self.namespace!r})"
 
     @staticmethod
-    def new(transport: Transport, *, home: str = "", namespace: str = "") -> Node:
+    def new(transport: Transport, home: str = "", namespace: str = "") -> Node:
         """
         Construct a new node using the specified transport. This is the main entry point of the library.
 
