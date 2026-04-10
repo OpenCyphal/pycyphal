@@ -1,4 +1,6 @@
-"""Cross-platform CAN backend using `python-can <https://python-can.readthedocs.io/>`_."""
+"""
+Cross-platform CAN backend using `python-can <https://python-can.readthedocs.io/>`_.
+"""
 
 from __future__ import annotations
 

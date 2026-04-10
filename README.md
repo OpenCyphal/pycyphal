@@ -23,26 +23,6 @@ Optional features inside the brackets can be removed if not needed; see `pyproje
 pip install pycyphal2[udp,pythoncan]
 ```
 
-The library is super straightforward to use:
-
-```python
-from pycyphal2 import Node
-from pycyphal2.udp import UDPTransport
-
-async def main():
-    transport = UDPTransport.new()
-    node = Node.new(transport, "my_node")
-    
-    sub = node.subscribe("my/topic")
-    async for arrival in sub:
-        print(
-            f"Received message at {arrival.timestamp.s:.3f} published by node {arrival.breadcrumb.remote_id:016x} "
-            f"on topic {arrival.breadcrumb.topic.name} with contents:",
-            arrival.message.hex(),
-            sep="\n"
-        )
-```
-
 📚 **Read the docs** at <https://opencyphal.github.io/pycyphal>.
 
 💡 **Runnable examples** at `examples/`.
