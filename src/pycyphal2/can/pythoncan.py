@@ -217,6 +217,7 @@ class PythonCANInterface(Interface):
             raise ClosedError(f"PythonCAN interface {self._name} closed")
 
     def _pause_rx_thread(self) -> None:
+        # Defensive future-proofing: avoid self-deadlock if this helper ever gets reused from the RX thread.
         if not self._rx_thread.is_alive() or threading.current_thread() is self._rx_thread:
             return
         self._rx_pause_request.set()

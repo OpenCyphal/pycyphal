@@ -28,6 +28,7 @@ PythonCANInterface = pythoncan.PythonCANInterface
 # ============================================================================
 
 _CHANNEL_SEQ = 0
+_FILTER_RECONFIGURATION_TIMEOUT = 2.0
 
 
 def _unique_channel() -> str:
@@ -824,7 +825,7 @@ async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
     try:
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
-        await wait_for(done.is_set, timeout=2.0)
+        await wait_for(done.is_set, timeout=_FILTER_RECONFIGURATION_TIMEOUT)
         assert not failures
     finally:
         itf.close()
