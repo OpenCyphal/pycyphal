@@ -44,7 +44,8 @@ __version__ = "2.0.0.dev0"
 
 # pdoc needs __all__ to display re-exported members.
 __all__ = [
-    _k for _k, _v in vars().items()
+    _k
+    for _k, _v in vars().items()
     if not _k.startswith("_")
     and _k not in {"annotations", "TYPE_CHECKING"}
     and (getattr(_v, "__module__", None) or "").startswith(__name__)
