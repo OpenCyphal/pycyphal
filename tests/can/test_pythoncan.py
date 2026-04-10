@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 import sys
 import threading
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -818,8 +818,6 @@ async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
         rx_polled.set()
         return orig_recv(*args, **kwargs)
 
-    bus.recv = instrumented_recv  # type: ignore[assignment]
-    itf = PythonCANInterface(bus)
     done = threading.Event()
     failures: list[BaseException] = []
 
@@ -831,14 +829,16 @@ async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
         finally:
             done.set()
 
-    try:
-        await wait_for(rx_polled.is_set, timeout=1.0)
-        thread = threading.Thread(target=worker, daemon=True)
-        thread.start()
-        await wait_for(done.is_set, timeout=_FILTER_RECONFIGURATION_TIMEOUT)
-        assert not failures
-    finally:
-        itf.close()
+    with patch.object(bus, "recv", side_effect=instrumented_recv):
+        itf = PythonCANInterface(bus)
+        try:
+            await wait_for(rx_polled.is_set, timeout=1.0)
+            thread = threading.Thread(target=worker, daemon=True)
+            thread.start()
+            await wait_for(done.is_set, timeout=_FILTER_RECONFIGURATION_TIMEOUT)
+            assert not failures
+        finally:
+            itf.close()
 
 
 async def test_unit_prebuilt_bus_name_from_channel_info() -> None:
