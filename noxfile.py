@@ -50,6 +50,13 @@ def format(session: nox.Session) -> None:
     session.run("black", "--check", "--diff", "src", "tests", "examples")
 
 
+@nox.session(reuse_venv=True)
+def docs(session: nox.Session) -> None:
+    session.install("-e", ".[udp]", "pdoc")
+    session.run("python", "docs/build.py")
+    session.log("Docs written to html_docs/")
+
+
 @nox.session(python=PYTHONS[0], default=False)
 def examples(session: nox.Session) -> None:
     import json as _json

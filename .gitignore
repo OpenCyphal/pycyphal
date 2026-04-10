@@ -49,6 +49,7 @@ coverage.xml
 *.cache
 *.db
 *.*-swp
+html_docs/
 nunavut_support.py
 
 .sisyphus/

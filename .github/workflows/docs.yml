@@ -1,0 +1,35 @@
+name: Docs
+
+on:
+  push:
+    branches: [master, v2-dev, v2-dev-docs]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: pip install nox
+      - run: nox -s docs
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: html_docs/
+      - uses: actions/deploy-pages@v5
+        id: deploy

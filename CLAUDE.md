@@ -47,6 +47,8 @@ The code is fully type-annotated; frozen dataclasses for data.
 
 Formatting follows PEP8, enforced using Black, line-length=120.
 
+Read `noxfile.py` to understand the project infrastructure.
+
 ## Reference design
 
 `reference/` contains git submodules with the reference implementations in C of the session layer (`cy/`)

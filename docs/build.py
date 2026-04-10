@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+"""Build API docs using pdoc. Invoked via ``nox -s docs``."""
+from pathlib import Path
+import pkgutil
+import importlib
+import sys
+
+import pycyphal2
+
+# Discover and import all public submodules so pdoc can see them,
+# then inject them into their parent's __all__ so pdoc lists them in the sidebar.
+for mi in pkgutil.walk_packages(pycyphal2.__path__, pycyphal2.__name__ + "."):
+    leaf = mi.name.rsplit(".", 1)[-1]
+    if leaf.startswith("_"):
+        continue
+    try:
+        importlib.import_module(mi.name)
+    except ImportError:
+        continue
+    parent = sys.modules[mi.name.rsplit(".", 1)[0]]
+    if hasattr(parent, "__all__") and leaf not in parent.__all__:
+        parent.__all__.append(leaf)
+
+import pdoc
+
+pdoc.pdoc("pycyphal2", output_directory=Path("html_docs"))

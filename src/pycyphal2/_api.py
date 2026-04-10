@@ -511,6 +511,7 @@ def eui64() -> int:
     Generate a globally unique random EUI-64 identifier where:
     - 20 most significant bits (5 hexadecimals) are a function of the host machine identity.
     - 44 least significant bits (11 hexadecimals) are random.
+
     The EIU-64 format is: The I/G bit is cleared (unicast). The U/L bit is set (locally administered).
     The protocol doesn't care about this structure, it is just an optional default convention for better diagnostics.
     """

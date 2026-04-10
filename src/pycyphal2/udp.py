@@ -1,4 +1,19 @@
-"""Cyphal/UDP transport implementation."""
+"""
+Cyphal/UDP transport — zero-config reliable pub/sub over IPv4 multicast.
+
+```python
+from pycyphal2.udp import UDPTransport
+
+transport = UDPTransport.new()  # auto-detects network interfaces to use
+```
+
+Pass the transport to `pycyphal2.Node.new()` to start a node.
+
+`UDPTransport.new()` discovers usable IPv4 interfaces automatically and generates a random node identity.
+For machine-local networking, use `UDPTransport.new_loopback()`.
+
+Requires third-party dependencies — install with `pip install pycyphal2[udp]`.
+"""
 
 # This module is directly importable by the application (hence no underscore prefix), so its API must be spotless!
 

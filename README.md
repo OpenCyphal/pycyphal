@@ -8,6 +8,7 @@ _pub/sub without steroids_
 
 [![Website](https://img.shields.io/badge/website-opencyphal.org-black?color=1700b3)](https://opencyphal.org/)
 [![Forum](https://img.shields.io/discourse/https/forum.opencyphal.org/users.svg?logo=discourse&color=1700b3)](https://forum.opencyphal.org)
+[![Docs](https://img.shields.io/badge/Docs-rtfm-black?color=ff00aa&logo=readthedocs)](https://opencyphal.github.io/pycyphal)
 
 </div>
 
@@ -15,25 +16,23 @@ _pub/sub without steroids_
 
 Python implementation of the [Cyphal](https://opencyphal.org) stack that runs on GNU/Linux, Windows, and macOS.
 
-**WORK IN PROGRESS**: The work on v2 is still ongoing and the new version is not yet ready for production use.
-Users seeking stability should continue using PyCyphal v1. The two versions are wire-compatible on Cyphal/CAN.
-
-## Usage
+Install as follows.
+Optional features inside the brackets can be removed if not needed; see `pyproject.toml` for the full list:
 
 ```
-pip install pycyphal2
+pip install pycyphal2[udp,pythoncan]
 ```
+
+The library is super straightforward to use:
 
 ```python
 from pycyphal2 import Node
 from pycyphal2.udp import UDPTransport
 
 async def main():
-    # Set up the local node.
     transport = UDPTransport.new()
     node = Node.new(transport, "my_node")
     
-    # Subscribe to a topic.
     sub = node.subscribe("my/topic")
     async for arrival in sub:
         print(
@@ -44,4 +43,6 @@ async def main():
         )
 ```
 
-See `examples/` for complete runnable usage examples.
+📚 **Read the docs** at <https://opencyphal.github.io/pycyphal>.
+
+💡 **Runnable examples** at `examples/`.
