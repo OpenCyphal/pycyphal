@@ -810,7 +810,16 @@ async def test_unit_rx_thread_stops_on_close() -> None:
 async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
     """ThreadSafeBus filter reconfiguration should complete promptly while RX is polling."""
     ch = _unique_channel()
-    itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
+    bus = _can.ThreadSafeBus(interface="virtual", channel=ch)
+    rx_polled = threading.Event()
+    orig_recv = bus.recv
+
+    def instrumented_recv(*args, **kwargs):
+        rx_polled.set()
+        return orig_recv(*args, **kwargs)
+
+    bus.recv = instrumented_recv  # type: ignore[assignment]
+    itf = PythonCANInterface(bus)
     done = threading.Event()
     failures: list[BaseException] = []
 
@@ -823,6 +832,7 @@ async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
             done.set()
 
     try:
+        await wait_for(rx_polled.is_set, timeout=1.0)
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
         await wait_for(done.is_set, timeout=_FILTER_RECONFIGURATION_TIMEOUT)
