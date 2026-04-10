@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 import sys
+import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -803,6 +804,31 @@ async def test_unit_rx_thread_stops_on_close() -> None:
     itf.close()
     itf._rx_thread.join(timeout=1.0)
     assert not itf._rx_thread.is_alive()
+
+
+async def test_unit_filter_does_not_starve_behind_rx_thread() -> None:
+    """ThreadSafeBus filter reconfiguration should complete promptly while RX is polling."""
+    ch = _unique_channel()
+    itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
+    done = threading.Event()
+    failure: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            itf.filter([Filter(id=0x123, mask=0x1FFFFFFF)])
+        except BaseException as ex:
+            failure.append(ex)
+        finally:
+            done.set()
+
+    try:
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+        await wait_for(lambda: itf._rx_pause_ack.is_set() or done.is_set(), timeout=1.0)
+        assert done.wait(1.0)
+        assert not failure
+    finally:
+        itf.close()
 
 
 async def test_unit_prebuilt_bus_name_from_channel_info() -> None:

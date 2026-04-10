@@ -8,6 +8,7 @@ import asyncio
 from collections.abc import Iterable
 import logging
 import threading
+import time
 
 from .._api import ClosedError, Instant
 from ._interface import Filter, Interface, TimestampedFrame
@@ -49,6 +50,8 @@ class PythonCANInterface(Interface):
         self._tx_task: asyncio.Task[None] | None = None
         self._rx_queue: asyncio.Queue[TimestampedFrame | BaseException] = asyncio.Queue()
         self._loop = asyncio.get_running_loop()
+        self._rx_pause_request = threading.Event()
+        self._rx_pause_ack = threading.Event()
         self._rx_thread = threading.Thread(target=self._rx_thread_func, daemon=True, name=f"pythoncan-rx-{self._name}")
         self._rx_thread.start()
         _logger.info("PythonCAN init iface=%s fd=%s", self._name, self._fd)
@@ -67,7 +70,11 @@ class PythonCANInterface(Interface):
         for item in filters:
             can_filters.append(can.typechecking.CanFilter(can_id=item.id, can_mask=item.mask, extended=True))
         try:
-            self._bus.set_filters(can_filters)
+            self._pause_rx_thread()
+            try:
+                self._bus.set_filters(can_filters)
+            finally:
+                self._resume_rx_thread()
         except can.CanError as ex:
             raise OSError(f"PythonCAN filter configuration failed on {self._name}: {ex}") from ex
         _logger.debug("PythonCAN filters set iface=%s n=%d", self._name, len(can_filters))
@@ -114,7 +121,11 @@ class PythonCANInterface(Interface):
         except Exception:
             pass
         try:
-            self._bus.shutdown()
+            self._pause_rx_thread()
+            try:
+                self._bus.shutdown()
+            finally:
+                self._resume_rx_thread()
         except Exception as ex:
             _logger.debug("PythonCAN bus shutdown error on %s: %s", self._name, ex)
 
@@ -163,6 +174,12 @@ class PythonCANInterface(Interface):
 
     def _rx_thread_func(self) -> None:
         while not self._closed:
+            if self._rx_pause_request.is_set():
+                self._rx_pause_ack.set()
+                while self._rx_pause_request.is_set() and not self._closed:
+                    time.sleep(0.001)
+                self._rx_pause_ack.clear()
+                continue
             try:
                 msg = self._bus.recv(timeout=_RX_POLL_TIMEOUT)
             except Exception as ex:
@@ -196,6 +213,16 @@ class PythonCANInterface(Interface):
             if self._failure is not None:
                 raise ClosedError(f"PythonCAN interface {self._name} failed") from self._failure
             raise ClosedError(f"PythonCAN interface {self._name} closed")
+
+    def _pause_rx_thread(self) -> None:
+        if not self._rx_thread.is_alive() or threading.current_thread() is self._rx_thread:
+            return
+        self._rx_pause_request.set()
+        self._rx_pause_ack.wait(timeout=_RX_POLL_TIMEOUT * 2.0)
+
+    def _resume_rx_thread(self) -> None:
+        self._rx_pause_request.clear()
+        self._rx_pause_ack.clear()
 
 
 def _parse_message(msg: can.Message) -> TimestampedFrame | None:
