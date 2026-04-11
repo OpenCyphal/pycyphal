@@ -559,6 +559,21 @@ class Node(Closable, ABC):
             _logger.exception("Failed to set up default remapping from CYPHAL_REMAP: %s", ex)
         return node
 
+    @abstractmethod
+    def monitor(self, callback: Callable[[Topic], None]) -> Closable:
+        """
+        *Advanced diagnostic utility.*
+
+        Install a listener callback invoked whenever the local node receives a non-inline gossip message.
+        This can be used to discover the full set of topics in the network for diagnostic purposes.
+
+        The :class:`Topic` instance is the actual local topic instance for locally known topics;
+        for topics not known locally it is a short-lived flyweight object.
+
+        The returned :class:`Closable` can be closed to remove the callback.
+        """
+        raise NotImplementedError
+
 
 def eui64() -> int:
     """

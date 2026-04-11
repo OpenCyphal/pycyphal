@@ -9,7 +9,7 @@ import random
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from ._hash import rapidhash
 from ._header import (
@@ -300,6 +300,38 @@ class SharedSubjectWriter:
     owners: set[Topic] = field(default_factory=set)
 
 
+@dataclass(frozen=True)
+class _TopicFlyweight(Topic):
+    """Short-lived topic view for unknown gossip."""
+
+    _topic_hash: int
+    _name: str
+
+    @property
+    def hash(self) -> int:
+        return self._topic_hash
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def match(self, pattern: str) -> list[tuple[str, int]] | None:
+        return match_pattern(pattern, self._name)
+
+
+@dataclass
+class _MonitorHandle(Closable):
+    _node: NodeImpl | None
+    _callback_id: int
+
+    def close(self) -> None:
+        node = self._node
+        if node is None:
+            return
+        node.monitor_unregister(self._callback_id)
+        self._node = None
+
+
 @dataclass
 class PublishTracker:
     """Tracks a pending reliable publication awaiting ACKs."""
@@ -462,6 +494,8 @@ class NodeImpl(Node):
         self._closed = False
         self.loop = asyncio.get_running_loop()
         self._now_mono = time.monotonic()
+        self._monitor_callbacks: dict[int, Callable[[Topic], None]] = {}
+        self._next_monitor_callback_id = 0
 
         # Topic indexes.
         self.topics_by_name: dict[str, TopicImpl] = {}
@@ -578,6 +612,22 @@ class NodeImpl(Node):
 
         _logger.info("Subscribe '%s' -> '%s' verbatim=%s", name, resolved, verbatim)
         return subscriber
+
+    def monitor(self, callback: Callable[[Topic], None]) -> Closable:
+        callback_id = self._next_monitor_callback_id
+        self._next_monitor_callback_id += 1
+        self._monitor_callbacks[callback_id] = callback
+        return _MonitorHandle(self, callback_id)
+
+    def monitor_unregister(self, callback_id: int) -> None:
+        self._monitor_callbacks.pop(callback_id, None)
+
+    def _notify_monitors(self, topic: Topic) -> None:
+        for callback in list(self._monitor_callbacks.values()):
+            try:
+                callback(topic)
+            except Exception:
+                _logger.exception("monitor() callback failed for %s", topic)
 
     # -- Topic Management --
 
@@ -1226,8 +1276,10 @@ class NodeImpl(Node):
                 )
         if topic is not None:
             self.on_gossip_known(topic, hdr.topic_evictions, hdr.topic_log_age, ts, scope)
+            self._notify_monitors(topic)
         else:
             self.on_gossip_unknown(hdr.topic_hash, hdr.topic_evictions, hdr.topic_log_age, ts)
+            self._notify_monitors(_TopicFlyweight(hdr.topic_hash, name))
 
     def on_gossip_known(
         self,
@@ -1401,5 +1453,6 @@ class NodeImpl(Node):
             w.close()
         for gossip_listener in self.gossip_shard_listeners.values():
             gossip_listener.close()
+        self._monitor_callbacks.clear()
         self._implicit_topics.clear()
         self.transport.close()
