@@ -16,7 +16,7 @@ jobs:
     outputs:
       should_release: ${{ steps.tip.outputs.should_release }}
     steps:
-      - name: Verify tested commit is still the tip of master
+      - name: Verify tested commit is still the tip of the default branch
         id: tip
         env:
           EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
