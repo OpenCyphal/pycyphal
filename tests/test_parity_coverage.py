@@ -328,7 +328,8 @@ async def test_gossip_control_send_failures_are_swallowed() -> None:
 
     tr.unicast = bad_unicast  # type: ignore[assignment]
     await node.send_gossip_unicast(topic, 42)
-    node.send_scout("topic")
+    with pytest.raises(pycyphal2.SendError):
+        await node.scout("topic")
     await asyncio.sleep(0.02)
 
     pub.close()

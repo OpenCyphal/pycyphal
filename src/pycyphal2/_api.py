@@ -574,6 +574,16 @@ class Node(Closable, ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    async def scout(self, pattern: str) -> None:
+        """
+        *Advanced diagnostic utility.*
+
+        Query the network for topics matching the pattern.
+        The :meth:`monitor` should be installed beforehand to process the responses.
+        """
+        raise NotImplementedError
+
 
 def eui64() -> int:
     """

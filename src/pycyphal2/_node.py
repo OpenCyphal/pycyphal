@@ -629,6 +629,17 @@ class NodeImpl(Node):
             except Exception:
                 _logger.exception("monitor() callback failed for %s", topic)
 
+    async def scout(self, pattern: str) -> None:
+        resolved, pin, _ = resolve_name(pattern, self._home, self._namespace, self._remaps)
+        if pin is not None:
+            raise ValueError("Cannot scout a pinned name/pattern")
+        try:
+            await self._transmit_scout(resolved)
+        except SendError:
+            raise
+        except Exception as ex:
+            raise SendError(f"Scout send failed for '{resolved}'") from ex
+
     # -- Topic Management --
 
     def topic_ensure(self, name: str, pin: int | None) -> TopicImpl:
@@ -969,15 +980,18 @@ class NodeImpl(Node):
 
     # -- Scout --
 
-    async def _send_scout_once(self, pattern: str) -> bool:
+    async def _transmit_scout(self, pattern: str) -> None:
         pattern_bytes = pattern.encode("utf-8")
         hdr = ScoutHeader(pattern_len=len(pattern_bytes))
         payload = hdr.serialize() + pattern_bytes
         deadline = Instant.now() + 1.0
+        await self.broadcast_writer(deadline, Priority.NOMINAL, payload)
+        _logger.debug("Scout sent for pattern '%s'", pattern)
+
+    async def _send_scout_once(self, pattern: str) -> bool:
         try:
-            await self.broadcast_writer(deadline, Priority.NOMINAL, payload)
-            _logger.debug("Scout sent for pattern '%s'", pattern)
-        except (SendError, OSError) as e:
+            await self._transmit_scout(pattern)
+        except Exception as e:
             _logger.warning("Scout send failed for '%s': %s", pattern, e)
             return False
         return True
