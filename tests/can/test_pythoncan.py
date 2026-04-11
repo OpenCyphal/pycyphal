@@ -37,6 +37,13 @@ def _unique_channel() -> str:
     return f"pycyphal2_test_{_CHANNEL_SEQ}"
 
 
+def _force_distinct_ids(a: CANTransport, b: CANTransport) -> None:
+    if a.id != b.id:
+        return
+    b._local_node_id = (a.id % 127) + 1  # type: ignore[attr-defined]
+    b._refresh_filters()  # type: ignore[attr-defined]
+
+
 def _virtual_pair(
     *, fd: bool = False, receive_own_messages: bool = False
 ) -> tuple[PythonCANInterface, PythonCANInterface]:
@@ -511,6 +518,7 @@ async def test_virtual_transport_pubsub() -> None:
     )
     a = CANTransport.new(a_itf)
     b = CANTransport.new(b_itf)
+    _force_distinct_ids(a, b)
     arrivals: list[TransportArrival] = []
     b.subject_listen(1234, arrivals.append)
     writer = a.subject_advertise(1234)
@@ -535,6 +543,7 @@ async def test_virtual_transport_unicast() -> None:
     )
     a = CANTransport.new(a_itf)
     b = CANTransport.new(b_itf)
+    _force_distinct_ids(a, b)
     arrivals: list[TransportArrival] = []
     b.unicast_listen(arrivals.append)
     try:
@@ -557,6 +566,7 @@ async def test_virtual_transport_multi_message() -> None:
     )
     a = CANTransport.new(a_itf)
     b = CANTransport.new(b_itf)
+    _force_distinct_ids(a, b)
     arrivals: list[TransportArrival] = []
     b.subject_listen(5678, arrivals.append)
     writer = a.subject_advertise(5678)
@@ -1067,6 +1077,7 @@ async def test_unit_transport_multiple_subjects() -> None:
     )
     a = CANTransport.new(a_itf)
     b = CANTransport.new(b_itf)
+    _force_distinct_ids(a, b)
     arrivals_1: list[TransportArrival] = []
     arrivals_2: list[TransportArrival] = []
     b.subject_listen(100, arrivals_1.append)
@@ -1363,6 +1374,7 @@ async def test_unit_transport_pubsub_large_message() -> None:
     )
     a = CANTransport.new(a_itf)
     b = CANTransport.new(b_itf)
+    _force_distinct_ids(a, b)
     arrivals: list[TransportArrival] = []
     b.subject_listen(500, arrivals.append)
     writer = a.subject_advertise(500)
@@ -1388,6 +1400,7 @@ async def test_unit_transport_bidirectional_unicast() -> None:
     )
     a = CANTransport.new(a_itf)
     b = CANTransport.new(b_itf)
+    _force_distinct_ids(a, b)
     a_rx: list[TransportArrival] = []
     b_rx: list[TransportArrival] = []
     a.unicast_listen(a_rx.append)
