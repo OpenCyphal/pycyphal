@@ -2,9 +2,9 @@
 """
 Subscribe to a Cyphal topic and print received messages as JSONL to stdout.
 Usage:
-    python examples/subscribe.py demo/time
-    python examples/subscribe.py demo/time --timeout 5.0
-    python examples/subscribe.py demo/time --transport socketcan:vcan0
+    python examples/subscribe_demo.py demo/time
+    python examples/subscribe_demo.py demo/time --timeout 5.0
+    python examples/subscribe_demo.py demo/time --transport socketcan:vcan0
 """
 
 from __future__ import annotations
@@ -53,6 +53,8 @@ async def run(transport_spec: str, topic: str, timeout: float) -> None:
             )
             sys.stdout.write(line + "\n")
             sys.stdout.flush()
+            # You can send a response (best-effort or reliable) to the publisher like:
+            #   await arrival.breadcrumb(Instant.now() + 1.0, b"payload", reliable=True)
     except LivenessError:
         logging.info("Liveness timeout — no messages for %.1f s", timeout)
     finally:

@@ -71,7 +71,7 @@ def examples(session: nox.Session) -> None:
     def run_case(label: str, extra_args: list[str]) -> None:
         session.log(f"--- examples smoke: {label} ---")
         sub_proc = subprocess.Popen(
-            [python, "examples/subscribe.py", topic, "--timeout", "10", *extra_args],
+            [python, "examples/subscribe_demo.py", topic, "--timeout", "10", *extra_args],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         )
