@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+env:
+  PYTHON_OLDEST: "3.11"
+
 jobs:
   test:
     strategy:
@@ -39,7 +42,7 @@ jobs:
       - run: pip install nox
       - run: nox -s test --python ${{ matrix.python }}
       - run: nox -s examples --python ${{ matrix.python }}
-        if: matrix.python == '3.11' && matrix.os != 'macos-latest'
+        if: matrix.python == env.PYTHON_OLDEST && matrix.os != 'macos-latest'
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -54,7 +57,7 @@ jobs:
           submodules: recursive
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_OLDEST }}
       - run: pip install nox
       - run: nox -s mypy
 
@@ -66,6 +69,6 @@ jobs:
           submodules: recursive
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_OLDEST }}
       - run: pip install nox
       - run: nox -s format
