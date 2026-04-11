@@ -1,19 +1,24 @@
 name: Release
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - "src/pycyphal2/__init__.py"
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
 
 jobs:
   release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master'
     runs-on: ubuntu-latest
     permissions:
       contents: write      # for creating tags
       id-token: write      # for PyPI trusted publishing (OIDC)
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - uses: actions/setup-python@v6
         with:
