@@ -70,6 +70,14 @@ Expected usage patterns:
 - Additional minor intentional deviations may be documented directly in the codebase.
   Such intentional deviations should be marked with `REFERENCE PARITY` comments in the code.
 
+## Documentation
+
+The documentation must be concise and to the point, with a strong focus on "how to use" rather than "how it works".
+Assume the reader to be short on time, impatient, and looking for quick answers.
+Prefer examples over long prose.
+
+When changing code, ALWAYS ensure that the documentation is updated accordingly.
+
 ## Testing
 
 Mock transport/network in `tests/conftest.py`.
