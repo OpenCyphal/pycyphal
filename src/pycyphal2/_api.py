@@ -63,21 +63,21 @@ class Instant:
     def __init__(self, *, ns: int) -> None:
         object.__setattr__(self, "ns", int(ns))
 
-    @staticmethod
-    def now() -> Instant:
-        return Instant(ns=time.monotonic_ns())
-
     @property
-    def s(self) -> float:
-        return self.ns * 1e-9
+    def us(self) -> float:
+        return self.ns * 1e-3
 
     @property
     def ms(self) -> float:
         return self.ns * 1e-6
 
     @property
-    def us(self) -> float:
-        return self.ns * 1e-3
+    def s(self) -> float:
+        return self.ns * 1e-9
+
+    @staticmethod
+    def now() -> Instant:
+        return Instant(ns=time.monotonic_ns())
 
     def __add__(self, other: Any) -> Instant:
         if isinstance(other, (float, int)):
@@ -163,8 +163,11 @@ class Topic(ABC):
 @dataclass(frozen=True)
 class Response:
     """
-    Represents a response to a published message from the specified remote node.
-    Seqno is managed by the remote, incrementing by one with each response starting from zero.
+    One response yielded by :class:`ResponseStream`.
+
+    A single request may elicit responses from multiple remote subscribers; ``remote_id`` identifies which one sent
+    this item. ``seqno`` is scoped to that remote responder: the first response is zero, then it increments by one
+    for each subsequent streamed response.
     """
 
     timestamp: Instant
@@ -175,9 +178,14 @@ class Response:
 
 class ResponseStream(Closable, ABC):
     """
-    Represents the expectation of response arrivals, used for one-off RPC and streaming.
-    Generates multiple async results, one per received response or per error.
-    Async iterator will continue to yield new messages until close()d, even after delivery/liveness errors.
+    Async iterator of responses produced by :meth:`Publisher.request`.
+
+    One request may yield zero, one, or many responses, possibly from different remotes.
+    Keeping the stream open enables streaming: later responses to the same request are yielded as they arrive.
+    If the remote uses reliable delivery for streaming (usually the case), then it will be notified if the client
+    stream is closed (explicit NACK) or if the client becomes unreachable (absence of ACK).
+
+    Library-level errors are reported through iteration and do not automatically close the stream.
     """
 
     def __aiter__(self) -> ResponseStream:
@@ -185,9 +193,14 @@ class ResponseStream(Closable, ABC):
 
     async def __anext__(self) -> Response:
         """
-        Blocks until response is received.
-        Raises DeliveryError if request could not be delivered by the deadline, LivenessError on response timeout,
-        SendError if failed to send the response before the deadline.
+        Wait for the next response or the next library-level failure.
+
+        Raises :class:`LivenessError` if no response arrives for longer than the configured response timeout; the
+        timeout restarts after every accepted response, so it also bounds the gaps inside a stream.
+
+        Raises :class:`DeliveryError` or :class:`SendError` if the request publication itself fails.
+        Such errors do not close the stream automatically; later iterations may still yield more responses until
+        :meth:`close`d.
         """
         raise NotImplementedError
 
@@ -195,8 +208,13 @@ class ResponseStream(Closable, ABC):
 class Publisher(Closable, ABC):
     """
     Represents the intent to send messages on a topic.
-    This is callable; an invocation triggers publication.
-    For publications that expect a response, use the ``request`` method.
+
+    Calling the publisher sends one message.
+    By default this is best-effort publication: the message is sent once and only immediate send failures are reported.
+    With ``reliable=True``, the library retransmits until the deadline and waits for acknowledgments from remote
+    subscribers.
+
+    For publications that expect responses, use :meth:`request`, which returns a :class:`ResponseStream`.
     """
 
     @property
@@ -218,8 +236,8 @@ class Publisher(Closable, ABC):
     @abstractmethod
     def ack_timeout(self) -> float:
         """
-        The effective ack timeout at the current priority.
-        The number of attempts is controlled by the deadline specified at publish time.
+        The effective initial ACK timeout at the current priority; retries back off exponentially.
+        The deadline limits the entire reliable publication, not just one attempt.
         """
         raise NotImplementedError
 
@@ -231,8 +249,12 @@ class Publisher(Closable, ABC):
     @abstractmethod
     async def __call__(self, deadline: Instant, message: memoryview | bytes, *, reliable: bool = False) -> None:
         """
-        Blocks at most until the deadline. Raises SendError if couldn't be sent before the deadline.
-        If reliable, DeliveryError will be raised unless acked by the remote subscribers before deadline.
+        Send one message.
+        Blocks at most until ``deadline``.
+        Raises :class:`SendError` if the message could not be sent before the deadline.
+
+        If ``reliable`` is false, the message is sent once.
+        If ``reliable`` is true, the library retransmits until ``deadline`` leveraging :attr:`ack_timeout`.
         """
         raise NotImplementedError
 
@@ -241,7 +263,14 @@ class Publisher(Closable, ABC):
         self, delivery_deadline: Instant, response_timeout: float, message: memoryview | bytes
     ) -> ResponseStream:
         """
-        Publish a message and expect responses. See ResponseStream for details.
+        Publish a request and return a stream of responses.
+
+        The request publication uses reliable delivery governed by ``delivery_deadline`` and :attr:`ack_timeout`.
+        Once the request is in flight, the returned :class:`ResponseStream` yields unicast responses
+        from any subscriber that chooses to answer.
+
+        ``response_timeout`` is the maximum idle gap (liveness timeout) between accepted responses,
+        so it applies both to one-off RPC and to streaming.
         """
         raise NotImplementedError
 
@@ -251,10 +280,13 @@ class Publisher(Closable, ABC):
 
 class Breadcrumb(ABC):
     """
-    The breadcrumb can be used, optionally, to send responses RPC-style or streamed back to a message publisher.
-    Instances can be retained after message reception for as long as necessary.
-    One instance is shared across all subscribers receiving the same message, ensuring contiguous seqno across
-    all responses.
+    Response handle attached to a received message.
+
+    It can be used, optionally, to send one or more unicast responses back to the original publisher,
+    enabling RPC and streaming alongside pub/sub.
+    Instances may be retained after message reception for as long as necessary.
+    One instance is shared across all subscribers receiving the same message, ensuring contiguous sequence numbers
+    across all responses emitted for that arrival.
 
     Responses are always sent at the same priority as that of the request.
     Internally, the library tracks the seqno that starts at zero and is incremented with every response.
@@ -281,11 +313,14 @@ class Breadcrumb(ABC):
     @abstractmethod
     async def __call__(self, deadline: Instant, message: memoryview | bytes, *, reliable: bool = False) -> None:
         """
-        Invoke multiple times to stream multiple responses.
-        Blocks at most until the deadline. Raises SendError if couldn't be sent before the deadline.
-        If reliable:
-        - DeliveryError will be raised unless acked by the remote subscribers before deadline.
-        - NackError will be raised if the remote is no longer accepting responses.
+        Send one response to the original publisher.
+
+        Invoke multiple times on the same breadcrumb to stream multiple responses. Blocks at most until ``deadline``.
+        Raises :class:`SendError` if the response could not be sent before the deadline.
+
+        If ``reliable`` is true, the response is retransmitted until acknowledged or until ``deadline`` expires.
+        :class:`DeliveryError` means the requester could not be reached in time; :class:`NackError` means the
+        requester is reachable but is no longer accepting responses for this stream (stream closed).
         """
         raise NotImplementedError
 
@@ -296,8 +331,9 @@ class Breadcrumb(ABC):
 @dataclass(frozen=True)
 class Arrival:
     """
-    Represents a message received from a topic.
-    The breadcrumb allows sending responses back to the publisher, thus enabling RPC and streaming.
+    Represents one message received from a topic.
+    ``breadcrumb`` captures the responder context for this arrival.
+    Calling it sends a unicast response back to the original publisher, enabling RPC and streaming.
     """
 
     timestamp: Instant
@@ -306,6 +342,14 @@ class Arrival:
 
 
 class Subscriber(Closable, ABC):
+    """
+    Async source of :class:`Arrival` objects produced by :meth:`Node.subscribe`.
+
+    Without reordering, arrivals are yielded as soon as they are accepted.
+    With a reordering window, each ``(remote_id, topic)`` stream may be delayed to reconstruct monotonically
+    increasing publication tags. In-order arrivals are not delayed.
+    """
+
     @property
     @abstractmethod
     def pattern(self) -> str:
@@ -350,7 +394,12 @@ class Subscriber(Closable, ABC):
     @abstractmethod
     async def __anext__(self) -> Arrival:
         """
-        Raises LivenessError if messages cease arriving for longer than the timeout, unless timeout is non-finite.
+        Wait for the next deliverable arrival.
+
+        Raises :class:`LivenessError` if messages cease arriving for longer than :attr:`timeout`, unless the timeout
+        is non-finite (default).
+        For ordered subscriptions, out-of-order messages may be withheld until the gap closes or the reordering
+        window expires.
         """
         raise NotImplementedError
 
@@ -450,16 +499,21 @@ class Node(Closable, ABC):
     @abstractmethod
     def advertise(self, name: str) -> Publisher:
         """
-        Begin publishing on a topic; this also includes sending RPC requests.
+        Begin publishing on a topic.
+
+        The returned :class:`Publisher` is used for ordinary publication and for RPC-style requests sent with
+        :meth:`Publisher.request`.
         """
         raise NotImplementedError
 
     @abstractmethod
     def subscribe(self, name: str, *, reordering_window: float | None = None) -> Subscriber:
         """
-        Receive messages from a single topic or multiple, if ``name`` is a pattern.
-        If the reordering window is set, ordered subscription is used that guarantees monotonically
-        increasing message tags, otherwise messages arrive ASAP.
+        Receive messages from one topic or from several if ``name`` is a pattern.
+
+        If ``reordering_window`` is ``None``, messages are yielded in arrival order.
+        Otherwise, each ``(remote_id, topic)`` stream is reordered independently to ensure that the application
+        sees a monotonically increasing tag sequence; this is useful for sensor feeds, state estimators, etc.
         """
         raise NotImplementedError
 

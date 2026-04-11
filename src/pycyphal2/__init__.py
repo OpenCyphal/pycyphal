@@ -31,6 +31,40 @@ Environment variables control name remapping similar to ROS:
 
 - `CYPHAL_NAMESPACE` — default namespace prepended to relative topic names.
 - `CYPHAL_REMAP` — topic name remappings (`from=to` pairs, whitespace-separated).
+
+Publication is best-effort by default. Pass ``reliable=True`` when publishing to retry delivery until
+acknowledged by every known subscriber or until the deadline; if the remote side does not acknowledge in time,
+:class:`DeliveryError` is raised.
+
+```python
+await pub(Instant.now() + 1.0, b"payload", reliable=True)
+```
+
+Subscriptions normally yield messages as soon as they arrive. Set ``reordering_window`` [seconds] on
+:meth:`Node.subscribe` to allow delaying out-of-order messages to reconstruct the original publication order.
+This is useful for sensor feeds and state estimators.
+
+```python
+sub = node.subscribe("sensor/temperature", reordering_window=0.1)
+```
+
+RPC is layered directly on top of pub/sub. Use :meth:`Publisher.request` to publish a message that expects
+responses, and use :attr:`Arrival.breadcrumb` on the subscriber side to send a unicast reply back to the requester.
+One request may yield responses from multiple subscribers.
+
+```python
+stream = await pub.request(Instant.now() + 1.0, 0.5, b"read")
+async for response in stream:
+    print(response.message)
+```
+
+Streaming is just repeated replying on the same breadcrumb. The requester consumes such replies through
+:class:`ResponseStream`; each responder numbers its own responses from zero upward.
+
+```python
+await arrival.breadcrumb(Instant.now() + 1.0, b"chunk-1", reliable=True)
+await arrival.breadcrumb(Instant.now() + 1.0, b"chunk-2", reliable=True)
+```
 """
 
 from __future__ import annotations

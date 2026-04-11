@@ -1,0 +1,9 @@
+{% extends "default/module.html.jinja2" %}
+
+{% macro is_public(doc) %}
+    {% if doc.name in ["__aiter__", "__anext__", "__call__"] %}
+        true
+    {% else %}
+        {{ default_is_public(doc) }}
+    {% endif %}
+{% endmacro %}

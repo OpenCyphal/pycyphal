@@ -24,6 +24,7 @@ for mi in pkgutil.walk_packages(pycyphal2.__path__, pycyphal2.__name__ + "."):
 
 import pdoc
 
-# HTML theme customization, optional:
+# Customization is necessary to expose special members like __aiter__, __call__, etc.
+# We also use it to tweak the colors.
 pdoc.render.configure(template_directory=Path(__file__).resolve().with_name("pdoc"))
 pdoc.pdoc("pycyphal2", output_directory=Path("html_docs"))
