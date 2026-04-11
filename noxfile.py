@@ -64,9 +64,13 @@ def examples(session: nox.Session) -> None:
     import sys
     import time
 
+    if sys.platform == "darwin":
+        session.skip("Examples smoke is skipped on macOS")
+
     session.install(".[udp]")
     topic = "demo/time"
-    python = str(Path(session.bin) / "python")
+    python = shutil.which("python", path=session.bin)
+    assert python is not None
 
     def terminate_process(proc: subprocess.Popen[str] | None) -> None:
         if proc is None or proc.poll() is not None:

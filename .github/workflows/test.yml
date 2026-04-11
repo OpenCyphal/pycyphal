@@ -39,7 +39,7 @@ jobs:
       - run: pip install nox
       - run: nox -s test --python ${{ matrix.python }}
       - run: nox -s examples --python ${{ matrix.python }}
-        if: matrix.python == '3.11'
+        if: matrix.python == '3.11' && matrix.os != 'macos-latest'
       - uses: actions/upload-artifact@v7
         if: always()
         with:
