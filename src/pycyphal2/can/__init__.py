@@ -11,6 +11,19 @@ from pycyphal2.can.socketcan import SocketCANInterface
 transport = CANTransport.new(SocketCANInterface("can0"))
 ```
 
+Python-CAN is useful when the application runs not on GNU/Linux or already uses `python-can` or needs
+`one of its *many* hardware backends <https://python-can.readthedocs.io/en/stable/interfaces.html>`_
+-- GS-USB, SLCAN, PCAN, etc:
+
+```python
+import can
+from pycyphal2.can import CANTransport
+from pycyphal2.can.pythoncan import PythonCANInterface
+
+bus = can.ThreadSafeBus(interface="socketcan", channel="can0")
+transport = CANTransport.new(PythonCANInterface(bus))
+```
+
 Pass the transport to `pycyphal2.Node.new()` to start a node.
 
 For the available dependencies see the submodules such as `socketcan` et al.

@@ -1,5 +1,13 @@
 """
 Cross-platform CAN backend using `python-can <https://python-can.readthedocs.io/>`_.
+
+This module exposes :class:`PythonCANInterface`, which adapts an existing :class:`can.BusABC`
+instance to :mod:`pycyphal2.can`. Install the optional dependency with ``pycyphal2[pythoncan]``.
+
+The application is responsible for creating and configuring the underlying python-can bus
+(backend, channel, bitrate, FD mode, vendor-specific options, etc.) before wrapping it here.
+This backend is a good fit when the application already uses python-can directly or needs
+one of its cross-platform hardware integrations.
 """
 
 from __future__ import annotations

@@ -10,14 +10,15 @@ import pycyphal2
 
 # Discover and import all public submodules so pdoc can see them,
 # then inject them into their parent's __all__ so pdoc lists them in the sidebar.
+# Public modules are expected to be importable in the docs environment; failures are treated as hard errors.
 for mi in pkgutil.walk_packages(pycyphal2.__path__, pycyphal2.__name__ + "."):
     leaf = mi.name.rsplit(".", 1)[-1]
     if leaf.startswith("_"):
         continue
     try:
         importlib.import_module(mi.name)
-    except ImportError:
-        continue
+    except Exception as ex:
+        raise RuntimeError(f"Failed to import public module {mi.name!r} while building docs") from ex
     parent = sys.modules[mi.name.rsplit(".", 1)[0]]
     if hasattr(parent, "__all__") and leaf not in parent.__all__:
         parent.__all__.append(leaf)

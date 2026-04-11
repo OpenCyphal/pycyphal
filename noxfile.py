@@ -52,7 +52,7 @@ def format(session: nox.Session) -> None:
 
 @nox.session(python=PYTHONS[0], reuse_venv=True)
 def docs(session: nox.Session) -> None:
-    session.install("-e", ".[udp]", "pdoc")
+    session.install("-e", ".[udp,pythoncan]", "pdoc")
     session.run("python", "docs/build.py")
     session.log("Docs written to html_docs/")
 
