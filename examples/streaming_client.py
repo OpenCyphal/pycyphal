@@ -92,9 +92,11 @@ async def run(count: int, period: float, timeout: float) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Send one streaming request over Cyphal/UDP.")
-    parser.add_argument("--count", default=10, help="Requested response count, default: 10")
-    parser.add_argument("--period", default=0.5, help="Requested response period [second]")
-    parser.add_argument("--timeout", default=2.0, help="Max idle gap between responses, aka liveness timeout [second]")
+    parser.add_argument("--count", type=int, default=10, help="Requested response count, default: 10")
+    parser.add_argument("--period", type=float, default=0.5, help="Requested response period [second]")
+    parser.add_argument(
+        "--timeout", type=float, default=2.0, help="Max idle gap between responses, aka liveness timeout [second]"
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(levelname)s: %(message)s")

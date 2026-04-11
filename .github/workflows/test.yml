@@ -38,6 +38,8 @@ jobs:
           ip -details link show vcan0
       - run: pip install nox
       - run: nox -s test --python ${{ matrix.python }}
+      - run: nox -s examples --python ${{ matrix.python }}
+        if: matrix.python == '3.11'
       - uses: actions/upload-artifact@v7
         if: always()
         with:
