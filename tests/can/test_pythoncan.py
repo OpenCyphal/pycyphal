@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 import sys
+import threading
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -734,6 +736,52 @@ async def test_filter_can_error_raises_oserror() -> None:
         with pytest.raises(OSError, match="filter configuration failed"):
             itf.filter([Filter.promiscuous()])
     finally:
+        itf.close()
+
+
+async def test_filter_waits_for_rx_thread_before_reconfiguring() -> None:
+    """Filter changes must wait until the RX thread leaves recv()."""
+    recv_entered = threading.Event()
+    allow_recv_return = threading.Event()
+    filter_started = threading.Event()
+    set_filters_called = threading.Event()
+    applied_filters: list[list[_can.typechecking.CanFilter]] = []
+
+    class BlockingRecvBus:
+        channel_info = "blocking:0"
+        protocol = _can.CanProtocol.CAN_20
+
+        def recv(self, timeout: float | None = None) -> _can.Message | None:
+            recv_entered.set()
+            allow_recv_return.wait()
+            return None
+
+        def set_filters(self, filters: list[_can.typechecking.CanFilter] | None = None) -> None:
+            applied_filters.append(list(filters or []))
+            set_filters_called.set()
+
+        def shutdown(self) -> None:
+            allow_recv_return.set()
+
+    itf = PythonCANInterface(cast(_can.BusABC, BlockingRecvBus()))
+
+    def apply_filters() -> None:
+        filter_started.set()
+        itf.filter([Filter.promiscuous()])
+
+    try:
+        assert await asyncio.to_thread(recv_entered.wait, 1.0)
+        task = asyncio.create_task(asyncio.to_thread(apply_filters))
+        assert await asyncio.to_thread(filter_started.wait, 1.0)
+        assert not set_filters_called.is_set()
+        allow_recv_return.set()
+        await asyncio.wait_for(task, timeout=1.0)
+        assert len(applied_filters) == 1
+        assert applied_filters[0][0]["can_id"] == 0
+        assert applied_filters[0][0]["can_mask"] == 0
+        assert applied_filters[0][0]["extended"] is True
+    finally:
+        allow_recv_return.set()
         itf.close()
 
 

@@ -49,6 +49,10 @@ class PythonCANInterface(Interface):
         self._tx_task: asyncio.Task[None] | None = None
         self._rx_queue: asyncio.Queue[TimestampedFrame | BaseException] = asyncio.Queue()
         self._loop = asyncio.get_running_loop()
+        self._admin_lock = threading.Lock()
+        self._rx_gate = threading.Condition()
+        self._rx_pause_requested = False
+        self._rx_paused = False
         self._rx_thread = threading.Thread(target=self._rx_thread_func, daemon=True, name=f"pythoncan-rx-{self._name}")
         self._rx_thread.start()
         _logger.info("PythonCAN init iface=%s fd=%s", self._name, self._fd)
@@ -67,7 +71,15 @@ class PythonCANInterface(Interface):
         for item in filters:
             can_filters.append(can.typechecking.CanFilter(can_id=item.id, can_mask=item.mask, extended=True))
         try:
-            self._bus.set_filters(can_filters)
+            with self._admin_lock:
+                self._raise_if_closed()
+                self._pause_rx_for_admin()
+                try:
+                    # ThreadSafeBus serializes recv() and set_filters() on the same receive lock,
+                    # so the RX loop must be quiesced before reconfiguring filters.
+                    self._bus.set_filters(can_filters)
+                finally:
+                    self._resume_rx_for_admin()
         except can.CanError as ex:
             raise OSError(f"PythonCAN filter configuration failed on {self._name}: {ex}") from ex
         _logger.debug("PythonCAN filters set iface=%s n=%d", self._name, len(can_filters))
@@ -103,20 +115,24 @@ class PythonCANInterface(Interface):
             return item
 
     def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        if self._tx_task is not None:
-            self._tx_task.cancel()
-            self._tx_task = None
-        try:
-            self._rx_queue.put_nowait(ClosedError(f"PythonCAN interface {self._name} closed"))
-        except Exception:
-            pass
-        try:
-            self._bus.shutdown()
-        except Exception as ex:
-            _logger.debug("PythonCAN bus shutdown error on %s: %s", self._name, ex)
+        with self._admin_lock:
+            if self._closed:
+                return
+            self._pause_rx_for_admin()
+            self._closed = True
+            if self._tx_task is not None:
+                self._tx_task.cancel()
+                self._tx_task = None
+            try:
+                self._rx_queue.put_nowait(ClosedError(f"PythonCAN interface {self._name} closed"))
+            except Exception:
+                pass
+            try:
+                self._bus.shutdown()
+            except Exception as ex:
+                _logger.debug("PythonCAN bus shutdown error on %s: %s", self._name, ex)
+            finally:
+                self._resume_rx_for_admin()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self._name!r}, fd={self._fd})"
@@ -162,28 +178,42 @@ class PythonCANInterface(Interface):
                 return
 
     def _rx_thread_func(self) -> None:
-        while not self._closed:
-            try:
-                msg = self._bus.recv(timeout=_RX_POLL_TIMEOUT)
-            except Exception as ex:
-                if not self._closed:
-                    try:
-                        self._loop.call_soon_threadsafe(self._rx_queue.put_nowait, ex)
-                    except RuntimeError:
-                        pass
-                return
-            if msg is None:
-                continue
-            try:
-                frame = _parse_message(msg)
-            except Exception as ex:
-                _logger.debug("PythonCAN rx drop malformed: %s", ex)
-                continue
-            if frame is not None:
+        try:
+            while True:
+                with self._rx_gate:
+                    if self._rx_pause_requested:
+                        self._rx_paused = True
+                        self._rx_gate.notify_all()
+                        self._rx_gate.wait_for(lambda: not self._rx_pause_requested or self._closed)
+                        self._rx_paused = False
+                        self._rx_gate.notify_all()
+                    if self._closed:
+                        return
                 try:
-                    self._loop.call_soon_threadsafe(self._rx_queue.put_nowait, frame)
-                except RuntimeError:
+                    msg = self._bus.recv(timeout=_RX_POLL_TIMEOUT)
+                except Exception as ex:
+                    if not self._closed:
+                        try:
+                            self._loop.call_soon_threadsafe(self._rx_queue.put_nowait, ex)
+                        except RuntimeError:
+                            pass
                     return
+                if msg is None:
+                    continue
+                try:
+                    frame = _parse_message(msg)
+                except Exception as ex:
+                    _logger.debug("PythonCAN rx drop malformed: %s", ex)
+                    continue
+                if frame is not None:
+                    try:
+                        self._loop.call_soon_threadsafe(self._rx_queue.put_nowait, frame)
+                    except RuntimeError:
+                        return
+        finally:
+            with self._rx_gate:
+                self._rx_paused = False
+                self._rx_gate.notify_all()
 
     def _fail(self, ex: BaseException) -> None:
         if self._failure is None:
@@ -196,6 +226,18 @@ class PythonCANInterface(Interface):
             if self._failure is not None:
                 raise ClosedError(f"PythonCAN interface {self._name} failed") from self._failure
             raise ClosedError(f"PythonCAN interface {self._name} closed")
+
+    def _pause_rx_for_admin(self) -> None:
+        with self._rx_gate:
+            self._rx_pause_requested = True
+            self._rx_gate.notify_all()
+            self._rx_gate.wait_for(lambda: self._rx_paused or not self._rx_thread.is_alive())
+
+    def _resume_rx_for_admin(self) -> None:
+        with self._rx_gate:
+            self._rx_pause_requested = False
+            self._rx_gate.notify_all()
+            self._rx_gate.wait_for(lambda: not self._rx_paused or not self._rx_thread.is_alive())
 
 
 def _parse_message(msg: can.Message) -> TimestampedFrame | None:
