@@ -68,6 +68,16 @@ def examples(session: nox.Session) -> None:
     topic = "demo/time"
     python = str(Path(session.bin) / "python")
 
+    def terminate_process(proc: subprocess.Popen[str] | None) -> None:
+        if proc is None or proc.poll() is not None:
+            return
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+
     def run_case(label: str, extra_args: list[str]) -> None:
         session.log(f"--- examples smoke: {label} ---")
         sub_proc = subprocess.Popen(
@@ -92,8 +102,47 @@ def examples(session: nox.Session) -> None:
             assert "topic" in obj
             assert "message_b64" in obj
 
+    def run_streaming_case() -> None:
+        session.log("--- examples smoke: streaming ---")
+        server_proc = None
+        try:
+            server_proc = subprocess.Popen(
+                [python, "examples/streaming_server.py"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            time.sleep(1)
+            client_proc = subprocess.Popen(
+                [python, "examples/streaming_client.py", "--count=3", "--period=0.2"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            client_stdout, client_stderr = client_proc.communicate(timeout=20)
+            assert client_proc.returncode == 0, f"Streaming client failed: {client_stderr}"
+            time.sleep(1)
+            assert server_proc.poll() is None, "Streaming server exited unexpectedly"
+        finally:
+            terminate_process(server_proc)
+        _, server_stderr = server_proc.communicate(timeout=5)
+        lines = [ln for ln in client_stdout.splitlines() if ln.strip()]
+        session.log(f"Streaming client captured {len(lines)} line(s)")
+        assert len(lines) == 2, f"Expected 2 JSONL responses, got {len(lines)}"
+        objs = [_json.loads(ln) for ln in lines]
+        assert [obj["seqno"] for obj in objs] == [0, 1]
+        assert len({obj["remote_id"] for obj in objs}) == 1
+        for obj in objs:
+            assert "ts" in obj
+            assert "stream_id" in obj
+            assert "requested_count" in obj
+            assert "period" in obj
+            assert "remaining" in obj
+            assert "sent_at" in obj
+
     run_case("udp", [])
     if sys.platform == "linux" and Path("/sys/class/net/vcan0").exists():
         run_case("socketcan:vcan0", ["--transport", "socketcan:vcan0"])
     else:
         session.log("Skipping socketcan:vcan0 case (vcan0 not available)")
+    run_streaming_case()
