@@ -65,6 +65,9 @@ Streaming is just repeated replying on the same breadcrumb. The requester consum
 await arrival.breadcrumb(Instant.now() + 1.0, b"chunk-1", reliable=True)
 await arrival.breadcrumb(Instant.now() + 1.0, b"chunk-2", reliable=True)
 ```
+
+Cyphal does not define a serialization format. Previous versions used to define the DSDL format but it has been
+extracted into an independent project, and Cyphal was made serialization-agnostic in v1.1+.
 """
 
 from __future__ import annotations
