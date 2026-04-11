@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Build API docs using pdoc. Invoked via ``nox -s docs``."""
+
 from pathlib import Path
 import pkgutil
 import importlib
@@ -23,4 +24,6 @@ for mi in pkgutil.walk_packages(pycyphal2.__path__, pycyphal2.__name__ + "."):
 
 import pdoc
 
+# HTML theme customization, optional:
+pdoc.render.configure(template_directory=Path(__file__).resolve().with_name("pdoc"))
 pdoc.pdoc("pycyphal2", output_directory=Path("html_docs"))

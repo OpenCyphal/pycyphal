@@ -50,7 +50,7 @@ def format(session: nox.Session) -> None:
     session.run("black", "--check", "--diff", "src", "tests", "examples")
 
 
-@nox.session(reuse_venv=True)
+@nox.session(python=PYTHONS[0], reuse_venv=True)
 def docs(session: nox.Session) -> None:
     session.install("-e", ".[udp]", "pdoc")
     session.run("python", "docs/build.py")
