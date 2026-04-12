@@ -306,6 +306,7 @@ class _TopicFlyweight(Topic):
 
     _topic_hash: int
     _name: str
+    _evictions: int
 
     @property
     def hash(self) -> int:
@@ -314,6 +315,13 @@ class _TopicFlyweight(Topic):
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def evictions(self) -> int:
+        return self._evictions
+
+    def subject_id(self, modulus: int) -> int:
+        return compute_subject_id(self._topic_hash, self._evictions, modulus)
 
     def match(self, pattern: str) -> list[tuple[str, int]] | None:
         return match_pattern(pattern, self._name)
@@ -364,7 +372,7 @@ class TopicImpl(Topic):
         self._node = node
         self._name = name
         self._topic_hash = rapidhash(name)
-        self.evictions = evictions
+        self._evictions = evictions
         self.ts_origin = now
         self.ts_animated = now
         self._pub_tag_baseline = int.from_bytes(os.urandom(8), "little")
@@ -392,14 +400,20 @@ class TopicImpl(Topic):
     def name(self) -> str:
         return self._name
 
+    @property
+    def evictions(self) -> int:
+        return self._evictions
+
+    def set_evictions(self, evictions: int) -> None:
+        self._evictions = evictions
+
+    def subject_id(self, modulus: int) -> int:
+        return compute_subject_id(self._topic_hash, self._evictions, modulus)
+
     def match(self, pattern: str) -> list[tuple[str, int]] | None:
         return match_pattern(pattern, self._name)
 
     # -- Internal --
-    @property
-    def subject_id(self) -> int:
-        return compute_subject_id(self._topic_hash, self.evictions, self._node.transport.subject_id_modulus)
-
     def lage(self, now: float) -> int:
         return log_age(self.ts_origin, now)
 
@@ -426,14 +440,14 @@ class TopicImpl(Topic):
 
     def ensure_writer(self) -> SubjectWriter:
         if self.pub_writer is None:
-            sid = self.subject_id
+            sid = self.subject_id(self._node.transport.subject_id_modulus)
             self.pub_writer = self._node.acquire_subject_writer(self, sid)
             _logger.info("Writer acquired for '%s' sid=%d", self._name, sid)
         return self.pub_writer
 
     def ensure_listener(self) -> None:
         if self.sub_listener is None and self.couplings:
-            sid = self.subject_id
+            sid = self.subject_id(self._node.transport.subject_id_modulus)
             self.sub_listener = self._node.acquire_subject_listener(self, sid)
             _logger.info("Listener acquired for '%s' sid=%d", self._name, sid)
 
@@ -441,12 +455,12 @@ class TopicImpl(Topic):
         if self.couplings:
             self.ensure_listener()
         elif self.sub_listener is not None:
-            self._node.release_subject_listener(self, self.subject_id)
+            self._node.release_subject_listener(self, self.subject_id(self._node.transport.subject_id_modulus))
             self.sub_listener = None
             _logger.info("Listener released for '%s'", self._name)
 
     def release_transport_handles(self) -> None:
-        sid = self.subject_id
+        sid = self.subject_id(self._node.transport.subject_id_modulus)
         if self.pub_writer is not None:
             self._node.release_subject_writer(self, sid)
             self.pub_writer = None
@@ -573,7 +587,12 @@ class NodeImpl(Node):
         topic.pub_count += 1
         topic.sync_implicit()
         topic.ensure_writer()
-        _logger.info("Advertise '%s' -> '%s' sid=%d", name, resolved, topic.subject_id)
+        _logger.info(
+            "Advertise '%s' -> '%s' sid=%d",
+            name,
+            resolved,
+            topic.subject_id(self.transport.subject_id_modulus),
+        )
         return PublisherImpl(self, topic)
 
     def subscribe(self, name: str, *, reordering_window: float | None = None) -> Subscriber:
@@ -662,29 +681,34 @@ class NodeImpl(Node):
             self.couple_topic_root(topic, root)
         topic.sync_listener()
         self.notify_implicit_gc()
-        _logger.info("Topic created '%s' hash=%016x sid=%d", name, topic.hash, topic.subject_id)
+        _logger.info(
+            "Topic created '%s' hash=%016x sid=%d",
+            name,
+            topic.hash,
+            topic.subject_id(self.transport.subject_id_modulus),
+        )
         return topic
 
     def topic_allocate(self, topic: TopicImpl, new_evictions: int, now: float) -> None:
         """Iterative subject-ID allocation with collision resolution. Mirrors topic_allocate() in cy.c."""
         # Work queue: list of (topic, new_evictions) pairs to process.
+        modulus = self.transport.subject_id_modulus
         work: list[tuple[TopicImpl, int]] = [(topic, new_evictions)]
         while work:
             t, ev = work.pop(0)
             # Remove from subject-ID index first.
-            old_sid = t.subject_id
+            old_sid = t.subject_id(modulus)
             if old_sid in self.topics_by_subject_id and self.topics_by_subject_id[old_sid] is t:
                 del self.topics_by_subject_id[old_sid]
 
             if ev >= EVICTIONS_PINNED_MIN:
                 # Pinned topic: no collision detection, shared subject-IDs are fine.
                 t.release_transport_handles()
-                t.evictions = ev
+                t.set_evictions(ev)
                 t.sync_listener()
                 self.schedule_gossip_urgent(t)
                 continue
 
-            modulus = self.transport.subject_id_modulus
             new_sid = compute_subject_id(t.hash, ev, modulus)
             collider = self.topics_by_subject_id.get(new_sid)
 
@@ -694,14 +718,14 @@ class NodeImpl(Node):
             if collider is None:
                 # No collision, install.
                 t.release_transport_handles()
-                t.evictions = ev
+                t.set_evictions(ev)
                 self.topics_by_subject_id[new_sid] = t
                 t.sync_listener()
                 self.schedule_gossip_urgent(t)
             elif left_wins(t.lage(now), t.hash, collider.lage(now), collider.hash):
                 # Our topic wins: take the slot, evict the collider.
                 t.release_transport_handles()
-                t.evictions = ev
+                t.set_evictions(ev)
                 del self.topics_by_subject_id[new_sid]
                 self.topics_by_subject_id[new_sid] = t
                 if collider.pub_writer is not None:
@@ -1293,7 +1317,7 @@ class NodeImpl(Node):
             self._notify_monitors(topic)
         else:
             self.on_gossip_unknown(hdr.topic_hash, hdr.topic_evictions, hdr.topic_log_age, ts)
-            self._notify_monitors(_TopicFlyweight(hdr.topic_hash, name))
+            self._notify_monitors(_TopicFlyweight(hdr.topic_hash, name, hdr.topic_evictions))
 
     def on_gossip_known(
         self,
@@ -1430,7 +1454,7 @@ class NodeImpl(Node):
             self.decouple_topic_root(topic, topic.couplings[0].root, sync_lifecycle=False)
         self.topics_by_name.pop(name, None)
         self.topics_by_hash.pop(topic.hash, None)
-        sid = topic.subject_id
+        sid = topic.subject_id(self.transport.subject_id_modulus)
         if self.topics_by_subject_id.get(sid) is topic:
             del self.topics_by_subject_id[sid]
         topic.associations.clear()

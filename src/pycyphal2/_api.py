@@ -131,7 +131,6 @@ class Closable(ABC):
 class Topic(ABC):
     """
     Topics are managed automatically by the library, created and destroyed as necessary.
-    This is just a compact view to expose some auxiliary information.
     """
 
     @property
@@ -142,6 +141,16 @@ class Topic(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def evictions(self) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def subject_id(self, modulus: int) -> int:
+        """The modulus can be obtained from :attr:`Transport.subject_id_modulus`."""
         raise NotImplementedError
 
     @abstractmethod

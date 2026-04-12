@@ -266,7 +266,7 @@ async def test_topic_destroy():
     topic = node.topics_by_name.get("to_destroy")
     assert topic is not None
     topic_hash = topic.hash
-    sid = topic.subject_id
+    sid = topic.subject_id(tr.subject_id_modulus)
 
     pub.close()  # Allow destroy.
     node.destroy_topic("to_destroy")
@@ -380,7 +380,7 @@ async def test_topic_collision_during_allocate():
 
     pub_a = node.advertise("/topic_alpha")
     topic_a = node.topics_by_name["topic_alpha"]
-    sid_a = topic_a.subject_id
+    sid_a = topic_a.subject_id(tr.subject_id_modulus)
 
     # Find a name that collides with topic_a's subject-ID.
     from pycyphal2._hash import rapidhash
@@ -394,7 +394,7 @@ async def test_topic_collision_during_allocate():
             pub_b = node.advertise(f"/{name}")
             topic_b = node.topics_by_name[name]
             # One of them should have been reallocated.
-            assert topic_a.subject_id != topic_b.subject_id
+            assert topic_a.subject_id(tr.subject_id_modulus) != topic_b.subject_id(tr.subject_id_modulus)
             pub_b.close()
             break
 

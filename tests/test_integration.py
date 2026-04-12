@@ -121,7 +121,7 @@ async def test_pinned_topic():
 
     pub = node.advertise("/my/topic#42")
     topic = list(node.topics_by_name.values())[0]
-    assert topic.subject_id == 42
+    assert topic.subject_id(tr.subject_id_modulus) == 42
     assert topic.evictions == 0xFFFFFFFF - 42
 
     pub.close()
@@ -348,7 +348,7 @@ async def test_remap_advertise_pinned():
     pub = node.advertise("my/topic")
     topic = list(node.topics_by_name.values())[0]
     assert topic.name == "ns/remapped"
-    assert topic.subject_id == 42
+    assert topic.subject_id(tr.subject_id_modulus) == 42
 
     pub.close()
     node.close()

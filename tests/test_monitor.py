@@ -115,6 +115,7 @@ async def test_monitor_implicit_topic_creation_reports_local_topic_instead_of_fl
 
 async def test_monitor_unknown_topic_uses_flyweight_with_wire_identity() -> None:
     node = new_node(MockTransport(node_id=1), home="n1")
+    modulus = node.transport.subject_id_modulus
 
     received: list[pycyphal2.Topic] = []
     node.monitor(received.append)
@@ -128,6 +129,8 @@ async def test_monitor_unknown_topic_uses_flyweight_with_wire_identity() -> None
     assert not isinstance(received[0], TopicImpl)
     assert received[0].hash == topic_hash
     assert received[0].name == name
+    assert received[0].evictions == 0
+    assert received[0].subject_id(modulus) == pycyphal2.SUBJECT_ID_PINNED_MAX + 1 + (topic_hash % modulus)
     assert received[0].match("sensor/*") == [("temp", 1)]
 
     node.close()
@@ -142,6 +145,7 @@ async def test_monitor_unknown_topic_uses_flyweight_with_wire_identity() -> None
 )
 async def test_monitor_unknown_topic_preserves_decoded_wire_name(name_bytes: bytes, expected_name: str) -> None:
     node = new_node(MockTransport(node_id=1), home="n1")
+    modulus = node.transport.subject_id_modulus
 
     received: list[pycyphal2.Topic] = []
     node.monitor(received.append)
@@ -154,6 +158,8 @@ async def test_monitor_unknown_topic_preserves_decoded_wire_name(name_bytes: byt
     assert len(received) == 1
     assert received[0].hash == 0xDEADBEEFCAFEBABE
     assert received[0].name == expected_name
+    assert received[0].evictions == 3
+    assert received[0].subject_id(modulus) == pycyphal2.SUBJECT_ID_PINNED_MAX + 1 + ((0xDEADBEEFCAFEBABE + 9) % modulus)
 
     node.close()
 
@@ -179,7 +185,7 @@ async def test_monitor_is_not_invoked_for_inline_gossip_on_message_reception() -
         ).serialize()
         + b"data",
     )
-    node.on_subject_arrival(topic.subject_id, arrival)
+    node.on_subject_arrival(topic.subject_id(node.transport.subject_id_modulus), arrival)
 
     assert received == []
 

@@ -109,7 +109,7 @@ async def test_advertise_assigns_subject_id():
     resolved, _, _ = resolve_name("my/topic", "test_node", "")
     topic = node.topics_by_name[resolved]
 
-    sid = topic.subject_id
+    sid = topic.subject_id(tr.subject_id_modulus)
     assert sid == compute_subject_id(topic.hash, topic.evictions, DEFAULT_MODULUS)
     assert node.topics_by_subject_id.get(sid) is topic
 
@@ -127,7 +127,7 @@ async def test_advertise_pinned_topic():
     resolved, pin, _ = resolve_name("my/topic#42", "test_node", "")
     assert pin == 42
     topic = node.topics_by_name[resolved]
-    assert topic.subject_id == 42
+    assert topic.subject_id(tr.subject_id_modulus) == 42
 
     pub.close()
     node.close()
@@ -179,7 +179,7 @@ async def test_topic_collision_evicts_loser():
     topic2 = node.topics_by_name[resolved2]
 
     # Both topics should exist with non-colliding subject-IDs (the allocator resolved them).
-    assert topic1.subject_id != topic2.subject_id or topic1 is topic2
+    assert topic1.subject_id(tr.subject_id_modulus) != topic2.subject_id(tr.subject_id_modulus) or topic1 is topic2
     assert topic1.name in node.topics_by_name
     assert topic2.name in node.topics_by_name
 
@@ -217,7 +217,7 @@ async def test_collision_allocator_iterates():
     # Collect all subject-IDs (non-pinned).
     sids = set()
     for name, topic in node.topics_by_name.items():
-        sid = topic.subject_id
+        sid = topic.subject_id(tr.subject_id_modulus)
         if sid not in sids:
             sids.add(sid)
         else:
@@ -318,7 +318,7 @@ async def test_gossip_unknown_collision_we_win():
     pub = node.advertise("my/topic")
     resolved, _, _ = resolve_name("my/topic", "test_node", "")
     topic = node.topics_by_name[resolved]
-    my_sid = topic.subject_id
+    my_sid = topic.subject_id(tr.subject_id_modulus)
 
     # Make our topic very old so we win.
     topic.ts_origin = time.monotonic() - 100000

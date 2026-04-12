@@ -160,7 +160,7 @@ async def test_reliable_publish_retry_rebuilds_writer_and_header_after_reallocat
     pub.priority = pycyphal2.Priority.EXCEPTIONAL
     pub.ack_timeout = 0.1
     topic = node.topics_by_name["topic"]
-    old_sid = topic.subject_id
+    old_sid = topic.subject_id(tr.subject_id_modulus)
     old_evictions = topic.evictions
     old_messages: list[TransportArrival] = []
     new_messages: list[TransportArrival] = []
@@ -189,7 +189,7 @@ async def test_reliable_publish_retry_rebuilds_writer_and_header_after_reallocat
     )
     node.on_subject_arrival(node.broadcast_subject_id, gossip_arrival)
 
-    new_sid = topic.subject_id
+    new_sid = topic.subject_id(tr.subject_id_modulus)
     assert new_sid != old_sid
     observer.subject_listen(new_sid, new_messages.append)
 
@@ -231,7 +231,7 @@ async def test_gossip_reallocation_to_occupied_subject_preserves_writer():
 
     pub_b = node.advertise(colliding_name)
     topic_b = node.topics_by_name[colliding_name.removeprefix("/")]
-    sid_b = topic_b.subject_id
+    sid_b = topic_b.subject_id(tr.subject_id_modulus)
     writer_b = expect_mock_writer(topic_b.pub_writer)
 
     now = pycyphal2.Instant.now().s
@@ -245,11 +245,11 @@ async def test_gossip_reallocation_to_occupied_subject_preserves_writer():
     remote_lage = topic_a.lage(now) + 1
     node.on_gossip_known(topic_a, remote_evictions, remote_lage, now, GossipScope.SHARDED)
 
-    assert topic_a.subject_id == sid_b
+    assert topic_a.subject_id(tr.subject_id_modulus) == sid_b
     assert topic_a.pub_writer is writer_b
     assert tr.subject_writer_creations.get(sid_b) == writer_creations_before == 1
     assert topic_b.pub_writer is None
-    assert topic_b.subject_id != sid_b
+    assert topic_b.subject_id(tr.subject_id_modulus) != sid_b
 
     send_count_before = writer_b.send_count
     await pub_a(pycyphal2.Instant.now() + 1.0, b"payload")
@@ -439,7 +439,7 @@ async def test_gossip_unknown_topic_collision():
 
     topic_a = node.topics_by_name.get("topic_a")
     assert topic_a is not None
-    old_sid = topic_a.subject_id
+    old_sid = topic_a.subject_id(tr.subject_id_modulus)
 
     # Craft a gossip from a different topic that happens to claim the same subject-ID.
     # Use a fake hash that maps to the same subject-ID with evictions=0.
@@ -469,7 +469,7 @@ async def test_gossip_unknown_topic_collision():
         node.on_subject_arrival(node.broadcast_subject_id, arrival)
         await asyncio.sleep(0.02)
         # Our topic should have been reallocated.
-        assert topic_a.subject_id != old_sid or topic_a.evictions > 0
+        assert topic_a.subject_id(tr.subject_id_modulus) != old_sid or topic_a.evictions > 0
 
     pub.close()
     node.close()
@@ -753,7 +753,7 @@ async def test_reliable_msg_sends_ack():
         remote_id=99,
         message=msg_data,
     )
-    node.on_subject_arrival(topic.subject_id, arrival)
+    node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), arrival)
 
     # Give ACK task time to run.
     await asyncio.sleep(0.02)
@@ -781,7 +781,8 @@ async def test_reliable_msg_wrong_subject_dropped():
 
     topic = list(node.topics_by_name.values())[0]
     subject_id_max = pycyphal2.SUBJECT_ID_PINNED_MAX + tr.subject_id_modulus
-    wrong_subject_id = topic.subject_id + 1 if topic.subject_id < subject_id_max else topic.subject_id - 1
+    topic_subject_id = topic.subject_id(tr.subject_id_modulus)
+    wrong_subject_id = topic_subject_id + 1 if topic_subject_id < subject_id_max else topic_subject_id - 1
     hdr = MsgRelHeader(
         topic_log_age=0,
         topic_evictions=topic.evictions,
@@ -828,8 +829,8 @@ async def test_reliable_msg_dedup():
     )
 
     # Deliver twice.
-    node.on_subject_arrival(topic.subject_id, arrival)
-    node.on_subject_arrival(topic.subject_id, arrival)
+    node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), arrival)
+    node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), arrival)
 
     # Should only get one message.
     assert sub.queue.qsize() == 1
@@ -891,7 +892,7 @@ async def test_reliable_msg_ordered_late_drop_sends_no_ack_or_nack():
             remote_id=99,
             message=hdr.serialize() + f"m{tag}".encode(),
         )
-        node.on_subject_arrival(topic.subject_id, arrival)
+        node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), arrival)
         await asyncio.sleep(0.02)
         tr.unicast_log.clear()
         await sub.queue.get()
@@ -908,7 +909,7 @@ async def test_reliable_msg_ordered_late_drop_sends_no_ack_or_nack():
         remote_id=99,
         message=late_hdr.serialize() + b"late",
     )
-    node.on_subject_arrival(topic.subject_id, late_arrival)
+    node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), late_arrival)
     await asyncio.sleep(0.02)
 
     assert tr.unicast_log == []
@@ -1011,7 +1012,7 @@ async def test_multicast_msg_ack_ignored():
         remote_id=42,
         message=MsgAckHeader(topic_hash=topic.hash, tag=tag).serialize(),
     )
-    node.on_subject_arrival(topic.subject_id, arrival)
+    node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), arrival)
 
     assert not tracker.acknowledged
     assert tracker.remaining == {42}

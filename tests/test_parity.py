@@ -44,7 +44,7 @@ async def test_crdt_collision_older_topic_wins():
     # Create topic_a first (it will be older).
     pub_a = node.advertise("/topic_a")
     topic_a = node.topics_by_name["topic_a"]
-    sid_a = topic_a.subject_id
+    sid_a = topic_a.subject_id(tr.subject_id_modulus)
 
     # Search for a colliding name.
     modulus = tr.subject_id_modulus
@@ -66,7 +66,7 @@ async def test_crdt_collision_older_topic_wins():
     topic_b = node.topics_by_name[colliding_name]
 
     # topic_a should keep its subject-ID since it is older; topic_b should have been evicted.
-    assert topic_a.subject_id != topic_b.subject_id
+    assert topic_a.subject_id(tr.subject_id_modulus) != topic_b.subject_id(tr.subject_id_modulus)
     assert topic_b.evictions > 0  # loser got bumped
     assert topic_a.evictions == 0  # winner untouched
 
@@ -211,7 +211,7 @@ async def test_msg_header_merges_lage():
         remote_id=99,
         message=hdr.serialize() + b"payload",
     )
-    node.on_subject_arrival(topic.subject_id, arrival)
+    node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), arrival)
 
     # After merge, our lage should have increased to at least the remote's claim.
     merged_lage = topic.lage(time.monotonic())
@@ -375,7 +375,7 @@ async def test_best_effort_full_pipeline():
     await pub(pycyphal2.Instant.now() + 1.0, b"test_payload")
 
     # Verify the transport writer was invoked.
-    writer = tr.writers.get(topic.subject_id)
+    writer = tr.writers.get(topic.subject_id(tr.subject_id_modulus))
     assert writer is not None
     assert writer.send_count >= 1
 
@@ -443,7 +443,7 @@ async def test_pinned_topic_formula():
     for pin_val in [0, 1, 42, 100, SUBJECT_ID_PINNED_MAX]:
         pub = node.advertise(f"/pin_{pin_val}#{pin_val}")
         topic = node.topics_by_name[f"pin_{pin_val}"]
-        assert topic.subject_id == pin_val
+        assert topic.subject_id(tr.subject_id_modulus) == pin_val
         assert topic.evictions == 0xFFFFFFFF - pin_val
         pub.close()
 
@@ -462,8 +462,8 @@ async def test_multiple_pinned_topics_share_subject_id():
     topic_b = node.topics_by_name["beta"]
 
     # Both should have subject-ID 42.
-    assert topic_a.subject_id == 42
-    assert topic_b.subject_id == 42
+    assert topic_a.subject_id(tr.subject_id_modulus) == 42
+    assert topic_b.subject_id(tr.subject_id_modulus) == 42
     assert topic_a.pub_writer is topic_b.pub_writer
     assert tr.subject_writer_creations.get(42) == 1
 
