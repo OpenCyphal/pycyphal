@@ -38,10 +38,31 @@ All public symbols live at the top level — just `import pycyphal2`.
 Transport modules (`pycyphal2.udp`, `pycyphal2.can`) are imported separately
 so that only the needed dependencies are pulled in.
 
-Environment variables control name remapping similar to ROS:
+### Name resolution
+
+The topic naming system shares many similarities with ROS.
+A valid name contains printable ASCII characters except space (ASCII codes [33, 126]).
+Normalized names do not have leading or trailing segment separators `/` and do not have consecutive separators.
+Every node should have a unique name, which is called its *home*; home substitution is done via `~/`.
+
+| Input name        | Namespace | Home | Remap              | Resolved name         | Note                             |
+| ----------------- | --------- | ---- | ------------------ | --------------------- | -------------------------------- |
+| `foo/bar`         | `ns`      | `me` |                    | `ns/foo/bar`          | Relative name                    |
+| `/foo//bar/`      | `ns`      | `me` |                    | `foo/bar`             | Absolute name; namespace ignored |
+| `~/foo/bar`       | `ns`      | `me` |                    | `me/foo/bar`          | Homeful name                     |
+| `sensor/*/temp`   | `diag`    | `me` |                    | `diag/sensor/*/temp`  | Pattern with `*`                 |
+| `/sensor/>`       | `diag`    | `me` |                    | `sensor/>`            | Pattern with trailing `>`        |
+| `foo/bar`         | `ns`      | `me` | `foo/bar=~/zoo`    | `me/zoo`              | Remap first, then resolve        |
+
+Only exact `~` or `~/...` is homeful; `~ns` is literal. A matching remap overrides pinning.
+Pins are allowed only on verbatim names, not on patterns.
+
+Environment variables that control name remapping:
 
 - `CYPHAL_NAMESPACE` — default namespace prepended to relative topic names.
 - `CYPHAL_REMAP` — topic name remappings (`from=to` pairs, whitespace-separated).
+
+See also :meth:`Node.remap`.
 
 ### Publish
 

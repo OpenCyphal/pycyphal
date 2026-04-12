@@ -12,7 +12,7 @@ transport = CANTransport.new(SocketCANInterface("can0"))
 ```
 
 Python-CAN is useful when the application runs not on GNU/Linux or already uses `python-can` or needs
-`one of its *many* hardware backends <https://python-can.readthedocs.io/en/stable/interfaces.html>`_
+[one of its *many* hardware backends](https://python-can.readthedocs.io/en/stable/interfaces.html)
 -- GS-USB, SLCAN, PCAN, etc:
 
 ```python
