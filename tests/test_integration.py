@@ -47,6 +47,14 @@ async def test_node_creation_and_home():
     node.close()
 
 
+async def test_node_exposes_transport_property():
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="my_home")
+    assert node.transport is tr
+    node.close()
+
+
 async def test_node_namespace():
     """Namespace should affect name resolution."""
     net = MockNetwork()

@@ -501,7 +501,7 @@ def left_wins(l_lage: int, l_hash: int, r_lage: int, r_hash: int) -> bool:
 
 class NodeImpl(Node):
     def __init__(self, transport: Transport, *, home: str, namespace: str) -> None:
-        self.transport = transport
+        self._transport = transport
         self._home = home
         self._namespace = namespace
         self._remaps: dict[str, str] = {}
@@ -568,6 +568,10 @@ class NodeImpl(Node):
     @property
     def namespace(self) -> str:
         return self._namespace
+
+    @property
+    def transport(self) -> Transport:
+        return self._transport
 
     def remap(self, spec: str | dict[str, str]) -> None:
         if isinstance(spec, str):

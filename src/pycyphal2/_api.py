@@ -484,6 +484,11 @@ class Node(Closable, ABC):
     def namespace(self) -> str:
         raise NotImplementedError
 
+    @property
+    @abstractmethod
+    def transport(self) -> Transport:
+        raise NotImplementedError
+
     @abstractmethod
     def remap(self, spec: str | dict[str, str]) -> None:
         """
