@@ -15,8 +15,6 @@ pip install pycyphal2[udp,pythoncan]
 
 ## Usage
 
->🎓 The source repository contains a collection of runnable examples.
-
 Set up a transport, make a node, publish and subscribe:
 
 ```python
