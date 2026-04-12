@@ -19,9 +19,8 @@ Python implementation of the [Cyphal](https://opencyphal.org) stack that runs on
 
 PyCyphal v2 is published on PyPI as `pycyphal2` to enable coexistence with v1 `pycyphal` in the same Python environment.
 The two packages have radically different APIs but are wire-compatible on Cyphal/CAN.
-The maintenance of the original `pycyphal` package will eventually cease,
-at which point it will be made an alias of `pycyphal2` and the old API will be removed.
-Existing applications leveraging `pycyphal` should eventually upgrade to the new API of `pycyphal2`.
+The maintenance of the original `pycyphal` package will eventually cease;
+existing applications leveraging `pycyphal` should upgrade to the new API of `pycyphal2`.
 
 📚 **Read the docs** at <https://opencyphal.github.io/pycyphal>.
 

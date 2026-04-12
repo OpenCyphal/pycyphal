@@ -18,3 +18,7 @@
     --def: #FC6D09;
     --annotation: #7aa2ff;
 }
+
+main.pdoc .docstring h3 {
+    font-size: 1.2rem;
+}

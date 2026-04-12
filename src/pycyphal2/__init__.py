@@ -13,13 +13,6 @@ Optional features inside the brackets can be removed if not needed; see `pyproje
 pip install pycyphal2[udp,pythoncan]
 ```
 
-PyCyphal v2 is published on PyPI as [`pycyphal2`](https://pypi.org/project/pycyphal2/)
-to enable coexistence with the original [`pycyphal` v1](https://pypi.org/project/pycyphal/)
-in the same Python environment.
-The two packages have radically different APIs but are wire-compatible on Cyphal/CAN.
-The maintenance of the original `pycyphal` package will eventually cease;
-existing applications leveraging `pycyphal` should eventually upgrade to the new API of `pycyphal2`.
-
 ## Usage
 
 >🎓 The source repository contains a collection of runnable examples.
@@ -50,21 +43,40 @@ Environment variables control name remapping similar to ROS:
 - `CYPHAL_NAMESPACE` — default namespace prepended to relative topic names.
 - `CYPHAL_REMAP` — topic name remappings (`from=to` pairs, whitespace-separated).
 
-Publication is best-effort by default. Pass ``reliable=True`` when publishing to retry delivery until
+### Publish
+
+Publication is best-effort by default. Pass `reliable=True` when publishing to retry delivery until
 acknowledged by every known subscriber or until the deadline; if the remote side does not acknowledge in time,
 :class:`DeliveryError` is raised.
 
 ```python
+pub = node.advertise("sensor/temperature")
 await pub(Instant.now() + 1.0, b"payload", reliable=True)
 ```
 
-Subscriptions normally yield messages as soon as they arrive. Set ``reordering_window`` [seconds] on
+### Subscribe
+
+Subscriptions normally yield messages as soon as they arrive. Set `reordering_window` [seconds] on
 :meth:`Node.subscribe` to allow delaying out-of-order messages to reconstruct the original publication order.
 This is useful for sensor feeds and state estimators.
 
 ```python
 sub = node.subscribe("sensor/temperature", reordering_window=0.1)
 ```
+
+Pattern matching is supported: use `*` to match one name segment (e.g., `sensor/*/temperature`)
+and a trailing `>` to match zero or more trailing segments (e.g., `sensor/>`).
+Pattern subscribers automatically join matching topics as they appear, and unsubscribe as they disappear.
+
+```python
+sub = node.subscribe("sensor/*/temperature")
+async for arrival in sub:
+    topic = arrival.breadcrumb.topic
+    captures = sub.substitutions(topic)
+    print(topic.name, captures)  # [('engine', 1)], where 1 is the pattern segment index
+```
+
+### RPC & streaming
 
 RPC is layered directly on top of pub/sub. Use :meth:`Publisher.request` to publish a message that expects
 responses, and use :attr:`Arrival.breadcrumb` on the subscriber side to send a unicast reply back to the requester.
@@ -84,8 +96,33 @@ await arrival.breadcrumb(Instant.now() + 1.0, b"chunk-1", reliable=True)
 await arrival.breadcrumb(Instant.now() + 1.0, b"chunk-2", reliable=True)
 ```
 
+### Topic pinning
+
+Topics may be pinned to a specific subject-ID using `name#1234` to bypass automatic assignment.
+This is useful for applications where a high degree of determinism is required and for Cyphal/CAN v1.0 interoperability.
+Pattern names (e.g., `sensor/*/temperature/>`) cannot be pinned.
+
+To join a Cyphal/CAN v1.0 subject, use topic name of the form `subject_id#subject_id`; e.g., `7509#7509`.
+
+```python
+pub = node.advertise("motor/status#1234")
+sub = node.subscribe("1234#1234")
+```
+
+Old Cyphal/CAN v1.0 nodes do not participate in the topic discovery protocol,
+so topics joined only by such nodes are not discoverable by pattern subscribers.
+
+## Remarks
+
 Cyphal does not define a serialization format. Previous versions used to define the DSDL format but it has been
 extracted into an independent project, and Cyphal was made serialization-agnostic in v1.1+.
+
+PyCyphal v2 is published on PyPI as [`pycyphal2`](https://pypi.org/project/pycyphal2/)
+to enable coexistence with the original [`pycyphal` v1](https://pypi.org/project/pycyphal/)
+in the same Python environment.
+The two packages have radically different APIs but are wire-compatible on Cyphal/CAN.
+The maintenance of the original `pycyphal` package will eventually cease;
+existing applications leveraging `pycyphal` should upgrade to the new API of `pycyphal2`.
 """
 
 from __future__ import annotations
