@@ -13,14 +13,19 @@ import asyncio
 import logging
 import sys
 import time
-from pathlib import Path
+from dataclasses import dataclass
 
 from pycyphal2 import Node, Topic, Transport
 
-NAME = f"{Path(__file__).stem}/"
 SCOUT_INTERVAL = 10.0
 DISPLAY_INTERVAL = 2.0
 EVICTION_TIMEOUT = 600.0
+
+
+@dataclass(frozen=True)
+class TopicInfo:
+    last_seen_monotonic: float
+    topic: Topic
 
 
 def make_node(transport_spec: str) -> Node:
@@ -36,20 +41,25 @@ def make_node(transport_spec: str) -> Node:
     else:
         raise ValueError(f"Unknown transport {transport_spec!r}")
 
-    return Node.new(transport, NAME)
+    return Node.new(transport, "monitor/")  # The trailing slash indicates that we want a unique ID at the end.
+
+
+def _clear() -> str:
+    return "\033[2J\033[H" if sys.stdout.isatty() else ("\n" * 3)
+
+
+def _bright(text: str) -> str:
+    return f"\033[1m{text}\033[0m" if sys.stdout.isatty() else text
 
 
 async def run(transport_spec: str) -> None:
-    # topic_name -> (topic_hash, last_seen_monotonic, gossip_count)
-    topics: dict[str, tuple[int, float, int]] = {}
+    topics: dict[str, TopicInfo] = {}
+    node = make_node(transport_spec)
+    subject_id_modulus = node.transport.subject_id_modulus
 
     def on_gossip(topic: Topic) -> None:
-        name = topic.name
-        prev = topics.get(name)
-        count = (prev[2] + 1) if prev else 1
-        topics[name] = (topic.hash, time.monotonic(), count)
+        topics[topic.name] = TopicInfo(last_seen_monotonic=time.monotonic(), topic=topic)
 
-    node = make_node(transport_spec)
     _mon = node.monitor(on_gossip)
 
     async def scout_loop() -> None:
@@ -65,16 +75,20 @@ async def run(transport_spec: str) -> None:
             await asyncio.sleep(DISPLAY_INTERVAL)
             now = time.monotonic()
             # Evict stale topics.
-            for name in [n for n, (_, ts, _) in topics.items() if now - ts > EVICTION_TIMEOUT]:
+            for name in [n for n, info in topics.items() if now - info.last_seen_monotonic > EVICTION_TIMEOUT]:
                 del topics[name]
-            # Clear screen and home cursor.
-            sys.stdout.write("\033[2J\033[H")
-            sys.stdout.write("#\tHASH\t\t\tCOUNT\tAGO\tNAME\n")
+            # Render the display.
+            out = [
+                _clear(),
+                _bright(f"{'#':>3} {'HEARD':<5} {'HASH':<16} {'EVICTIONS':>10} {'SUBJECT-ID':>10} NAME\n"),
+            ]
             for idx, name in enumerate(sorted(topics), 1):
-                th, ts, count = topics[name]
-                age = int(now - ts)
-                sys.stdout.write(f"{idx}\t{th:016x}\t{count}\t{age // 60:02d}:{age % 60:02d}\t{name}\n")
-            sys.stdout.flush()
+                age = int(now - topics[name].last_seen_monotonic)
+                age_fmt = f"{age // 60:02d}:{age % 60:02d}"
+                t = topics[name].topic
+                subject_id = t.subject_id(subject_id_modulus)
+                out.append(f"{idx:>3} {age_fmt} {t.hash:016x} {t.evictions:>10} {subject_id:>10} {t.name}\n")
+            print("".join(out), end="", flush=True)
 
     await asyncio.gather(scout_loop(), display_loop())
 
