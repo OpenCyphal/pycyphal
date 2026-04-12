@@ -1,9 +1,29 @@
 """
-`Cyphal <https://opencyphal.org>`_ in Python —
+[Cyphal](https://opencyphal.org) in Python —
 decentralized real-time pub/sub with tunable reliability, service discovery, and zero configuration.
-Works anywhere, `even baremetal MCUs <https://github.com/OpenCyphal-Garage/cy>`_.
+Works anywhere, [including baremetal MCUs](https://github.com/OpenCyphal-Garage/cy).
 
 Supports various transports such as Ethernet (UDP) and CAN FD with optional redundancy.
+
+## Installation
+
+Optional features inside the brackets can be removed if not needed; see `pyproject.toml` for the full list:
+
+```
+pip install pycyphal2[udp,pythoncan]
+```
+
+PyCyphal v2 is published on PyPI as [`pycyphal2`](https://pypi.org/project/pycyphal2/)
+to enable coexistence with the original [`pycyphal` v1](https://pypi.org/project/pycyphal/)
+in the same Python environment.
+The two packages have radically different APIs but are wire-compatible on Cyphal/CAN.
+The maintenance of the original `pycyphal` package will eventually cease;
+existing applications leveraging `pycyphal` should eventually upgrade to the new API of `pycyphal2`.
+
+## Usage
+
+>🎓 The source repository contains a collection of runnable examples.
+
 Set up a transport, make a node, publish and subscribe:
 
 ```python
@@ -24,8 +44,6 @@ async def main():
 All public symbols live at the top level — just `import pycyphal2`.
 Transport modules (`pycyphal2.udp`, `pycyphal2.can`) are imported separately
 so that only the needed dependencies are pulled in.
-
-The source repository contains a collection of runnable examples.
 
 Environment variables control name remapping similar to ROS:
 
@@ -77,7 +95,7 @@ from ._transport import Transport as Transport
 from ._transport import TransportArrival as TransportArrival
 from ._transport import SubjectWriter as SubjectWriter
 
-__version__ = "2.0.0.dev0"
+__version__ = "2.0.0.dev1"
 
 # pdoc needs __all__ to display re-exported members.
 __all__ = [
