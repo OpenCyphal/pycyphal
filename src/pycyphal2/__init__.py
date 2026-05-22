@@ -18,6 +18,8 @@ pip install 'pycyphal2[udp,pythoncan]'
 Set up a transport, make a node, publish and subscribe:
 
 ```python
+import asyncio
+
 from pycyphal2 import Node, Instant
 from pycyphal2.udp import UDPTransport
 
@@ -30,6 +32,9 @@ async def main():
     sub = node.subscribe("sensor/temperature")
     async for arrival in sub:
         print(arrival.message)
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 All public symbols live at the top level — just `import pycyphal2`.
