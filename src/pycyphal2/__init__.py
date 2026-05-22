@@ -19,7 +19,6 @@ Set up a transport, make a node, publish and subscribe:
 
 ```python
 import asyncio
-
 from pycyphal2 import Node, Instant
 from pycyphal2.udp import UDPTransport
 
