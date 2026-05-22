@@ -155,7 +155,7 @@ from ._transport import SubjectWriter as SubjectWriter
 from ._transport import Transport as Transport
 from ._transport import TransportArrival as TransportArrival
 
-__version__ = "2.0.0.dev1"
+__version__ = "2.0.0.dev2"
 
 # pdoc needs __all__ to display re-exported members.
 __all__ = [
