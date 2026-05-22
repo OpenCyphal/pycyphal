@@ -10,7 +10,7 @@ Supports various transports such as Ethernet (UDP) and CAN FD with optional redu
 Optional features inside the brackets can be removed if not needed; see `pyproject.toml` for the full list:
 
 ```
-pip install pycyphal2[udp,pythoncan]
+pip install 'pycyphal2[udp,pythoncan]'
 ```
 
 ## Usage
@@ -147,9 +147,9 @@ existing applications leveraging `pycyphal` should upgrade to the new API of `py
 from __future__ import annotations
 
 from ._api import *
+from ._transport import SubjectWriter as SubjectWriter
 from ._transport import Transport as Transport
 from ._transport import TransportArrival as TransportArrival
-from ._transport import SubjectWriter as SubjectWriter
 
 __version__ = "2.0.0.dev1"
 
