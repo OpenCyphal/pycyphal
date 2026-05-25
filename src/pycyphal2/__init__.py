@@ -5,7 +5,7 @@ Works anywhere, [including baremetal MCUs](https://github.com/OpenCyphal-Garage/
 
 Supports various transports such as Ethernet (UDP) and CAN FD with optional redundancy.
 
-## Installation
+# Installation
 
 Optional features inside the brackets can be removed if not needed; see `pyproject.toml` for the full list:
 
@@ -13,7 +13,7 @@ Optional features inside the brackets can be removed if not needed; see `pyproje
 pip install 'pycyphal2[udp,pythoncan]'
 ```
 
-## Usage
+# Usage
 
 Set up a transport, make a node, publish and subscribe:
 
@@ -40,17 +40,17 @@ All public symbols live at the top level — just `import pycyphal2`.
 Transport modules (`pycyphal2.udp`, `pycyphal2.can`) are imported separately
 so that only the needed dependencies are pulled in.
 
-### Name resolution
+## Name resolution
 
 The topic naming system shares many similarities with [ROS Names](https://wiki.ros.org/Names).
 
 Name resolution is the process by which a topic name passed to `node.advertise()` or `node.subscribe()` is resolved to a topic name as used on the Cyphal network.
+There exist 4 kinds of topic names in Cyphal:
 
-There exist 4 kinds of topic names in Cyphal, used effectively they allow the developer to split up complex systems into smaller sub-systems, simplifying development and debugging.
+<details markdown="1">
+<summary>Relative Name</summary>
 
-#### 1. Relative Name
-
-A relative name is a name that does not start with '/' or `~/`.
+A relative name is a name that does not start with `/` or `~/`.
 
 ```
 sensor/temperature
@@ -58,16 +58,16 @@ cmd_vel
 camera/image_raw
 ```
 
-It's resolved name is prefixed with the node namespace.
+Its resolved name is prefixed with the node namespace.
 
 | Input name        | Namespace | Home | Resolved name         |
 | ----------------- | --------- | ---- | --------------------- |
 | `foo`             | `ns`      | `me` | `ns/foo`              |
 | `foo/bar`         | `ns`      | `me` | `ns/foo/bar`          |
 
-Use case: Use relative names for topics that are specific to a node, but might be reused across multiple nodes.
+*Use case:* Use relative names for topics that are specific to a node, but might be reused across multiple nodes.
 
-Example: A robot contains 4 motor controllers of the same type, each has its own namespace (`motor_1`, `motor_2`, `motor_3`, `motor_4`).
+*Example:* A robot contains 4 motor controllers of the same type, each has its own namespace (`motor_1`, `motor_2`, `motor_3`, `motor_4`).
 Using relative names, the application code is the same for all 4 motor controllers, however the topics are resolved differently based on the node namespace.
 
 | Input name        | Namespace | Home    | Resolved name                |
@@ -77,7 +77,10 @@ Using relative names, the application code is the same for all 4 motor controlle
 | `speed`           | `motor_3` | `robot` | `motor_3/speed`              |
 | `speed`           | `motor_4` | `robot` | `motor_4/speed`              |
 
-#### 2. Absolute Name
+</details>
+
+<details markdown="1">
+<summary>Absolute Name</summary>
 
 An absolute name starts with `/`.
 
@@ -86,14 +89,14 @@ An absolute name starts with `/`.
 /diagnostics/status
 ```
 
-It ignores the node namespace.
+Its resolved name is simply the same as the input name, ignoring both the node namespace and home.
 
 | Input name        | Namespace | Home | Resolved name      |
 | ----------------- | --------- | ---- | ------------------ |
 | `foo`             | `ns`      | `me` | `foo`              |
 | `foo/bar`         | `ns`      | `me` | `foo/bar`          |
 
-Use case: Use absolute names for topics that are shared across multiple nodes.
+Use case: Use absolute names for topics that are *not* specific to a node and might be reused across multiple nodes.
 
 Example: Shared system topics like `/log`, since multiple nodes may publish to the same topic.
 Conversely, topics like `/battery_voltage` that might be sourced from multiple nodes but need one single source of truth for other nodes like the motor controllers to subscribe to.
@@ -103,7 +106,10 @@ Conversely, topics like `/battery_voltage` that might be sourced from multiple n
 | `/log`                | `cpu`           | `robot` | `/log`             |
 | `/battery_voltage`    | `battery_1`     | `robot` | `/battery_voltage` |
 
-#### 3. Homeful Name
+</details>
+
+<details markdown="1">
+<summary>Homeful Name</summary>
 
 A homeful name starts with `~` of `~/`.
 
@@ -111,7 +117,9 @@ A homeful name starts with `~` of `~/`.
 ~/config
 ```
 
-Note that the node namespace is ignored. Also note that `~foo` is not homeful and resolves as relative name to `ns/~foo` (this is confusing so don't use this).
+Its resolved name consists of the home and the input name, with the node namespace ignored. Note that `~foo` is not homeful and resolves as relative name to `ns/~foo` (this is confusing so don't use this).
+
+Proposal: both `~` and `~foo` should not be allowed.
 
 | Input name            | Namespace       | Home    | Resolved name      |
 | --------------------- | --------------- | ------- | ------------------ |
@@ -123,7 +131,10 @@ Use case: For topics tied to specific nodes. The most common use case is configu
 
 Example: We want to configure an antenna to transmit at a specific frequency. The antenna node has a `~/config/frequency` topic that we can publish to.
 
-#### 4. Pattern Name
+</details>
+
+<details markdown="1">
+<summary>Pattern Name (only for subscribing)</summary>
 
 A pattern name contains wildcard `*` (matches any _single_ name segment)
 
@@ -143,7 +154,11 @@ Use `>` to subscribe to _multiple_ topics under a given namespace.
 Example: `*/battery_pct` to subscribe to all nodes publishing battery data, of which there may be multiple per vehicle.
 'logs/>' to subscribe to all topics publishing under '/logs' which may contain 'log_info', 'log_warning', 'log_error' topics.
 
-#### Extra functions
+</details>
+
+Used effectively they allow to split up complex systems into smaller sub-systems simplifying development and debugging.
+
+### Extra functions
 
 *Topping* is the process by which a unique subject ID is assigned upon initialization.
 For some applications that require a high level of reliability, determinism is required and can be achieved by using `#` to pin a topic to a specific subject ID.
@@ -186,7 +201,7 @@ Environment variables that control name remapping:
 
 See also :meth:`Node.remap`.
 
-### Publish
+## Publish
 
 Publication is best-effort by default. Pass `reliable=True` when publishing to retry delivery until
 acknowledged by every known subscriber or until the deadline; if the remote side does not acknowledge in time,
@@ -197,7 +212,7 @@ pub = node.advertise("sensor/temperature")
 await pub(Instant.now() + 1.0, b"payload", reliable=True)
 ```
 
-### Subscribe
+## Subscribe
 
 Subscriptions normally yield messages as soon as they arrive. Set `reordering_window` [seconds] on
 :meth:`Node.subscribe` to allow delaying out-of-order messages to reconstruct the original publication order.
@@ -219,7 +234,7 @@ async for arrival in sub:
     print(topic.name, captures)  # [('engine', 1)], where 1 is the pattern segment index
 ```
 
-### RPC & streaming
+## RPC & streaming
 
 RPC is layered directly on top of pub/sub. Use :meth:`Publisher.request` to publish a message that expects
 responses, and use :attr:`Arrival.breadcrumb` on the subscriber side to send a unicast reply back to the requester.
@@ -239,7 +254,7 @@ await arrival.breadcrumb(Instant.now() + 1.0, b"chunk-1", reliable=True)
 await arrival.breadcrumb(Instant.now() + 1.0, b"chunk-2", reliable=True)
 ```
 
-### Topic pinning
+## Topic pinning
 
 Topics may be pinned to a specific subject-ID using `name#1234` to bypass automatic assignment.
 This is useful for applications where a high degree of determinism is required and for Cyphal/CAN v1.0 interoperability.
@@ -255,7 +270,7 @@ sub = node.subscribe("1234#1234")
 Old Cyphal/CAN v1.0 nodes do not participate in the topic discovery protocol,
 so topics joined only by such nodes are not discoverable by pattern subscribers.
 
-## Remarks
+# Remarks
 
 Cyphal does not define a serialization format. Previous versions used to define the DSDL format but it has been
 extracted into an independent project, and Cyphal was made serialization-agnostic in v1.1+.
