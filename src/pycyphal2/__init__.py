@@ -42,7 +42,127 @@ so that only the needed dependencies are pulled in.
 
 ### Name resolution
 
-The topic naming system shares many similarities with ROS.
+The topic naming system shares many similarities with [ROS Names](https://wiki.ros.org/Names).
+
+Name resolution is the process by which a topic name passed to `node.advertise()` or `node.subscribe()` is resolved to a topic name as used on the Cyphal network.
+
+There exist 4 kinds of topic names in Cyphal, used effectively they allow the developer to split up complex systems into smaller sub-systems, simplifying development and debugging.
+
+#### 1. Relative Name
+
+A relative name is a name that does not start with '/' or `~/`.
+
+```
+sensor/temperature
+cmd_vel
+camera/image_raw
+```
+
+It's resolved name is prefixed with the node namespace.
+
+| Input name        | Namespace | Home | Resolved name         |
+| ----------------- | --------- | ---- | --------------------- |
+| `foo`             | `ns`      | `me` | `ns/foo`              |
+| `foo/bar`         | `ns`      | `me` | `ns/foo/bar`          |
+
+Use case: Use relative names for topics that are specific to a node, but might be reused across multiple nodes.
+
+Example: A robot contains 4 motor controllers of the same type, each has its own namespace (`motor_1`, `motor_2`, `motor_3`, `motor_4`).
+Using relative names, the application code is the same for all 4 motor controllers, however the topics are resolved differently based on the node namespace.
+
+| Input name        | Namespace | Home    | Resolved name                |
+| ----------------- | --------- | ------- | ---------------------------- |
+| `speed`           | `motor_1` | `robot` | `motor_1/speed`              |
+| `speed`           | `motor_2` | `robot` | `motor_2/speed`              |
+| `speed`           | `motor_3` | `robot` | `motor_3/speed`              |
+| `speed`           | `motor_4` | `robot` | `motor_4/speed`              |
+
+#### 2. Absolute Name
+
+An absolute name starts with `/`.
+
+```
+/temperature
+/diagnostics/status
+```
+
+It ignores the node namespace.
+
+| Input name        | Namespace | Home | Resolved name      |
+| ----------------- | --------- | ---- | ------------------ |
+| `foo`             | `ns`      | `me` | `foo`              |
+| `foo/bar`         | `ns`      | `me` | `foo/bar`          |
+
+Use case: Use absolute names for topics that are shared across multiple nodes.
+
+Example: Shared system topics like `/log`, since multiple nodes may publish to the same topic.
+Conversely, topics like `/battery_voltage` that might be sourced from multiple nodes but need one single source of truth for other nodes like the motor controllers to subscribe to.
+
+| Input name            | Namespace       | Home    | Resolved name      |
+| --------------------- | --------------- | ------- | ------------------ |
+| `/log`                | `cpu`           | `robot` | `/log`             |
+| `/battery_voltage`    | `battery_1`     | `robot` | `/battery_voltage` |
+
+#### 3. Homeful Name
+
+A homeful name starts with `~` of `~/`.
+
+```
+~/config
+```
+
+Note that the node namespace is ignored. Also note that `~foo` is not homeful and resolves as relative name to `ns/~foo` (this is confusing so don't use this).
+
+| Input name            | Namespace       | Home    | Resolved name      |
+| --------------------- | --------------- | ------- | ------------------ |
+| `~`                   | `ns`            | `me`    | `me`               |
+| `~/config`            | `ns`            | `me`    | `me/config`        |
+| `~config`             | `ns`            | `me`    | `ns/~config`       |
+
+Use case: For topics tied to specific nodes. The most common use case is configuring a node's parameters or settings.
+
+Example: We want to configure an antenna to transmit at a specific frequency. The antenna node has a `~/config/frequency` topic that we can publish to.
+
+#### 4. Pattern Name
+
+A pattern name contains wildcard `*` (matches any _single_ name segment)
+
+```
+*/speed # matches any topic under `speed` (e.g. `motor_1/speed`, `motor_2/speed/`, `motor_3/value`, ...)
+```
+
+or `>` (matches _zero or more_ trailing segments)
+
+```
+sensor/> # matches any topic under `sensor` (e.g. `sensor/`, `sensor/temperature`, `sensor/pressure/`, ...)
+```
+
+Use case: Use `*` to subscribe to a _specific_ topic coming from a undetermined number of nodes.
+Use `>` to subscribe to _multiple_ topics under a given namespace.
+
+Example: `*/battery_pct` to subscribe to all nodes publishing battery data, of which there may be multiple per vehicle.
+'logs/>' to subscribe to all topics publishing under '/logs' which may contain 'log_info', 'log_warning', 'log_error' topics.
+
+#### Extra functions
+
+*Topping* is the process by which a unique subject ID is assigned upon initialization.
+For some applications that require a high level of reliability, determinism is required and can be achieved by using `#` to pin a topic to a specific subject ID.
+
+```
+motor/speed#1234
+```
+
+The resolved topic name is 'motor/speed' and the subject ID is fixed to 1234.
+
+*Remapping* lets a node replace one name with another before final resolution.
+This can be useful when trying to match the expected topic name from one node to another (when integrating multiple subsystems).
+
+```
+node.remap({"sensor/temperature": "temp"})
+```
+
+Now any topic name matching `sensor/temperature` will be remapped to `temp` before final resolution.
+
 A valid name contains printable ASCII characters except space (ASCII codes [33, 126]).
 Normalized names do not have leading or trailing segment separators `/` and do not have consecutive separators.
 Every node should have a unique name, which is called its *home*; home substitution is done via `~/`.
