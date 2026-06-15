@@ -29,6 +29,16 @@ def test_parse_classic_extended_frames() -> None:
     assert parser.feed(b"x1BADC0DE201AB\r") == [Frame(id=0x1BADC0DE, data=b"\x01\xAB")]
 
 
+def test_parse_classic_extended_frames_with_timestamp_suffix() -> None:
+    parser = SLCANParser()
+
+    assert parser.feed(b"T000001232ABCD1234\r") == [Frame(id=0x123, data=b"\xAB\xCD")]
+    assert parser.feed(b"T10AE6EFF8000000FF000000A07071\r") == [
+        Frame(id=0x10AE6EFF, data=b"\x00\x00\x00\xFF\x00\x00\x00\xA0"),
+    ]
+    assert parser.feed(b"T000001232ABCDzzzz\r") == []
+
+
 def test_parse_multiple_frames_and_newlines() -> None:
     parser = SLCANParser()
 

@@ -15,6 +15,7 @@ _CR = 0x0D
 _LF = 0x0A
 _BEL = 0x07
 _MAX_LINE_LENGTH = 256
+_TIMESTAMP_LENGTH = 4
 
 
 def encode_frame(identifier: int, data: bytes | bytearray | memoryview) -> bytes:
@@ -95,10 +96,14 @@ def _parse_classic_extended(line: bytes) -> Frame | None:
         _logger.debug("SLCAN drop malformed classic header line=%r", line)
         return None
     expected = 10 + dlc * 2
-    if len(line) != expected:
+    if len(line) == expected + _TIMESTAMP_LENGTH:
+        if not _is_hex(line[expected:]):
+            _logger.debug("SLCAN drop malformed timestamp line=%r", line)
+            return None
+    elif len(line) != expected:
         _logger.debug("SLCAN drop classic dlc mismatch len=%d expected=%d", len(line), expected)
         return None
-    return _make_frame(identifier, line[10:])
+    return _make_frame(identifier, line[10:expected])
 
 
 def _make_frame(identifier: int, data_hex: bytes) -> Frame | None:

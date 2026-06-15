@@ -105,6 +105,20 @@ def test_receive_returns_timestamped_frame_and_drops_malformed_input() -> None:
     asyncio.run(run())
 
 
+def test_receive_accepts_slcan_timestamp_suffix() -> None:
+    async def run() -> None:
+        port = _FakeAsyncSerial([b"T10AE6EFF8000000FF000000A07071\r"])
+        iface = WebSerialSLCANInterface(port)
+
+        frame = await asyncio.wait_for(iface.receive(), timeout=1.0)
+
+        assert frame.id == 0x10AE6EFF
+        assert frame.data == b"\x00\x00\x00\xFF\x00\x00\x00\xA0"
+        iface.close()
+
+    asyncio.run(run())
+
+
 def test_receive_applies_local_filters() -> None:
     async def run() -> None:
         port = _FakeAsyncSerial([b"T000001231AA\rT000004561BB\r"])
