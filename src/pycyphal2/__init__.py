@@ -23,24 +23,18 @@ from pycyphal2 import Node, Instant
 from pycyphal2.udp import UDPTransport
 
 async def main():
-    publisher = Node.new(UDPTransport.new_loopback(), "publisher")
-    subscriber = Node.new(UDPTransport.new_loopback(), "subscriber")
+    node = Node.new(UDPTransport.new(), "my_node")
 
-    sub = subscriber.subscribe("sensor/temperature")
-    pub = publisher.advertise("sensor/temperature")
-
+    pub = node.advertise("sensor/temperature")
     await pub(Instant.now() + 1.0, b"21.5")
+
+    sub = node.subscribe("sensor/temperature")
     async for arrival in sub:
         print(arrival.message)
-        break
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
-
-The subscriber is created before publishing so the message is not missed.
-Use distinct nodes/transports for publishing and subscribing; transports generally do not deliver a node's own
-transmissions back to itself.
 
 All public symbols live at the top level — just `import pycyphal2`.
 Transport modules (`pycyphal2.udp`, `pycyphal2.can`) are imported separately
