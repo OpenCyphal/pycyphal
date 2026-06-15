@@ -78,7 +78,7 @@ def test_enqueue_writes_expected_slcan_bytes() -> None:
     async def run() -> None:
         port = _FakeAsyncSerial()
         iface = WebSerialSLCANInterface(port)
-        iface.enqueue(0x123, [memoryview(b"\xAA"), memoryview(b"")], Instant.now() + 1.0)
+        iface.enqueue(0x123, [memoryview(b"\xaa"), memoryview(b"")], Instant.now() + 1.0)
 
         await _wait_for(lambda: len(port.writes) == 2)
         assert port.writes == [b"T000001231AA\r", b"T000001230\r"]
@@ -98,7 +98,7 @@ def test_receive_returns_timestamped_frame_and_drops_malformed_input() -> None:
         frame = await asyncio.wait_for(iface.receive(), timeout=1.0)
         after = Instant.now()
 
-        assert frame == TimestampedFrame(id=0x123, data=b"\xAA", timestamp=frame.timestamp)
+        assert frame == TimestampedFrame(id=0x123, data=b"\xaa", timestamp=frame.timestamp)
         assert before.ns <= frame.timestamp.ns <= after.ns
         iface.close()
 
@@ -113,7 +113,7 @@ def test_receive_accepts_slcan_timestamp_suffix() -> None:
         frame = await asyncio.wait_for(iface.receive(), timeout=1.0)
 
         assert frame.id == 0x10AE6EFF
-        assert frame.data == b"\x00\x00\x00\xFF\x00\x00\x00\xA0"
+        assert frame.data == b"\x00\x00\x00\xff\x00\x00\x00\xa0"
         iface.close()
 
     asyncio.run(run())
@@ -128,7 +128,7 @@ def test_receive_applies_local_filters() -> None:
         frame = await asyncio.wait_for(iface.receive(), timeout=1.0)
 
         assert frame.id == 0x456
-        assert frame.data == b"\xBB"
+        assert frame.data == b"\xbb"
         iface.close()
 
     asyncio.run(run())
@@ -139,8 +139,8 @@ def test_expired_deadline_is_dropped() -> None:
         port = _FakeAsyncSerial()
         iface = WebSerialSLCANInterface(port)
 
-        iface.enqueue(0x123, [memoryview(b"\xAA")], Instant.now() + (-1.0))
-        iface.enqueue(0x124, [memoryview(b"\xBB")], Instant.now() + 1.0)
+        iface.enqueue(0x123, [memoryview(b"\xaa")], Instant.now() + (-1.0))
+        iface.enqueue(0x124, [memoryview(b"\xbb")], Instant.now() + 1.0)
 
         await _wait_for(lambda: len(port.writes) == 1)
         assert port.writes == [b"T000001241BB\r"]
@@ -154,9 +154,9 @@ def test_purge_drops_pending_tx() -> None:
         port = _FakeAsyncSerial()
         iface = WebSerialSLCANInterface(port)
 
-        iface.enqueue(0x123, [memoryview(b"\xAA")], Instant.now() + 10.0)
+        iface.enqueue(0x123, [memoryview(b"\xaa")], Instant.now() + 10.0)
         iface.purge()
-        iface.enqueue(0x124, [memoryview(b"\xBB")], Instant.now() + 1.0)
+        iface.enqueue(0x124, [memoryview(b"\xbb")], Instant.now() + 1.0)
 
         await _wait_for(lambda: len(port.writes) == 1)
         assert port.writes == [b"T000001241BB\r"]
@@ -209,7 +209,7 @@ def test_write_failure_closes_interface() -> None:
         port.write_errors.append(OSError("tx failed"))
         iface = WebSerialSLCANInterface(port)
 
-        iface.enqueue(0x123, [memoryview(b"\xAA")], Instant.now() + 1.0)
+        iface.enqueue(0x123, [memoryview(b"\xaa")], Instant.now() + 1.0)
 
         await _wait_for(lambda: port.closed)
         with pytest.raises(ClosedError, match="failed") as exc_info:

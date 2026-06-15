@@ -33,6 +33,7 @@ coverage.xml
 *,cover
 .*mypy.json
 .python-version
+.venv/
 
 .project
 .pydevproject

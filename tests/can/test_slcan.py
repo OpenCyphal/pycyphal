@@ -8,7 +8,7 @@ from pycyphal2.can._slcan import SLCANParser, encode_frame
 
 def test_encode_classic_extended_frames() -> None:
     assert encode_frame(0x123, b"") == b"T000001230\r"
-    assert encode_frame(0x1BADC0DE, b"\x01\xAB") == b"T1BADC0DE201AB\r"
+    assert encode_frame(0x1BADC0DE, b"\x01\xab") == b"T1BADC0DE201AB\r"
     assert encode_frame(0x1FFFFFFF, bytes(range(8))) == b"T1FFFFFFF80001020304050607\r"
 
 
@@ -23,18 +23,18 @@ def test_encode_validation() -> None:
 def test_parse_classic_extended_frames() -> None:
     parser = SLCANParser()
 
-    assert parser.feed(b"T000001232ABCD\r") == [Frame(id=0x123, data=b"\xAB\xCD")]
+    assert parser.feed(b"T000001232ABCD\r") == [Frame(id=0x123, data=b"\xab\xcd")]
     assert parser.feed(b"T000001") == []
     assert parser.feed(b"230\r") == [Frame(id=0x123, data=b"")]
-    assert parser.feed(b"x1BADC0DE201AB\r") == [Frame(id=0x1BADC0DE, data=b"\x01\xAB")]
+    assert parser.feed(b"x1BADC0DE201AB\r") == [Frame(id=0x1BADC0DE, data=b"\x01\xab")]
 
 
 def test_parse_classic_extended_frames_with_timestamp_suffix() -> None:
     parser = SLCANParser()
 
-    assert parser.feed(b"T000001232ABCD1234\r") == [Frame(id=0x123, data=b"\xAB\xCD")]
+    assert parser.feed(b"T000001232ABCD1234\r") == [Frame(id=0x123, data=b"\xab\xcd")]
     assert parser.feed(b"T10AE6EFF8000000FF000000A07071\r") == [
-        Frame(id=0x10AE6EFF, data=b"\x00\x00\x00\xFF\x00\x00\x00\xA0"),
+        Frame(id=0x10AE6EFF, data=b"\x00\x00\x00\xff\x00\x00\x00\xa0"),
     ]
     assert parser.feed(b"T000001232ABCDzzzz\r") == []
 
@@ -44,7 +44,7 @@ def test_parse_multiple_frames_and_newlines() -> None:
 
     assert parser.feed(b"T000000010\rT1FFFFFFF1AA\r\n") == [
         Frame(id=1, data=b""),
-        Frame(id=0x1FFFFFFF, data=b"\xAA"),
+        Frame(id=0x1FFFFFFF, data=b"\xaa"),
     ]
 
 

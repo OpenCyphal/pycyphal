@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+
 import nox
 
 nox.options.sessions = ["test", "mypy", "lint", "format"]

@@ -152,9 +152,7 @@ class WebSerialSLCANInterface(Interface):
                 return
             for frame in self._parser.feed(chunk):
                 if match_filters(self._filters, frame.id):
-                    self._rx_queue.put_nowait(
-                        TimestampedFrame(id=frame.id, data=frame.data, timestamp=Instant.now())
-                    )
+                    self._rx_queue.put_nowait(TimestampedFrame(id=frame.id, data=frame.data, timestamp=Instant.now()))
 
     def _fail(self, ex: BaseException) -> None:
         if self._failure is None:
