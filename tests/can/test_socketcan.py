@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -12,7 +12,7 @@ from pycyphal2.can import CANTransport
 from pycyphal2.can._wire import HEARTBEAT_SUBJECT_ID, TransferKind, serialize_transfer
 from tests.can._support import wait_for
 
-socketcan = pytest.importorskip("pycyphal2.can.socketcan", reason="SocketCAN backend unavailable")
+socketcan = pytest.importorskip("pycyphal2.can.socketcan", reason="SocketCAN backend unavailable", exc_type=ImportError)
 SocketCANInterface = socketcan.SocketCANInterface
 list_interfaces = SocketCANInterface.list_interfaces
 
