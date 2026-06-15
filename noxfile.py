@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-
 import nox
 
 nox.options.sessions = ["test", "mypy", "lint", "format"]
 
-PYTHONS = ["3.12"]
+PYTHONS = ["3.11", "3.12", "3.13"]
 
 
 @nox.session(python=False, default=False)
