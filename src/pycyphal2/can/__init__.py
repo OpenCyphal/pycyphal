@@ -24,9 +24,6 @@ bus = can.ThreadSafeBus(interface="socketcan", channel="can0")
 transport = CANTransport.new(PythonCANInterface(bus))
 ```
 
-For browser/Pyodide applications, use `pycyphal2.can.webserial.WebSerialSLCANInterface` with an
-application-provided async WebSerial byte stream adapter.
-
 Pass the transport to `pycyphal2.Node.new()` to start a node.
 
 For the available dependencies see the submodules such as `socketcan` et al.
@@ -40,7 +37,7 @@ from ._interface import Interface as Interface
 from ._interface import TimestampedFrame as TimestampedFrame
 from ._transport import CANTransport as CANTransport
 
-# Backend submodules importable via pycyphal2.can.pythoncan / pycyphal2.can.socketcan / pycyphal2.can.webserial;
+# Backend submodules importable via pycyphal2.can.pythoncan / pycyphal2.can.socketcan;
 # they are not eagerly imported here because they pull in optional dependencies.
 
 __all__ = ["CANTransport", "Frame", "TimestampedFrame", "Filter", "Interface"]
