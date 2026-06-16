@@ -3,35 +3,31 @@
 from __future__ import annotations
 
 import asyncio
+from abc import ABC, abstractmethod
 from collections.abc import Iterable
 import logging
-from typing import Protocol, runtime_checkable
 
 from .._api import ClosedError, Instant
 from ._interface import Filter, Interface, TimestampedFrame
 from ._slcan import SLCANParser, encode_frame
-from ._wire import match_filters
 
 _logger = logging.getLogger(__name__)
 
 
-@runtime_checkable
-class AsyncSerialPort(Protocol):
+class AsyncSerialPort(ABC):
     """Minimal async byte stream expected from a WebSerial adapter."""
 
+    @abstractmethod
     async def read(self) -> bytes:
-        """Return the next received byte chunk. An empty chunk indicates end-of-stream."""
-        del self
         raise NotImplementedError
 
+    @abstractmethod
     async def write(self, data: bytes) -> None:
-        """Write one byte chunk to the serial adapter."""
-        del self, data
+        del data
         raise NotImplementedError
 
+    @abstractmethod
     async def close(self) -> None:
-        """Close the serial adapter."""
-        del self
         raise NotImplementedError
 
 
@@ -48,7 +44,6 @@ class WebSerialSLCANInterface(Interface):
         self._name = str(name)
         self._closed = False
         self._failure: BaseException | None = None
-        self._filters = [Filter.promiscuous()]
         self._parser = SLCANParser()
         self._tx_seq = 0
         self._tx_queue: asyncio.PriorityQueue[tuple[int, int, int, bytes]] = asyncio.PriorityQueue()
@@ -67,9 +62,8 @@ class WebSerialSLCANInterface(Interface):
         return False
 
     def filter(self, filters: Iterable[Filter]) -> None:
+        del filters
         self._raise_if_closed()
-        self._filters = list(filters)
-        _logger.debug("WebSerial SLCAN filters set iface=%s n=%d", self._name, len(self._filters))
 
     def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> None:
         self._raise_if_closed()
@@ -110,7 +104,7 @@ class WebSerialSLCANInterface(Interface):
         self._close(ClosedError(f"WebSerial SLCAN interface {self._name} closed"))
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({self._name!r}, fd=False)"
+        return f"{type(self).__name__}({self._name!r}, fd={self.fd})"
 
     async def _tx_loop(self) -> None:
         while not self._closed:
@@ -151,8 +145,7 @@ class WebSerialSLCANInterface(Interface):
                 self._fail(EOFError(f"WebSerial SLCAN interface {self._name} ended"))
                 return
             for frame in self._parser.feed(chunk):
-                if match_filters(self._filters, frame.id):
-                    self._rx_queue.put_nowait(TimestampedFrame(id=frame.id, data=frame.data, timestamp=Instant.now()))
+                self._rx_queue.put_nowait(TimestampedFrame(id=frame.id, data=frame.data, timestamp=Instant.now()))
 
     def _fail(self, ex: BaseException) -> None:
         if self._failure is None:

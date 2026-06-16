@@ -9,11 +9,13 @@ from ._interface import Frame
 _logger = logging.getLogger(__name__)
 
 _CAN_EXT_ID_MASK = (1 << 29) - 1
+_CAN_STD_ID_MASK = (1 << 11) - 1
 _CAN_CLASSIC_MTU = 8
 _HEX_CHARS = frozenset(b"0123456789abcdefABCDEF")
 _CR = 0x0D
 _LF = 0x0A
 _BEL = 0x07
+_ETX = 0x03
 _MAX_LINE_LENGTH = 256
 _TIMESTAMP_LENGTH = 4
 
@@ -76,34 +78,49 @@ class SLCANParser:
 
 
 def _parse_line(line: bytes) -> Frame | None:
+    line = line.strip().strip(bytes([_BEL])).strip(bytes([_ETX]))
+    if not line:
+        return None
     command = line[:1]
     if command in (b"T", b"x"):
-        return _parse_classic_extended(line)
-    if command in (b"t", b"r", b"R"):
+        return _parse_data_frame(line, id_length=8, max_payload_length=_CAN_CLASSIC_MTU)
+    if command == b"t":
+        return _parse_data_frame(line, id_length=3, max_payload_length=_CAN_CLASSIC_MTU)
+    if command == b"D":
+        return _parse_data_frame(line, id_length=8, max_payload_length=64)
+    if command in (b"r", b"R"):
         _logger.debug("SLCAN drop unsupported frame type cmd=%r", command)
         return None
     _logger.debug("SLCAN drop unknown line=%r", line)
     return None
 
 
-def _parse_classic_extended(line: bytes) -> Frame | None:
-    if len(line) < 10:
-        _logger.debug("SLCAN drop short classic line=%r", line)
+def _parse_data_frame(line: bytes, *, id_length: int, max_payload_length: int) -> Frame | None:
+    header_length = 2 + id_length
+    if len(line) < header_length:
+        _logger.debug("SLCAN drop short data line=%r", line)
         return None
-    identifier = _parse_hex_int(line[1:9])
-    dlc = _parse_classic_dlc(line[9])
+    identifier = _parse_hex_int(line[1 : 1 + id_length])
+    dlc = _parse_dlc(line[1 + id_length])
     if identifier is None or dlc is None:
-        _logger.debug("SLCAN drop malformed classic header line=%r", line)
+        _logger.debug("SLCAN drop malformed data header line=%r", line)
         return None
-    expected = 10 + dlc * 2
-    if len(line) == expected + _TIMESTAMP_LENGTH:
-        if not _is_hex(line[expected:]):
+    payload_length = _dlc_to_length(dlc)
+    if payload_length > max_payload_length:
+        _logger.debug("SLCAN drop data dlc out of range dlc=%d max=%d line=%r", dlc, max_payload_length, line)
+        return None
+    expected = header_length + payload_length * 2
+    if len(line) >= expected + _TIMESTAMP_LENGTH:
+        if not _is_hex(line[-_TIMESTAMP_LENGTH:]):
             _logger.debug("SLCAN drop malformed timestamp line=%r", line)
             return None
     elif len(line) != expected:
-        _logger.debug("SLCAN drop classic dlc mismatch len=%d expected=%d", len(line), expected)
+        _logger.debug("SLCAN drop data dlc mismatch len=%d expected=%d", len(line), expected)
         return None
-    return _make_frame(identifier, line[10:expected])
+    if id_length == 3 and identifier > _CAN_STD_ID_MASK:
+        _logger.debug("SLCAN drop invalid standard id=%03x", identifier)
+        return None
+    return _make_frame(identifier, line[header_length:expected])
 
 
 def _make_frame(identifier: int, data_hex: bytes) -> Frame | None:
@@ -130,8 +147,28 @@ def _parse_hex_bytes(value: bytes) -> bytes | None:
     return bytes.fromhex(value.decode("ascii"))
 
 
-def _parse_classic_dlc(value: int) -> int | None:
-    return value - ord("0") if ord("0") <= value <= ord("8") else None
+def _parse_dlc(value: int) -> int | None:
+    return int(chr(value), 16) if value in _HEX_CHARS else None
+
+
+def _dlc_to_length(dlc: int) -> int:
+    if 0 <= dlc <= 8:
+        return dlc
+    if dlc == 9:
+        return 12
+    if dlc == 10:
+        return 16
+    if dlc == 11:
+        return 20
+    if dlc == 12:
+        return 24
+    if dlc == 13:
+        return 32
+    if dlc == 14:
+        return 48
+    if dlc == 15:
+        return 64
+    return 0
 
 
 def _is_hex(value: bytes) -> bool:

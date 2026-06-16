@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from abc import ABC
 from collections.abc import Callable
 
 import pytest
@@ -57,8 +58,8 @@ async def _wait_for(predicate: Callable[[], bool], timeout: float = 1.0) -> None
     raise AssertionError("predicate did not become true within timeout")
 
 
-def test_async_serial_port_protocol_runtime_check() -> None:
-    assert isinstance(_FakeAsyncSerial(), AsyncSerialPort)
+def test_async_serial_port_is_abc() -> None:
+    assert issubclass(AsyncSerialPort, ABC)
 
 
 def test_webserial_interface_properties_and_sync_close() -> None:
@@ -119,7 +120,7 @@ def test_receive_accepts_slcan_timestamp_suffix() -> None:
     asyncio.run(run())
 
 
-def test_receive_applies_local_filters() -> None:
+def test_receive_filter_is_noop() -> None:
     async def run() -> None:
         port = _FakeAsyncSerial([b"T000001231AA\rT000004561BB\r"])
         iface = WebSerialSLCANInterface(port)
@@ -127,8 +128,8 @@ def test_receive_applies_local_filters() -> None:
 
         frame = await asyncio.wait_for(iface.receive(), timeout=1.0)
 
-        assert frame.id == 0x456
-        assert frame.data == b"\xbb"
+        assert frame.id == 0x123
+        assert frame.data == b"\xaa"
         iface.close()
 
     asyncio.run(run())
