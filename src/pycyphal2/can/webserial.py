@@ -23,7 +23,6 @@ class AsyncSerialPort(ABC):
 
     @abstractmethod
     async def write(self, data: bytes) -> None:
-        del data
         raise NotImplementedError
 
     @abstractmethod
@@ -64,6 +63,7 @@ class WebSerialSLCANInterface(Interface):
     def filter(self, filters: Iterable[Filter]) -> None:
         del filters
         self._raise_if_closed()
+        # No-op: WebSerial adapters do not provide hardware acceptance filtering.
 
     def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> None:
         self._raise_if_closed()

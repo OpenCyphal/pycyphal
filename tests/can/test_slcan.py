@@ -25,6 +25,7 @@ def test_parse_classic_extended_frames() -> None:
 
     assert parser.feed(b"T000001232ABCD\r") == [Frame(id=0x123, data=b"\xab\xcd")]
     assert parser.feed(b"t1231AA\r") == [Frame(id=0x123, data=b"\xaa")]
+    assert parser.feed(b"t7FF1AA\r") == [Frame(id=0x7FF, data=b"\xaa")]
     assert parser.feed(b"T000001") == []
     assert parser.feed(b"230\r") == [Frame(id=0x123, data=b"")]
     assert parser.feed(b"x1BADC0DE201AB\r") == [Frame(id=0x1BADC0DE, data=b"\x01\xab")]
@@ -34,6 +35,7 @@ def test_parse_classic_extended_frames_with_timestamp_suffix() -> None:
     parser = SLCANParser()
 
     assert parser.feed(b"T000001232ABCD1234\r") == [Frame(id=0x123, data=b"\xab\xcd")]
+    # REFERENCE PARITY: pydronecan accepts garbage before the 4-hex timestamp tail; keep this permissive behavior.
     assert parser.feed(b"T000001232ABCDxxxx1234\r") == [Frame(id=0x123, data=b"\xab\xcd")]
     assert parser.feed(b"T000001232ABCD1234\x03\r") == [Frame(id=0x123, data=b"\xab\xcd")]
     assert parser.feed(b"T10AE6EFF8000000FF000000A07071\r") == [

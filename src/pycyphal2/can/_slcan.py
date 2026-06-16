@@ -15,9 +15,10 @@ _HEX_CHARS = frozenset(b"0123456789abcdefABCDEF")
 _CR = 0x0D
 _LF = 0x0A
 _BEL = 0x07
-_ETX = 0x03
 _MAX_LINE_LENGTH = 256
 _TIMESTAMP_LENGTH = 4
+_DLC_TO_LENGTH = (0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64)
+_STRIP_CHARS = b" \t\r\n\x07\x03"
 
 
 def encode_frame(identifier: int, data: bytes | bytearray | memoryview) -> bytes:
@@ -78,7 +79,8 @@ class SLCANParser:
 
 
 def _parse_line(line: bytes) -> Frame | None:
-    line = line.strip().strip(bytes([_BEL])).strip(bytes([_ETX]))
+    # REFERENCE PARITY: pydronecan strips surrounding whitespace and control characters like BEL/ETX.
+    line = line.strip(_STRIP_CHARS)
     if not line:
         return None
     command = line[:1]
@@ -106,11 +108,15 @@ def _parse_data_frame(line: bytes, *, id_length: int, max_payload_length: int) -
         _logger.debug("SLCAN drop malformed data header line=%r", line)
         return None
     payload_length = _dlc_to_length(dlc)
+    if payload_length is None:
+        _logger.debug("SLCAN drop malformed dlc=%r line=%r", dlc, line)
+        return None
     if payload_length > max_payload_length:
         _logger.debug("SLCAN drop data dlc out of range dlc=%d max=%d line=%r", dlc, max_payload_length, line)
         return None
     expected = header_length + payload_length * 2
     if len(line) >= expected + _TIMESTAMP_LENGTH:
+        # REFERENCE PARITY: accept and ignore extra bytes between payload and timestamp, check tail only.
         if not _is_hex(line[-_TIMESTAMP_LENGTH:]):
             _logger.debug("SLCAN drop malformed timestamp line=%r", line)
             return None
@@ -118,7 +124,7 @@ def _parse_data_frame(line: bytes, *, id_length: int, max_payload_length: int) -
         _logger.debug("SLCAN drop data dlc mismatch len=%d expected=%d", len(line), expected)
         return None
     if id_length == 3 and identifier > _CAN_STD_ID_MASK:
-        _logger.debug("SLCAN drop invalid standard id=%03x", identifier)
+        _logger.debug("SLCAN drop invalid standard id=%x", identifier)
         return None
     return _make_frame(identifier, line[header_length:expected])
 
@@ -148,27 +154,17 @@ def _parse_hex_bytes(value: bytes) -> bytes | None:
 
 
 def _parse_dlc(value: int) -> int | None:
-    return int(chr(value), 16) if value in _HEX_CHARS else None
+    if ord("0") <= value <= ord("9"):
+        return value - ord("0")
+    if ord("A") <= value <= ord("F"):
+        return 10 + value - ord("A")
+    if ord("a") <= value <= ord("f"):
+        return 10 + value - ord("a")
+    return None
 
 
-def _dlc_to_length(dlc: int) -> int:
-    if 0 <= dlc <= 8:
-        return dlc
-    if dlc == 9:
-        return 12
-    if dlc == 10:
-        return 16
-    if dlc == 11:
-        return 20
-    if dlc == 12:
-        return 24
-    if dlc == 13:
-        return 32
-    if dlc == 14:
-        return 48
-    if dlc == 15:
-        return 64
-    return 0
+def _dlc_to_length(dlc: int) -> int | None:
+    return _DLC_TO_LENGTH[dlc] if 0 <= dlc < len(_DLC_TO_LENGTH) else None
 
 
 def _is_hex(value: bytes) -> bool:
