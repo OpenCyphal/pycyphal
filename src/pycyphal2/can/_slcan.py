@@ -165,4 +165,3 @@ def _parse_dlc(value: int) -> int | None:
 
 def _dlc_to_length(dlc: int) -> int | None:
     return _DLC_TO_LENGTH[dlc] if 0 <= dlc < len(_DLC_TO_LENGTH) else None
-
