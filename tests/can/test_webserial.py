@@ -11,7 +11,7 @@ from pycyphal2.can import Filter, TimestampedFrame
 from pycyphal2.can.webserial import AsyncSerialPort, WebSerialSLCANInterface
 
 
-class _FakeAsyncSerial:
+class _FakeAsyncSerial(AsyncSerialPort):
     def __init__(self, reads: list[bytes | BaseException] | None = None) -> None:
         self.reads = list(reads or [])
         self.writes: list[bytes] = []
@@ -106,9 +106,9 @@ def test_receive_returns_timestamped_frame_and_drops_malformed_input() -> None:
     asyncio.run(run())
 
 
-def test_receive_accepts_slcan_timestamp_suffix() -> None:
+def test_receive_accepts_slcan_optional_suffix() -> None:
     async def run() -> None:
-        port = _FakeAsyncSerial([b"T10AE6EFF8000000FF000000A07071\r"])
+        port = _FakeAsyncSerial([b"T10AE6EFF8000000FF000000A07071Lvendor\r"])
         iface = WebSerialSLCANInterface(port)
 
         frame = await asyncio.wait_for(iface.receive(), timeout=1.0)
