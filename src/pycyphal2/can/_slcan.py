@@ -11,7 +11,6 @@ _logger = logging.getLogger(__name__)
 _CAN_EXT_ID_MASK = (1 << 29) - 1
 _CAN_STD_ID_MASK = (1 << 11) - 1
 _CAN_CLASSIC_MTU = 8
-_HEX_CHARS = frozenset(b"0123456789abcdefABCDEF")
 _CR = 0x0D
 _LF = 0x0A
 _BEL = 0x07
@@ -137,15 +136,21 @@ def _make_frame(identifier: int, data_hex: bytes) -> Frame | None:
 
 
 def _parse_hex_int(value: bytes) -> int | None:
-    if not value or not _is_hex(value):
+    if not value:
         return None
-    return int(value, 16)
+    try:
+        return int(value, 16)
+    except ValueError:
+        return None
 
 
 def _parse_hex_bytes(value: bytes) -> bytes | None:
-    if len(value) % 2 != 0 or not _is_hex(value):
+    if len(value) % 2 != 0:
         return None
-    return bytes.fromhex(value.decode("ascii"))
+    try:
+        return bytes.fromhex(value.decode("ascii"))
+    except (UnicodeDecodeError, ValueError):
+        return None
 
 
 def _parse_dlc(value: int) -> int | None:
@@ -161,6 +166,3 @@ def _parse_dlc(value: int) -> int | None:
 def _dlc_to_length(dlc: int) -> int | None:
     return _DLC_TO_LENGTH[dlc] if 0 <= dlc < len(_DLC_TO_LENGTH) else None
 
-
-def _is_hex(value: bytes) -> bool:
-    return all(x in _HEX_CHARS for x in value)
