@@ -532,7 +532,6 @@ async def test_msg_ack_dispatch():
     tag = topic.next_tag()
     tracker = PublishTracker(
         tag=tag,
-        deadline_ns=(pycyphal2.Instant.now() + 10.0).ns,
         remaining={42},
         ack_event=asyncio.Event(),
     )
@@ -573,7 +572,6 @@ async def test_msg_nack_dispatch():
     tag = topic.next_tag()
     tracker = PublishTracker(
         tag=tag,
-        deadline_ns=(pycyphal2.Instant.now() + 10.0).ns,
         remaining={42},
         ack_event=asyncio.Event(),
     )
@@ -1000,7 +998,6 @@ async def test_multicast_msg_ack_ignored():
     tag = topic.next_tag()
     tracker = PublishTracker(
         tag=tag,
-        deadline_ns=(pycyphal2.Instant.now() + 10.0).ns,
         remaining={42},
         ack_event=asyncio.Event(),
     )

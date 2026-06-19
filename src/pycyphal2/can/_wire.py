@@ -10,9 +10,8 @@ from .._hash import (
     CRC16CCITT_FALSE_RESIDUE,
     crc16ccitt_false_add,
 )
-from ._interface import Filter
+from ._interface import CAN_EXT_ID_MASK, Filter
 
-CAN_EXT_ID_MASK = (1 << 29) - 1
 NODE_ID_MAX = 127
 NODE_ID_ANONYMOUS = 0xFF
 NODE_ID_CAPACITY = NODE_ID_MAX + 1

@@ -215,7 +215,7 @@ async def test_prepare_publish_tracker_skips_saturated_associations_and_release_
     topic.associations = {10: live, 11: saturated}
 
     tag = topic.next_tag()
-    tracker = node.prepare_publish_tracker(topic, tag, (pycyphal2.Instant.now() + 1.0).ns, b"data")
+    tracker = node.prepare_publish_tracker(topic, tag)
 
     assert tracker.remaining == {10}
     assert tracker.associations == [live]
@@ -243,7 +243,7 @@ async def test_publish_tracker_release_compromised_does_not_penalize_association
     assoc = Association(remote_id=10, last_seen=0.0, slack=ASSOC_SLACK_LIMIT - 1)
     topic.associations = {10: assoc}
     tag = topic.next_tag()
-    tracker = node.prepare_publish_tracker(topic, tag, (pycyphal2.Instant.now() + 1.0).ns, b"data")
+    tracker = node.prepare_publish_tracker(topic, tag)
     tracker.compromised = True
 
     node.publish_tracker_release(topic, tracker)
@@ -266,7 +266,7 @@ async def test_reliable_publish_scheduler_lag_does_not_penalize_association() ->
     topic.associations = {10: assoc}
     tag = topic.next_tag()
     deadline = pycyphal2.Instant(ns=1_000_000_000)
-    tracker = pub._prepare_reliable_publish_tracker(tag, deadline.ns, b"data")
+    tracker = pub._prepare_reliable_publish_tracker(tag)
     tracker.ack_timeout = 0.2
 
     now_ns = 0

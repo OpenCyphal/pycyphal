@@ -18,7 +18,7 @@ import logging
 import threading
 
 from .._api import ClosedError, Instant
-from ._interface import Filter, Interface, TimestampedFrame
+from ._interface import CAN_EXT_ID_MASK, Filter, Interface, TimestampedFrame
 
 try:
     import can
@@ -27,8 +27,11 @@ except ImportError:
 
 _logger = logging.getLogger(__name__)
 
-_RX_POLL_TIMEOUT = 0.1
-_CAN_EXT_ID_MASK = (1 << 29) - 1
+# RX thread poll cadence. This also bounds how long filter()/close() may block the event loop while
+# they quiesce the RX thread (it can only acknowledge a pause between recv() calls). Kept short so that
+# admin stall stays small. ponytail: to remove the stall entirely, hand pending filters to the RX
+# thread to apply between recv() calls instead of pausing it from the loop thread.
+_RX_POLL_TIMEOUT = 0.02
 
 
 class PythonCANInterface(Interface):
@@ -96,6 +99,7 @@ class PythonCANInterface(Interface):
         self._raise_if_closed()
         if self._tx_task is None:
             self._tx_task = self._loop.create_task(self._tx_loop())
+            self._tx_task.add_done_callback(self._on_task_done)
         for chunk in data:
             self._tx_seq += 1
             self._tx_queue.put_nowait((id, self._tx_seq, deadline.ns, bytes(chunk)))
@@ -151,15 +155,12 @@ class PythonCANInterface(Interface):
         loop = asyncio.get_running_loop()
         while not self._closed:
             try:
-                identifier, _seq, deadline_ns, payload = await self._tx_queue.get()
+                identifier, seq, deadline_ns, payload = await self._tx_queue.get()
             except asyncio.CancelledError:
                 raise
             if self._closed:
                 return
-            if Instant.now().ns >= deadline_ns:
-                _logger.debug("PythonCAN tx drop expired iface=%s id=%08x", self._name, identifier)
-                continue
-            timeout = max(0.0, (deadline_ns - Instant.now().ns) * 1e-9)
+            timeout = (deadline_ns - Instant.now().ns) * 1e-9
             if timeout <= 0.0:
                 _logger.debug("PythonCAN tx drop expired iface=%s id=%08x", self._name, identifier)
                 continue
@@ -172,14 +173,10 @@ class PythonCANInterface(Interface):
             )
             try:
                 await asyncio.wait_for(loop.run_in_executor(None, self._bus.send, msg, timeout), timeout=timeout)
-            except asyncio.TimeoutError:
-                self._tx_queue.put_nowait((identifier, self._tx_seq, deadline_ns, payload))
-                self._tx_seq += 1
-                await asyncio.sleep(0.001)
-            except can.CanError as ex:
+            except (asyncio.TimeoutError, can.CanError) as ex:
+                # Re-queue with the original seq so the frame keeps its place within its transfer.
                 _logger.debug("PythonCAN tx retry iface=%s err=%s", self._name, ex)
-                self._tx_queue.put_nowait((identifier, self._tx_seq, deadline_ns, payload))
-                self._tx_seq += 1
+                self._tx_queue.put_nowait((identifier, seq, deadline_ns, payload))
                 await asyncio.sleep(0.001)
             except OSError as ex:
                 self._fail(ex)
@@ -229,6 +226,14 @@ class PythonCANInterface(Interface):
             _logger.error("PythonCAN interface %s failed: %s", self._name, ex)
         self.close()
 
+    def _on_task_done(self, task: asyncio.Task[None]) -> None:
+        # Surface an unexpected TX-task crash as an interface failure instead of swallowing it.
+        if task.cancelled() or self._closed:
+            return
+        ex = task.exception()
+        if ex is not None:
+            self._fail(ex)
+
     def _raise_if_closed(self) -> None:
         if self._closed:
             if self._failure is not None:
@@ -258,4 +263,4 @@ def _parse_message(msg: can.Message) -> TimestampedFrame | None:
     if msg.is_remote_frame:
         _logger.debug("PythonCAN drop remote frame id=%08x", msg.arbitration_id)
         return None
-    return TimestampedFrame(id=msg.arbitration_id & _CAN_EXT_ID_MASK, data=bytes(msg.data), timestamp=Instant.now())
+    return TimestampedFrame(id=msg.arbitration_id & CAN_EXT_ID_MASK, data=bytes(msg.data), timestamp=Instant.now())

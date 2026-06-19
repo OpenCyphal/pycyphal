@@ -475,13 +475,13 @@ class TestTransferSlot:
             ),
             0,
         )
-        assert slot._accept_fragment(0, b"a" * 30, 0)
+        assert slot._accept_fragment(0, b"a" * 30)
         assert slot.covered_prefix == 30
-        assert slot._accept_fragment(50, b"b" * 30, 0)
+        assert slot._accept_fragment(50, b"b" * 30)
         assert slot.covered_prefix == 30
-        assert slot._accept_fragment(30, b"c" * 20, 0)
+        assert slot._accept_fragment(30, b"c" * 20)
         assert slot.covered_prefix == 80
-        assert slot._accept_fragment(80, b"d" * 20, 0)
+        assert slot._accept_fragment(80, b"d" * 20)
         assert slot.covered_prefix == 100
 
     def test_contained_fragment_rejected(self):
@@ -491,8 +491,8 @@ class TestTransferSlot:
             ),
             0,
         )
-        assert slot._accept_fragment(0, b"A" * 4, 0)
-        assert not slot._accept_fragment(1, b"B" * 2, 0)
+        assert slot._accept_fragment(0, b"A" * 4)
+        assert not slot._accept_fragment(1, b"B" * 2)
         assert [(frag.offset, frag.data) for frag in slot.fragments] == [(0, b"AAAA")]
 
     def test_bridge_fragment_evicts_victim(self):
@@ -502,10 +502,10 @@ class TestTransferSlot:
             ),
             0,
         )
-        assert slot._accept_fragment(0, b"AAAA", 0)
-        assert slot._accept_fragment(4, b"BB", 0)
-        assert slot._accept_fragment(6, b"CCCC", 0)
-        assert slot._accept_fragment(2, b"XXXXXX", 0)
+        assert slot._accept_fragment(0, b"AAAA")
+        assert slot._accept_fragment(4, b"BB")
+        assert slot._accept_fragment(6, b"CCCC")
+        assert slot._accept_fragment(2, b"XXXXXX")
         assert [(frag.offset, frag.data) for frag in slot.fragments] == [(0, b"AAAA"), (2, b"XXXXXX"), (6, b"CCCC")]
 
     def test_furthest_reaching_crc_is_used(self):
@@ -1187,3 +1187,124 @@ class TestAsyncSendto:
                     await t.async_sendto(sock, b"fail", ("127.0.0.1", 9999), deadline)
         finally:
             t.close()
+
+
+@pytest.mark.asyncio
+async def test_subject_send_succeeds_when_one_redundant_interface_fails() -> None:
+    """Redundant transport: a transfer delivered on >=1 interface is a success, not a raise.
+
+    Regression: a partial-interface failure used to raise an ExceptionGroup, making the caller treat a
+    delivered transfer as failed and retry it, duplicating it on the interfaces that already succeeded.
+    """
+    iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
+    pub = UDPTransport.new(interfaces=[iface, iface])
+    assert isinstance(pub, _UDPTransportImpl)
+    try:
+        real_sendto = pub.async_sendto
+
+        async def flaky_sendto(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
+            if sock is pub.tx_socks[0]:
+                raise OSError("interface 0 is down")
+            await real_sendto(sock, data, addr, deadline)
+
+        with patch.object(pub, "async_sendto", flaky_sendto):
+            writer = pub.subject_advertise(10)
+            await writer(Instant.now() + 2.0, Priority.NOMINAL, b"redundant")  # Must not raise.
+
+        async def all_fail(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
+            raise OSError("all interfaces down")
+
+        with patch.object(pub, "async_sendto", all_fail):
+            writer_all = pub.subject_advertise(11)
+            with pytest.raises(SendError):
+                await writer_all(Instant.now() + 2.0, Priority.NOMINAL, b"nope")
+    finally:
+        pub.close()
+
+
+def test_interface_rejects_subminimum_mtu() -> None:
+    """A link MTU below the Cyphal minimum is rejected at construction, not via a strippable assert."""
+    with pytest.raises(ValueError, match="mtu_link must be"):
+        Interface(address=IPv4Address("127.0.0.1"), mtu_link=100)
+
+
+@pytest.mark.asyncio
+async def test_raising_subject_handler_does_not_kill_rx_loop() -> None:
+    """A subject handler that raises must not tear down the receive loop; later transfers still arrive."""
+    pub = UDPTransport.new_loopback()
+    sub = UDPTransport.new_loopback()
+    try:
+        received: list[bytes] = []
+
+        def handler(arrival: TransportArrival) -> None:
+            received.append(arrival.message)
+            raise RuntimeError("handler boom")  # Raised on every delivery.
+
+        sub.subject_listen(10, handler)
+        writer = pub.subject_advertise(10)
+        await writer(Instant.now() + 2.0, Priority.NOMINAL, b"first")
+        await writer(Instant.now() + 2.0, Priority.NOMINAL, b"second")
+
+        for _ in range(200):
+            if len(received) >= 2:
+                break
+            await asyncio.sleep(0.01)
+        assert received == [b"first", b"second"]  # Second arrived => loop survived the first raise.
+    finally:
+        pub.close()
+        sub.close()
+
+
+@pytest.mark.asyncio
+async def test_unicast_succeeds_when_one_redundant_interface_fails() -> None:
+    """Unicast, like subject send, must succeed if delivered on >=1 interface (used by reliable replies)."""
+    iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
+    t = UDPTransport.new(interfaces=[iface, iface])
+    assert isinstance(t, _UDPTransportImpl)
+    try:
+        remote = 5
+        # Pretend both interfaces have learned an endpoint for the remote node.
+        t._remote_endpoints[(remote, 0)] = ("127.0.0.1", t.tx_socks[0].getsockname()[1])
+        t._remote_endpoints[(remote, 1)] = ("127.0.0.1", t.tx_socks[1].getsockname()[1])
+        real_sendto = t.async_sendto
+
+        async def flaky_sendto(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
+            if sock is t.tx_socks[0]:
+                raise OSError("interface 0 is down")
+            await real_sendto(sock, data, addr, deadline)
+
+        with patch.object(t, "async_sendto", flaky_sendto):
+            await t.unicast(Instant.now() + 2.0, Priority.NOMINAL, remote, b"redundant")  # Must not raise.
+
+        async def all_fail(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
+            raise OSError("all interfaces down")
+
+        with patch.object(t, "async_sendto", all_fail):
+            with pytest.raises(SendError):
+                await t.unicast(Instant.now() + 2.0, Priority.NOMINAL, remote, b"nope")
+    finally:
+        t.close()
+
+
+@pytest.mark.asyncio
+async def test_raising_unicast_handler_does_not_kill_rx() -> None:
+    """A raising unicast handler must not tear down the receive path; later transfers still arrive."""
+    t = UDPTransport.new_loopback()
+    assert isinstance(t, _UDPTransportImpl)
+    try:
+        received: list[bytes] = []
+
+        def handler(arrival: TransportArrival) -> None:
+            received.append(arrival.message)
+            raise RuntimeError("handler boom")
+
+        t.unicast_listen(handler)
+        uid = 0x1234
+        first = _segment_transfer(Priority.NOMINAL, 0, uid, b"first", 1400)[0]
+        second = _segment_transfer(Priority.NOMINAL, 1, uid, b"second", 1400)[0]
+        # Feed two single-frame transfers through the same code path the RX loop uses.
+        t._process_unicast_datagram(first, "127.0.0.1", 40000, 0, Instant.now())
+        t._process_unicast_datagram(second, "127.0.0.1", 40000, 0, Instant.now())
+        assert received == [b"first", b"second"]  # Second processed => the first raise was contained.
+    finally:
+        t.close()

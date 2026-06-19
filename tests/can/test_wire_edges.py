@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from pycyphal2.can import Filter
+from pycyphal2.can._interface import CAN_EXT_ID_MASK
 from pycyphal2.can._wire import (
-    CAN_EXT_ID_MASK,
     CRC_INITIAL,
     CRC_RESIDUE,
     HEARTBEAT_SUBJECT_ID,

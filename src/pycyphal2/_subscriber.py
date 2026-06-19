@@ -15,6 +15,7 @@ from ._node import (
     NodeImpl,
     SubscriberRoot,
     TopicImpl,
+    ack_window,
     match_pattern,
 )
 
@@ -220,9 +221,6 @@ class SubscriberImpl(Subscriber):
 
         state.timeout_handle = loop.call_later(delay, on_timeout)
 
-    def _arm_reorder_timeout(self, state: ReorderingState) -> None:
-        self._rearm_reorder_timeout(state)
-
     def _drop_stale_reordering(self, now: float) -> None:
         stale = [key for key, state in self._reordering.items() if (state.last_active_at + SESSION_LIFETIME) < now]
         for key in stale:
@@ -337,7 +335,7 @@ class BreadcrumbImpl(Breadcrumb):
 
         ack_timeout = ACK_BASELINE_DEFAULT_TIMEOUT * (1 << int(self._priority))
         try:
-            initial_window = _ack_window(deadline.ns, ack_timeout)
+            initial_window = ack_window(deadline.ns, ack_timeout)
             if initial_window is None:
                 raise DeliveryError("Reliable response not acknowledged before deadline")
 
@@ -371,7 +369,7 @@ class BreadcrumbImpl(Breadcrumb):
                 if last_attempt:
                     break
                 ack_timeout *= 2
-                next_window = _ack_window(deadline.ns, ack_timeout)
+                next_window = ack_window(deadline.ns, ack_timeout)
                 if next_window is None:
                     break
                 ack_deadline_ns, last_attempt = next_window
@@ -414,17 +412,3 @@ class RespondTracker:
         self.done = True
         self.nacked = not positive
         self.ack_event.set()
-
-
-def _ack_is_last_attempt(current_ack_deadline_ns: int, current_ack_timeout: float, total_deadline_ns: int) -> bool:
-    next_ack_timeout_ns = round(current_ack_timeout * 2 * 1e9)
-    remaining_budget_ns = total_deadline_ns - current_ack_deadline_ns
-    return remaining_budget_ns < next_ack_timeout_ns
-
-
-def _ack_window(deadline_ns: int, ack_timeout: float) -> tuple[int, bool] | None:
-    now_ns = Instant.now().ns
-    if now_ns >= deadline_ns:
-        return None
-    ack_deadline_ns = min(deadline_ns, now_ns + round(ack_timeout * 1e9))
-    return ack_deadline_ns, _ack_is_last_attempt(ack_deadline_ns, ack_timeout, deadline_ns)

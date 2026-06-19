@@ -39,6 +39,9 @@ class _TaskStub:
     def cancel(self) -> None:
         self.cancelled = True
 
+    def add_done_callback(self, _cb: object) -> None:
+        pass
+
 
 class _FakeLoop:
     def __init__(self, *, recv: list[object] | None = None, send: list[object] | None = None) -> None:
@@ -162,7 +165,7 @@ def test_socketcan_init_fd_and_classic_paths(monkeypatch: pytest.MonkeyPatch) ->
     fake_socket, created = _make_socket_module()
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
 
-    monkeypatch.setattr(module.SocketCANInterface, "_read_iface_mtu", lambda self: module._CAN_FD_MTU)
+    monkeypatch.setattr(module.SocketCANInterface, "_read_iface_mtu", lambda self: module._FD_FRAME_SIZE)
     fd_iface = module.SocketCANInterface("vcan0")
     fd_sock = created[-1]
     assert fd_iface.name == "vcan0"
@@ -170,7 +173,7 @@ def test_socketcan_init_fd_and_classic_paths(monkeypatch: pytest.MonkeyPatch) ->
     assert ("setsockopt", fake_socket.SOL_CAN_RAW, fake_socket.CAN_RAW_FD_FRAMES, 1) in fd_sock.calls
     assert "vcan0" in repr(fd_iface)
 
-    monkeypatch.setattr(module.SocketCANInterface, "_read_iface_mtu", lambda self: module._CAN_CLASSIC_MTU)
+    monkeypatch.setattr(module.SocketCANInterface, "_read_iface_mtu", lambda self: module._CLASSIC_FRAME_SIZE)
     classic_iface = module.SocketCANInterface("vcan1")
     classic_sock = created[-1]
     assert classic_iface.fd is False
@@ -277,15 +280,15 @@ def test_encode_and_decode_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(module.Instant, "now", staticmethod(lambda: Instant(ns=123)))
 
     classic = _make_iface(module, fd=False)
-    with pytest.raises(ClosedError, match="not CAN FD-capable"):
+    with pytest.raises(ValueError, match="Classic CAN"):
         classic._encode(123, b"012345678")
 
     encoded_classic = classic._encode(123, b"abc")
-    assert len(encoded_classic) == module._CAN_CLASSIC_MTU
+    assert len(encoded_classic) == module._CLASSIC_FRAME_SIZE
 
     fd_iface = _make_iface(module, fd=True)
     encoded_fd = fd_iface._encode(456, b"012345678")
-    assert len(encoded_fd) == module._CAN_FD_MTU
+    assert len(encoded_fd) == module._FD_FRAME_SIZE
 
     assert module.SocketCANInterface._decode(b"\x00") is None
 
@@ -481,3 +484,26 @@ async def test_tx_loop_paths(monkeypatch: pytest.MonkeyPatch) -> None:
 def _close_then_return(iface: object, item: tuple[int, int, int, bytes]) -> tuple[int, int, int, bytes]:
     iface._closed = True  # type: ignore[attr-defined]
     return item
+
+
+async def test_tx_loop_drops_oversized_classic_frame(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An oversized frame on a Classic-CAN interface is dropped in-loop, not allowed to kill the TX task."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+
+    iface = _make_iface(module)  # fd=False -> Classic CAN, so a >8-byte payload is unencodable.
+    iface._tx_queue = _QueueScript(iface, [(20, 1, 100, b"0" * 9), (21, 2, 100, b"abc")])
+    loop = _FakeLoop()
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
+    monkeypatch.setattr(module.Instant, "now", staticmethod(lambda: Instant(ns=0)))
+
+    async def wait_ok(coro: object, timeout: float) -> None:
+        del timeout
+        await cast(Awaitable[object], coro)
+
+    monkeypatch.setattr(module.asyncio, "wait_for", wait_ok)
+    await iface._tx_loop()
+
+    assert len(loop.sent_frames) == 1  # Oversized frame dropped; the following valid frame still sent.
+    assert iface._tx_queue.requeued == []  # The oversized frame was not re-queued.
+    assert iface._failure is None  # And it was not treated as an interface failure.

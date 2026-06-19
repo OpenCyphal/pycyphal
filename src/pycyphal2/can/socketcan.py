@@ -21,12 +21,14 @@ _logger = logging.getLogger(__name__)
 
 _CAN_FILTER_CAPACITY = 64
 _CAN_INTERFACE_TYPE = 280
-_CAN_CLASSIC_MTU = 16
-_CAN_FD_MTU = 72
 _CANFD_FDF = getattr(socket, "CANFD_FDF", 0)
 _CAN_FRAME_STRUCT = struct.Struct("=IB3x8s")
 _CANFD_FRAME_STRUCT = struct.Struct("=IBBBB64s")
 _CAN_FILTER_STRUCT = struct.Struct("=II")
+# SocketCAN frame sizes — sizeof(struct can_frame)=16, sizeof(struct canfd_frame)=72 (NOT the 8/64 payload MTU).
+# The kernel also reports these as the CAN netdev MTU, so they double as the FD-capability threshold.
+_CLASSIC_FRAME_SIZE = _CAN_FRAME_STRUCT.size
+_FD_FRAME_SIZE = _CANFD_FRAME_STRUCT.size
 _TRANSIENT_TX_ERRNO = {errno.EAGAIN, errno.EWOULDBLOCK, errno.ENOBUFS, errno.ENOMEM, errno.EBUSY}
 
 
@@ -37,7 +39,7 @@ class SocketCANInterface(Interface):
         self._sock.setblocking(False)
         self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_LOOPBACK, 1)
         self._sock.bind((self._name,))
-        self._fd = self._read_iface_mtu() >= _CAN_FD_MTU
+        self._fd = self._read_iface_mtu() >= _FD_FRAME_SIZE
         if self._fd:
             self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)
         self._closed = False
@@ -74,6 +76,7 @@ class SocketCANInterface(Interface):
         self._raise_if_closed()
         if self._tx_task is None:
             self._tx_task = asyncio.get_running_loop().create_task(self._tx_loop())
+            self._tx_task.add_done_callback(self._on_task_done)
         for chunk in data:
             self._tx_seq += 1
             self._tx_queue.put_nowait((id, self._tx_seq, deadline.ns, bytes(chunk)))
@@ -94,7 +97,7 @@ class SocketCANInterface(Interface):
     async def receive(self) -> TimestampedFrame:
         self._raise_if_closed()
         loop = asyncio.get_running_loop()
-        recv_size = _CAN_FD_MTU if self._fd else _CAN_CLASSIC_MTU
+        recv_size = _FD_FRAME_SIZE if self._fd else _CLASSIC_FRAME_SIZE
         while True:
             try:
                 raw = await loop.sock_recv(self._sock, recv_size)
@@ -128,13 +131,16 @@ class SocketCANInterface(Interface):
                 raise
             if self._closed:
                 return
-            if Instant.now().ns >= deadline_ns:
-                _logger.debug("SocketCAN tx drop expired iface=%s id=%08x", self._name, identifier)
-                continue
-            frame = self._encode(identifier, payload)
-            timeout = max(0.0, (deadline_ns - Instant.now().ns) * 1e-9)
+            timeout = (deadline_ns - Instant.now().ns) * 1e-9
             if timeout <= 0.0:
                 _logger.debug("SocketCAN tx drop expired iface=%s id=%08x", self._name, identifier)
+                continue
+            try:
+                frame = self._encode(identifier, payload)
+            except ValueError as ex:
+                # An unencodable frame (e.g. oversized on a Classic-only interface) is a single bad
+                # frame, not an interface failure: drop it instead of letting it kill the TX task.
+                _logger.warning("SocketCAN tx drop unencodable iface=%s id=%08x: %s", self._name, identifier, ex)
                 continue
             try:
                 await asyncio.wait_for(loop.sock_sendall(self._sock, frame), timeout=timeout)
@@ -159,6 +165,14 @@ class SocketCANInterface(Interface):
             _logger.error("SocketCAN interface %s failed: %s", self._name, ex)
         self.close()
 
+    def _on_task_done(self, task: asyncio.Task[None]) -> None:
+        # Surface an unexpected TX-task crash as an interface failure instead of swallowing it.
+        if task.cancelled() or self._closed:
+            return
+        ex = task.exception()
+        if ex is not None:
+            self._fail(ex)
+
     def _raise_if_closed(self) -> None:
         if self._closed:
             if self._failure is not None:
@@ -172,7 +186,9 @@ class SocketCANInterface(Interface):
     def _encode(self, identifier: int, data: bytes) -> bytes:
         if len(data) > 8:
             if not self._fd:
-                raise ClosedError(f"SocketCAN interface {self._name} is not CAN FD-capable")
+                raise ValueError(
+                    f"SocketCAN interface {self._name} cannot send a {len(data)}-byte frame on Classic CAN"
+                )
             return _CANFD_FRAME_STRUCT.pack(
                 socket.CAN_EFF_FLAG | (identifier & socket.CAN_EFF_MASK),
                 len(data),
@@ -189,14 +205,14 @@ class SocketCANInterface(Interface):
 
     @staticmethod
     def _decode(raw: bytes) -> TimestampedFrame | None:
-        if len(raw) < _CAN_CLASSIC_MTU:
+        if len(raw) < _CLASSIC_FRAME_SIZE:
             _logger.debug("SocketCAN drop short len=%d", len(raw))
             return None
-        if len(raw) >= _CAN_FD_MTU:
-            can_id, length, _flags, _reserved0, _reserved1, data = _CANFD_FRAME_STRUCT.unpack(raw[:_CAN_FD_MTU])
+        if len(raw) >= _FD_FRAME_SIZE:
+            can_id, length, _flags, _reserved0, _reserved1, data = _CANFD_FRAME_STRUCT.unpack(raw[:_FD_FRAME_SIZE])
             payload = data[: min(length, 64)]
         else:
-            can_id, length, data = _CAN_FRAME_STRUCT.unpack(raw[:_CAN_CLASSIC_MTU])
+            can_id, length, data = _CAN_FRAME_STRUCT.unpack(raw[:_CLASSIC_FRAME_SIZE])
             payload = data[: min(length, 8)]
         if (can_id & socket.CAN_EFF_FLAG) == 0 or (can_id & (socket.CAN_RTR_FLAG | socket.CAN_ERR_FLAG)) != 0:
             _logger.debug("SocketCAN drop non-extended or non-data id=%08x", can_id)

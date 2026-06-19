@@ -172,7 +172,6 @@ def _frame_is_valid(header: _FrameHeader, payload_chunk: bytes | memoryview) -> 
 class _Fragment:
     offset: int
     data: bytes
-    crc: int
 
     @property
     def end(self) -> int:
@@ -210,7 +209,7 @@ class _TransferSlot:
         )
 
     def update(self, timestamp_ns: int, header: _FrameHeader, payload_chunk: bytes) -> bytes | None:
-        if self._accept_fragment(header.frame_payload_offset, payload_chunk, header.prefix_crc):
+        if self._accept_fragment(header.frame_payload_offset, payload_chunk):
             self.ts_max_ns = max(self.ts_max_ns, timestamp_ns)
             self.ts_min_ns = min(self.ts_min_ns, timestamp_ns)
             crc_end = header.frame_payload_offset + len(payload_chunk)
@@ -221,7 +220,7 @@ class _TransferSlot:
             return None
         return self._finalize_payload()
 
-    def _accept_fragment(self, offset: int, data: bytes, crc: int) -> bool:
+    def _accept_fragment(self, offset: int, data: bytes) -> bool:
         left = offset
         right = offset + len(data)
         for frag in self.fragments:
@@ -244,7 +243,7 @@ class _TransferSlot:
         v_left = min(left, left_neighbor.offset + 1) if left_neighbor is not None else left
         v_right = max(right, max(right_neighbor.end, 1) - 1) if right_neighbor is not None else right
         self.fragments = [frag for frag in self.fragments if not (frag.offset >= v_left and frag.end <= v_right)]
-        self.fragments.append(_Fragment(offset=offset, data=data, crc=crc))
+        self.fragments.append(_Fragment(offset=offset, data=data))
         self.fragments.sort(key=lambda frag: frag.offset)
         self.covered_prefix = self._compute_covered_prefix()
         return True
@@ -474,10 +473,15 @@ class Interface:
     mtu_link: int
     """Link-layer MTU. E.g., 1500 for Ethernet, ~64K for loopback."""
 
+    def __post_init__(self) -> None:
+        # Validate at construction (not via assert, which `python -O` strips) so a too-small MTU can
+        # never produce a negative mtu_cyphal that would make segmentation loop forever.
+        if self.mtu_link < _CYPHAL_MTU_LINK_MIN:
+            raise ValueError(f"mtu_link must be >= {_CYPHAL_MTU_LINK_MIN}, got {self.mtu_link}")
+
     @property
     def mtu_cyphal(self) -> int:
         """Max Cyphal frame payload: mtu_link - 60 (IPv4 max) - 8 (UDP) - 32 (Cyphal header)."""
-        assert self.mtu_link >= _CYPHAL_MTU_LINK_MIN
         return self.mtu_link - _CYPHAL_OVERHEAD_MAX
 
 
@@ -516,18 +520,22 @@ class _UDPSubjectWriter(SubjectWriter):
             except (OSError, SendError) as e:
                 errors.append(e)
 
+        if errors and success_count == 0:
+            _logger.error("Send failed on all interfaces for subject %d", self._subject_id)
+            raise SendError("send failed on all interfaces") from ExceptionGroup(
+                "send failed on all interfaces", errors
+            )
         if errors:
-            eg = ExceptionGroup("send failed on some interfaces", errors)
-            if success_count == 0:
-                _logger.error("Send failed on all interfaces for subject %d", self._subject_id)
-                raise SendError("send failed on all interfaces") from eg
+            # Redundant transport: delivery via at least one interface is a success. Warn but do not
+            # raise, otherwise the caller would treat a delivered transfer as failed and retry it,
+            # duplicating it on the interfaces that already succeeded. This mirrors the CAN transport
+            # (see _CANTransportImpl.send_transfer) and the reference cy_udp_posix push semantics.
             _logger.warning(
-                "Send failed on %d/%d interfaces for subject %d",
-                len(errors),
+                "Send succeeded on %d/%d interfaces for subject %d",
+                success_count,
                 len(errors) + success_count,
                 self._subject_id,
             )
-            raise eg
 
         _logger.debug("Subject tx done sid=%d tid=%d", self._subject_id, transfer_id)
 
@@ -843,8 +851,16 @@ class _UDPTransportImpl(UDPTransport):
             _logger.warning("No endpoint known for remote_id=0x%016x", remote_id)
             raise SendError("No endpoint known for remote_id")
         if errors:
-            raise ExceptionGroup("unicast send failed on some interfaces", errors)
-        _logger.debug("Unicast sent %d frames to remote_id=0x%016x", len(frames), remote_id)
+            # Redundant transport: delivery via at least one interface is a success. Warn but do not
+            # raise, otherwise a delivered transfer would be reported as failed and retried (mirrors
+            # _UDPSubjectWriter.__call__ and the reference cy_udp_posix unicast push semantics).
+            _logger.warning(
+                "Unicast succeeded on %d/%d interfaces for remote_id=0x%016x",
+                success_count,
+                len(errors) + success_count,
+                remote_id,
+            )
+        _logger.debug("Unicast sent to remote_id=0x%016x", remote_id)
 
     def close(self) -> None:
         if self._closed:
@@ -947,7 +963,11 @@ class _UDPTransportImpl(UDPTransport):
             return
         if arrival is not None and self._unicast_handler is not None:
             _logger.debug("Unicast transfer complete from sender_uid=0x%016x", arrival.remote_id)
-            self._unicast_handler(arrival)
+            try:
+                self._unicast_handler(arrival)
+            except Exception:
+                # A raising handler must not kill the receive loop; drop the arrival and keep serving.
+                _logger.exception("Unicast handler raised iface=%d", iface_idx)
 
     def _process_subject_datagram(
         self,
@@ -997,4 +1017,8 @@ class _UDPTransportImpl(UDPTransport):
         if arrival is not None:
             _logger.debug("Subject %d transfer complete from sender_uid=0x%016x", subject_id, arrival.remote_id)
             if handler is not None:
-                handler(arrival)
+                try:
+                    handler(arrival)
+                except Exception:
+                    # A raising handler must not kill the receive loop; drop the arrival and keep serving.
+                    _logger.exception("Subject %d handler raised", subject_id)

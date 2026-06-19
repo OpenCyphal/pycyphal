@@ -6,12 +6,11 @@ from __future__ import annotations
 
 import logging
 
-from ._interface import Frame
-from ._wire import CAN_EXT_ID_MASK, DLC_TO_LENGTH, MTU_CAN_CLASSIC
+from ._interface import CAN_EXT_ID_MASK, CAN_STD_ID_MASK, Frame
+from ._wire import DLC_TO_LENGTH, MTU_CAN_CLASSIC
 
 _logger = logging.getLogger(__name__)
 
-_CAN_STD_ID_MASK = (1 << 11) - 1
 _CR = 0x0D  # ACK / carriage return
 _LF = 0x0A
 _BEL = 0x07  # NACK / bell
@@ -157,7 +156,7 @@ def _parse_data_frame(line: bytes, *, id_length: int, max_payload_length: int) -
     if len(line) < expected:
         _logger.debug("SLCAN drop data dlc mismatch len=%d expected=%d", len(line), expected)
         return None
-    if id_length == 3 and identifier > _CAN_STD_ID_MASK:
+    if id_length == 3 and identifier > CAN_STD_ID_MASK:
         _logger.debug("SLCAN drop invalid standard id=%x", identifier)
         return None
     data = _parse_hex_bytes(line[header_length:expected])

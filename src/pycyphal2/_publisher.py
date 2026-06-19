@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from ._api import DeliveryError, Instant, LivenessError, Priority, SendError
 from ._api import Publisher, Topic, ResponseStream, Response
 from ._header import MsgBeHeader, MsgRelHeader, RspBeHeader, RspRelHeader
-from ._node import ACK_BASELINE_DEFAULT_TIMEOUT, NodeImpl, PublishTracker, SESSION_LIFETIME, TopicImpl
+from ._node import ACK_BASELINE_DEFAULT_TIMEOUT, NodeImpl, PublishTracker, SESSION_LIFETIME, TopicImpl, ack_window
 from ._transport import TransportArrival
 
 _logger = logging.getLogger(__name__)
@@ -124,7 +124,7 @@ class PublisherImpl(Publisher):
         )
         self._topic.request_futures[tag] = stream
 
-        tracker = self._prepare_reliable_publish_tracker(tag, delivery_deadline.ns, payload)
+        tracker = self._prepare_reliable_publish_tracker(tag)
         try:
             initial_window = await self._reliable_publish_start(delivery_deadline, tag, payload, tracker)
         except asyncio.CancelledError:
@@ -170,12 +170,6 @@ class PublisherImpl(Publisher):
             self._release_reliable_publish_tracker(tag, tracker)
 
     @staticmethod
-    def _ack_is_last_attempt(current_ack_deadline_ns: int, current_ack_timeout: float, total_deadline_ns: int) -> bool:
-        next_ack_timeout_ns = round(current_ack_timeout * 2 * 1e9)
-        remaining_budget_ns = total_deadline_ns - current_ack_deadline_ns
-        return remaining_budget_ns < next_ack_timeout_ns
-
-    @staticmethod
     def _ack_window_is_compromised(deadline_ns: int, current_ack_timeout: float) -> bool:
         return Instant.now().ns >= (deadline_ns - round(current_ack_timeout * 1e9))
 
@@ -189,16 +183,8 @@ class PublisherImpl(Publisher):
         )
         return hdr.serialize() + payload
 
-    @staticmethod
-    def _reliable_publish_window(deadline_ns: int, ack_timeout: float) -> tuple[int, bool] | None:
-        now_ns = Instant.now().ns
-        if now_ns >= deadline_ns:
-            return None
-        ack_deadline_ns = min(deadline_ns, now_ns + round(ack_timeout * 1e9))
-        return ack_deadline_ns, PublisherImpl._ack_is_last_attempt(ack_deadline_ns, ack_timeout, deadline_ns)
-
-    def _prepare_reliable_publish_tracker(self, tag: int, deadline_ns: int, payload: bytes) -> PublishTracker:
-        tracker = self._node.prepare_publish_tracker(self._topic, tag, deadline_ns, payload)
+    def _prepare_reliable_publish_tracker(self, tag: int) -> PublishTracker:
+        tracker = self._node.prepare_publish_tracker(self._topic, tag)
         tracker.ack_timeout = self.ack_timeout
         self._topic.publish_futures[tag] = tracker
         return tracker
@@ -231,7 +217,7 @@ class PublisherImpl(Publisher):
         payload: bytes,
         tracker: PublishTracker,
     ) -> tuple[int, bool]:
-        initial_window = self._reliable_publish_window(deadline.ns, tracker.ack_timeout)
+        initial_window = ack_window(deadline.ns, tracker.ack_timeout)
         if initial_window is None:
             raise DeliveryError("Reliable publish not acknowledged before deadline")
         ack_deadline_ns, _ = initial_window
@@ -277,7 +263,7 @@ class PublisherImpl(Publisher):
             if last_attempt:
                 break
             tracker.ack_timeout *= 2
-            next_window = self._reliable_publish_window(deadline.ns, tracker.ack_timeout)
+            next_window = ack_window(deadline.ns, tracker.ack_timeout)
             if next_window is None:
                 break
             ack_deadline_ns, last_attempt = next_window
@@ -292,7 +278,7 @@ class PublisherImpl(Publisher):
         raise DeliveryError("Reliable publish not acknowledged before deadline")
 
     async def _reliable_publish(self, deadline: Instant, tag: int, payload: bytes) -> None:
-        tracker = self._prepare_reliable_publish_tracker(tag, deadline.ns, payload)
+        tracker = self._prepare_reliable_publish_tracker(tag)
         try:
             initial_window = await self._reliable_publish_start(deadline, tag, payload, tracker)
             await self._reliable_publish_continue(deadline, tag, payload, tracker, initial_window)

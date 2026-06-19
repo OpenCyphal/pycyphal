@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
+from collections.abc import Coroutine
 import logging
 import math
 import os
@@ -28,7 +29,7 @@ from ._header import (
     deserialize_header,
 )
 from ._transport import SubjectWriter, Transport, TransportArrival
-from ._api import Topic, Node, Publisher, Subscriber, Breadcrumb, Closable, Instant, Priority, SendError
+from ._api import Topic, Node, Publisher, Subscriber, Breadcrumb, Closable, ClosedError, Instant, Priority, SendError
 from ._api import SUBJECT_ID_PINNED_MAX
 
 if TYPE_CHECKING:
@@ -56,6 +57,22 @@ ASSOC_SLACK_LIMIT = 2
 DEDUP_HISTORY = 512
 ACK_SEQNO_MAX_LAG = 100000
 U64_MASK = (1 << 64) - 1
+
+
+def ack_is_last_attempt(current_ack_deadline_ns: int, current_ack_timeout: float, total_deadline_ns: int) -> bool:
+    """True if doubling the ACK timeout would overrun the total deadline, so this is the last retry."""
+    next_ack_timeout_ns = round(current_ack_timeout * 2 * 1e9)
+    remaining_budget_ns = total_deadline_ns - current_ack_deadline_ns
+    return remaining_budget_ns < next_ack_timeout_ns
+
+
+def ack_window(deadline_ns: int, ack_timeout: float) -> tuple[int, bool] | None:
+    """Next reliable-delivery ACK window: (ack_deadline_ns, is_last_attempt), or None if past the deadline."""
+    now_ns = Instant.now().ns
+    if now_ns >= deadline_ns:
+        return None
+    ack_deadline_ns = min(deadline_ns, now_ns + round(ack_timeout * 1e9))
+    return ack_deadline_ns, ack_is_last_attempt(ack_deadline_ns, ack_timeout, deadline_ns)
 
 
 class GossipScope(Enum):
@@ -113,6 +130,24 @@ def _name_join(left: str, right: str) -> str:
 
 def _name_is_homeful(name: str) -> bool:
     return name == "~" or name.startswith("~/")
+
+
+def _is_valid_wire_name(name: str) -> bool:
+    """True if `name` is a well-formed *resolved* wire topic name, as required of names received in gossip:
+    nonempty, length-bounded, printable ASCII (33-126), already normalized (no leading/trailing/duplicate
+    '/'), verbatim (no '*'/'>' pattern tokens), not homeful ('~'/'~/...'), and pin-free (no '#<id>' suffix).
+    The last two are stripped/expanded by resolve_name before a name reaches the wire, so their presence
+    means the gossip is unresolved/non-canonical and must not create a local topic."""
+    return (
+        bool(name)
+        and len(name) <= TOPIC_NAME_MAX
+        and "*" not in name
+        and ">" not in name
+        and not _name_is_homeful(name)
+        and _name_consume_pin_suffix(name)[1] is None
+        and all(33 <= ord(ch) <= 126 for ch in name)
+        and _name_normalize(name) == name
+    )
 
 
 def resolve_name(
@@ -345,10 +380,8 @@ class PublishTracker:
     """Tracks a pending reliable publication awaiting ACKs."""
 
     tag: int
-    deadline_ns: int
     ack_event: asyncio.Event
     acknowledged: bool = False
-    data: bytes | None = None
     ack_timeout: float = ACK_BASELINE_DEFAULT_TIMEOUT
     compromised: bool = False
     remaining: set[int] = field(default_factory=set)
@@ -507,7 +540,6 @@ class NodeImpl(Node):
         self._remaps: dict[str, str] = {}
         self._closed = False
         self.loop = asyncio.get_running_loop()
-        self._now_mono = time.monotonic()
         self._monitor_callbacks: dict[int, Callable[[Topic], None]] = {}
         self._next_monitor_callback_id = 0
 
@@ -573,7 +605,31 @@ class NodeImpl(Node):
     def transport(self) -> Transport:
         return self._transport
 
+    def _raise_if_closed(self) -> None:
+        if self._closed:
+            raise ClosedError(f"Node '{self._home}' is closed")
+
+    def _spawn_detached(self, coro: Coroutine[Any, Any, None], what: str) -> None:
+        """Fire-and-forget a short-lived send: skip when closed, and never let its exception go unobserved."""
+        if self._closed:
+            coro.close()
+            return
+
+        def _done(task: asyncio.Task[None]) -> None:
+            if task.cancelled():
+                return
+            ex = task.exception()
+            if ex is None:
+                return
+            if isinstance(ex, (SendError, OSError)):
+                _logger.debug("%s send failed: %s", what, ex)
+            else:
+                _logger.error("%s task crashed: %s", what, ex, exc_info=ex)
+
+        self.loop.create_task(coro).add_done_callback(_done)
+
     def remap(self, spec: str | dict[str, str]) -> None:
+        self._raise_if_closed()
         if isinstance(spec, str):
             spec = dict(x.split("=", 1) for x in spec.split() if "=" in x)
         assert isinstance(spec, dict)
@@ -584,6 +640,7 @@ class NodeImpl(Node):
     def advertise(self, name: str) -> Publisher:
         from ._publisher import PublisherImpl
 
+        self._raise_if_closed()
         resolved, pin, verbatim = resolve_name(name, self._home, self._namespace, self._remaps)
         if not verbatim:
             raise ValueError("Cannot advertise on a pattern name")
@@ -602,6 +659,7 @@ class NodeImpl(Node):
     def subscribe(self, name: str, *, reordering_window: float | None = None) -> Subscriber:
         from ._subscriber import SubscriberImpl
 
+        self._raise_if_closed()
         resolved, pin, verbatim = resolve_name(name, self._home, self._namespace, self._remaps)
         if pin is not None and not verbatim:
             raise ValueError("Pattern names cannot be pinned")
@@ -637,6 +695,7 @@ class NodeImpl(Node):
         return subscriber
 
     def monitor(self, callback: Callable[[Topic], None]) -> Closable:
+        self._raise_if_closed()
         callback_id = self._next_monitor_callback_id
         self._next_monitor_callback_id += 1
         self._monitor_callbacks[callback_id] = callback
@@ -653,6 +712,7 @@ class NodeImpl(Node):
                 _logger.exception("monitor() callback failed for %s", topic)
 
     async def scout(self, pattern: str) -> None:
+        self._raise_if_closed()
         resolved, pin, _ = resolve_name(pattern, self._home, self._namespace, self._remaps)
         if pin is not None:
             raise ValueError("Cannot scout a pinned name/pattern")
@@ -800,12 +860,10 @@ class NodeImpl(Node):
         tracker.remaining.clear()
 
     @staticmethod
-    def prepare_publish_tracker(topic: TopicImpl, tag: int, deadline_ns: int, data: bytes) -> PublishTracker:
+    def prepare_publish_tracker(topic: TopicImpl, tag: int) -> PublishTracker:
         tracker = PublishTracker(
             tag=tag,
-            deadline_ns=deadline_ns,
             ack_event=asyncio.Event(),
-            data=data,
         )
         tracker.ack_timeout = ACK_BASELINE_DEFAULT_TIMEOUT
         for assoc in sorted(topic.associations.values(), key=lambda x: x.remote_id):
@@ -1036,14 +1094,6 @@ class NodeImpl(Node):
 
         root.scout_task = self.loop.create_task(do_send())
 
-    def send_scout(self, pattern: str) -> None:
-        """Send a scout message to discover topics matching a pattern."""
-
-        async def do_send() -> None:
-            await self._send_scout_once(pattern)
-
-        self.loop.create_task(do_send())
-
     # -- Message Dispatch --
 
     def on_subject_arrival(self, subject_id: int, arrival: TransportArrival) -> None:
@@ -1055,6 +1105,8 @@ class NodeImpl(Node):
         self.dispatch_arrival(arrival, subject_id=None, unicast=True)
 
     def dispatch_arrival(self, arrival: TransportArrival, *, subject_id: int | None, unicast: bool) -> None:
+        if self._closed:
+            return  # Drop late arrivals after close instead of mutating state / spawning sends.
         msg = arrival.message
         if len(msg) < HEADER_SIZE:
             _logger.debug("Drop short msg len=%d", len(msg))
@@ -1207,7 +1259,7 @@ class NodeImpl(Node):
             except (SendError, OSError) as e:
                 _logger.debug("ACK send failed: %s", e)
 
-        self.loop.create_task(do_send())
+        self._spawn_detached(do_send(), "ACK")
 
     def on_msg_ack(self, arrival: TransportArrival, hdr: MsgAckHeader | MsgNackHeader) -> None:
         topic = self.topics_by_hash.get(hdr.topic_hash)
@@ -1295,7 +1347,7 @@ class NodeImpl(Node):
             except (SendError, OSError) as e:
                 _logger.debug("RSP ACK send failed: %s", e)
 
-        self.loop.create_task(do_send())
+        self._spawn_detached(do_send(), "RSP ACK")
 
     def on_gossip(
         self,
@@ -1306,6 +1358,8 @@ class NodeImpl(Node):
     ) -> None:
         name = ""
         if hdr.name_len > 0:
+            # Best-effort decode for diagnostics/monitoring; an invalid name cannot create a topic because
+            # topic_subscribe_if_matching validates the character set before creating one.
             name = payload[: hdr.name_len].decode("utf-8", errors="replace")
 
         topic = self.topics_by_hash.get(hdr.topic_hash)
@@ -1374,6 +1428,14 @@ class NodeImpl(Node):
         now: float,
     ) -> TopicImpl | None:
         """Create an implicit topic if any pattern subscriber matches the name."""
+        # REFERENCE PARITY: the reference does not (yet) validate gossip-name characters here -- it trusts
+        # the hash. We additionally reject names that are not valid resolved wire names (non-normalized,
+        # non-verbatim by this implementation's rule, homeful, or pinned) so untrusted wire input cannot
+        # create a local topic with such a name. Consistent with the documented whitespace-strip deviation;
+        # the reference may adopt the same validation later.
+        if not _is_valid_wire_name(name):
+            _logger.debug("Gossip drop invalid wire name hash=%016x", topic_hash)
+            return None
         # Validate that the hash matches the name to prevent corrupt gossip from creating inconsistencies.
         if rapidhash(name) != topic_hash:
             _logger.debug("Gossip hash mismatch for '%s': got %016x, expected %016x", name, topic_hash, rapidhash(name))
@@ -1398,12 +1460,15 @@ class NodeImpl(Node):
     def on_scout(self, arrival: TransportArrival, hdr: ScoutHeader, payload: bytes) -> None:
         if hdr.pattern_len == 0 or hdr.pattern_len > TOPIC_NAME_MAX or len(payload) < hdr.pattern_len:
             return
+        # Best-effort decode; an invalid pattern simply matches no local topic names.
         pattern = payload[: hdr.pattern_len].decode("utf-8", errors="replace")
         _logger.debug("Scout received pattern='%s' from %016x", pattern, arrival.remote_id)
         for topic in list(self.topics_by_name.values()):
             subs = match_pattern(pattern, topic.name)
             if subs is not None:
-                self.loop.create_task(self.send_gossip_unicast(topic, arrival.remote_id, arrival.priority))
+                self._spawn_detached(
+                    self.send_gossip_unicast(topic, arrival.remote_id, arrival.priority), "gossip unicast"
+                )
 
     # -- Implicit Topic GC --
 
@@ -1474,6 +1539,12 @@ class NodeImpl(Node):
             return
         self._closed = True
         _logger.info("Node closing home='%s'", self._home)
+        # Unblock anything awaiting on a subscriber (`async for`): closing each enqueues StopAsyncIteration,
+        # otherwise a default (no-liveness-timeout) subscriber would wait on its queue forever. (Reliable
+        # publishes / response streams are deadline-bounded and resolve on their own.)
+        for root in list(self.sub_roots_verbatim.values()) + list(self.sub_roots_pattern.values()):
+            for sub in list(root.subscribers):
+                sub.close()
         self._gc_task.cancel()
         for root in list(self.sub_roots_pattern.values()):
             if root.scout_task is not None:

@@ -6,7 +6,7 @@ import pytest
 
 from pycyphal2 import Instant
 from pycyphal2.can import Filter, Frame, TimestampedFrame
-from pycyphal2.can._interface import _CAN_EXT_ID_MASK
+from pycyphal2.can._interface import CAN_EXT_ID_MASK
 
 
 def test_frame_validation_and_normalization() -> None:
@@ -20,7 +20,7 @@ def test_frame_validation_and_normalization() -> None:
         Frame(id="bad", data=b"")  # type: ignore[arg-type]
 
     with pytest.raises(ValueError, match="Invalid CAN identifier"):
-        Frame(id=_CAN_EXT_ID_MASK + 1, data=b"")
+        Frame(id=CAN_EXT_ID_MASK + 1, data=b"")
 
     with pytest.raises(ValueError, match="Invalid CAN data length"):
         Frame(id=1, data=bytes(65))
@@ -35,7 +35,7 @@ def test_filter_validation_and_helpers() -> None:
         Filter(id=-1, mask=0)
 
     with pytest.raises(ValueError, match="Invalid CAN mask"):
-        Filter(id=0, mask=_CAN_EXT_ID_MASK + 1)
+        Filter(id=0, mask=CAN_EXT_ID_MASK + 1)
 
     with pytest.raises(ValueError, match="target number of filters must be positive"):
         Filter.coalesce([], 0)

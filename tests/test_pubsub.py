@@ -36,6 +36,66 @@ async def test_basic_best_effort_pubsub():
     node.close()
 
 
+async def test_node_operations_after_close_raise():
+    """Public node operations reject use after close() instead of mutating a dead node."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+    node.close()
+
+    with pytest.raises(pycyphal2.ClosedError):
+        node.advertise("my/topic")
+    with pytest.raises(pycyphal2.ClosedError):
+        node.subscribe("my/topic")
+    with pytest.raises(pycyphal2.ClosedError):
+        node.monitor(lambda _t: None)
+    with pytest.raises(pycyphal2.ClosedError):
+        node.remap("a=b")
+    with pytest.raises(pycyphal2.ClosedError):
+        await node.scout("pattern/*")
+
+
+async def test_node_close_unblocks_pending_subscriber():
+    """Closing the node ends a pending `async for` on a subscriber instead of hanging it forever."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+    sub = node.subscribe("my/topic")
+    task = asyncio.create_task(sub.__anext__())
+    await asyncio.sleep(0)  # Let the task start awaiting on the queue.
+
+    node.close()
+
+    with pytest.raises(StopAsyncIteration):
+        await asyncio.wait_for(task, timeout=1.0)
+
+
+async def test_gossip_rejects_malformed_names():
+    """A gossiped name that is not a normalized verbatim topic name must not become a local topic.
+
+    A match-all '>' pattern subscriber is registered so that, WITHOUT the name guard, every name below
+    would be created -- this makes the test fail on the unfixed code rather than passing vacuously (the
+    hash matches the name in each case, so only the name guard can reject it).
+    """
+    from pycyphal2._hash import rapidhash
+
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="test_node")
+    try:
+        node.subscribe(">")  # Match-all pattern: the name guard is then the only thing that can reject.
+        # Sanity: a valid normalized name IS created through this subscriber, proving the path is live.
+        good = node.topic_subscribe_if_matching("sensor/temp", rapidhash("sensor/temp"), 0, 0, 0.0)
+        assert good is not None
+
+        for bad_name in ["foo bar", "foo//bar", "/foo", "foo/", "foo/*", "foo/>", "foo#123", "~/foo", "~", ""]:
+            result = node.topic_subscribe_if_matching(bad_name, rapidhash(bad_name), 0, 0, 0.0)
+            assert result is None, bad_name
+            assert bad_name not in node.topics_by_name
+    finally:
+        node.close()
+
+
 async def test_publish_multiple_messages():
     """Multiple messages should arrive in order."""
     net = MockNetwork()
