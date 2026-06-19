@@ -1,4 +1,6 @@
-"""Browser-oriented SLCAN backend for WebSerial/Pyodide."""
+"""
+Browser-oriented SLCAN backend for WebSerial/Pyodide.
+"""
 
 from __future__ import annotations
 
@@ -9,21 +11,19 @@ from collections.abc import Iterable
 
 from .._api import ClosedError, Instant
 from ._interface import Filter, Interface, TimestampedFrame
-from ._slcan import (
-    SLCAN_ACK,
-    SLCAN_ACK_TIMEOUT,
-    SLCAN_BITRATE_TO_SPEED_CODE,
-    SLCAN_COMMAND_CLOSE,
-    SLCAN_COMMAND_OPEN,
-    SLCAN_COMMAND_SET_BITRATE_PREFIX,
-    SLCAN_COMMAND_TERMINATOR,
-    SLCAN_DEFAULT_BITRATE,
-    SLCAN_NACK,
+from ._media_slcan import (
     SLCANParser,
+    classify_init_response,
+    encode_deinit,
     encode_frame,
+    encode_init_sequence,
 )
 
 _logger = logging.getLogger(__name__)
+
+_ACK_TIMEOUT = 3.0
+_DEINIT_SETTLE = 0.1
+_PURGE_DRAIN_TIMEOUT = 0.05
 
 
 class AsyncSerialPort(ABC):
@@ -47,18 +47,15 @@ class WebSerialSLCANInterface(Interface):
     SLCAN CAN interface over an application-provided async serial byte stream.
 
     The port is expected to be already opened by browser/Pyodide glue code.
-    The SLCAN channel is closed, configured for the selected bitrate, then reopened before frame I/O begins.
-    Only Classic CAN extended-ID data frames are supported.
+    On startup the adapter is reset: closed, left to settle, its pending input purged (so stale frames
+    from a previous configuration are dropped), then configured for the selected bitrate and reopened.
+    If no bitrate is given, the bitrate is left unconfigured (old/default).
     """
 
     def __init__(self, port: AsyncSerialPort, *, name: str = "webserial", bitrate: int | None = None) -> None:
         self._port = port
         self._name = str(name)
-        self._bitrate = SLCAN_DEFAULT_BITRATE if bitrate is None else int(bitrate)
-        try:
-            self._speed_code = SLCAN_BITRATE_TO_SPEED_CODE[self._bitrate]
-        except KeyError:
-            raise ValueError(f"Unsupported SLCAN bitrate: {bitrate!r}") from None
+        self._bitrate = None if bitrate is None else int(bitrate)
         self._closed = False
         self._failure: BaseException | None = None
         self._parser = SLCANParser()
@@ -69,11 +66,8 @@ class WebSerialSLCANInterface(Interface):
         self._tx_task: asyncio.Task[None] | None = None
         self._rx_task: asyncio.Task[None] | None = None
         self._close_task: asyncio.Task[None] | None = None
-        try:
-            self._start_init()
-        except RuntimeError:
-            pass
-        _logger.info("WebSerial SLCAN init iface=%s bitrate=%d", self._name, self._bitrate)
+        self._start_init()  # Requires a running loop; this is an async interface, always built in one.
+        _logger.info("WebSerial SLCAN init iface=%s bitrate=%s", self._name, self._bitrate)
 
     @property
     def name(self) -> str:
@@ -132,22 +126,14 @@ class WebSerialSLCANInterface(Interface):
     async def _tx_loop(self) -> None:
         try:
             await self._ensure_initialized()
-        except asyncio.CancelledError:
-            raise
         except Exception as ex:
             self._fail(ex)
             return
         while not self._closed:
-            try:
-                identifier, seq, deadline_ns, payload = await self._tx_queue.get()
-            except asyncio.CancelledError:
-                raise
+            identifier, seq, deadline_ns, payload = await self._tx_queue.get()
             if self._closed:
                 return
-            if Instant.now().ns >= deadline_ns:
-                _logger.debug("WebSerial SLCAN tx drop expired iface=%s id=%08x", self._name, identifier)
-                continue
-            timeout = max(0.0, (deadline_ns - Instant.now().ns) * 1e-9)
+            timeout = (deadline_ns - Instant.now().ns) * 1e-9
             if timeout <= 0.0:
                 _logger.debug("WebSerial SLCAN tx drop expired iface=%s id=%08x", self._name, identifier)
                 continue
@@ -156,8 +142,6 @@ class WebSerialSLCANInterface(Interface):
             except asyncio.TimeoutError:
                 self._tx_queue.put_nowait((identifier, seq, deadline_ns, payload))
                 await asyncio.sleep(0.001)
-            except asyncio.CancelledError:
-                raise
             except Exception as ex:
                 self._fail(ex)
                 return
@@ -165,16 +149,12 @@ class WebSerialSLCANInterface(Interface):
     async def _rx_loop(self) -> None:
         try:
             await self._ensure_initialized()
-        except asyncio.CancelledError:
-            raise
         except Exception as ex:
             self._fail(ex)
             return
         while not self._closed:
             try:
                 chunk = await self._port.read()
-            except asyncio.CancelledError:
-                raise
             except Exception as ex:
                 self._fail(ex)
                 return
@@ -206,25 +186,34 @@ class WebSerialSLCANInterface(Interface):
         self._raise_if_closed()
 
     async def _init_adapter(self) -> None:
-        _logger.info("WebSerial SLCAN setup iface=%s bitrate=%d", self._name, self._bitrate)
-        await self._send_init_command(SLCAN_COMMAND_CLOSE, optional_ack=True)
-        await self._send_init_command(SLCAN_COMMAND_SET_BITRATE_PREFIX + str(self._speed_code).encode("ascii"))
-        await self._send_init_command(SLCAN_COMMAND_OPEN)
+        _logger.info("WebSerial SLCAN setup iface=%s bitrate=%s", self._name, self._bitrate)
+        # Reset an adapter that may be in an unknown state: close, settle, discard whatever it was
+        # forwarding under the old config, then configure and open.
+        await self._port.write(encode_deinit())
+        await asyncio.sleep(_DEINIT_SETTLE)
+        await self._purge_input()
+        for command in encode_init_sequence(self._bitrate):
+            _logger.debug("WebSerial SLCAN setup cmd iface=%s cmd=%r", self._name, command)
+            await self._port.write(command)
+            await self._wait_for_init_ack()
         _logger.info("WebSerial SLCAN setup done iface=%s", self._name)
 
-    async def _send_init_command(self, command: bytes, *, optional_ack: bool = False) -> None:
-        _logger.debug("WebSerial SLCAN setup cmd iface=%s cmd=%r", self._name, command)
-        await self._port.write(command + SLCAN_COMMAND_TERMINATOR)
-        try:
-            await self._wait_for_init_ack()
-        except Exception as ex:
-            if not optional_ack:
-                raise
-            _logger.debug("WebSerial SLCAN setup ignored cmd error iface=%s cmd=%r err=%s", self._name, command, ex)
+    async def _purge_input(self) -> None:
+        dropped = 0
+        while True:
+            try:
+                chunk = await asyncio.wait_for(self._port.read(), timeout=_PURGE_DRAIN_TIMEOUT)
+            except asyncio.TimeoutError:
+                break
+            if not chunk:
+                raise EOFError("SLCAN channel ended while purging input")
+            dropped += len(chunk)
+        if dropped > 0:
+            _logger.debug("WebSerial SLCAN purge stale input iface=%s dropped=%d", self._name, dropped)
 
     async def _wait_for_init_ack(self) -> None:
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + SLCAN_ACK_TIMEOUT
+        deadline = loop.time() + _ACK_TIMEOUT
         while True:
             timeout = deadline - loop.time()
             if timeout <= 0.0:
@@ -232,12 +221,12 @@ class WebSerialSLCANInterface(Interface):
             chunk = await asyncio.wait_for(self._port.read(), timeout=timeout)
             if not chunk:
                 raise EOFError("SLCAN channel ended while waiting for ACK")
-            for byte in chunk:
-                if byte == SLCAN_ACK:
-                    return
-                if byte == SLCAN_NACK:
-                    raise OSError("SLCAN NACK in response")
-                _logger.debug("WebSerial SLCAN setup ignored byte iface=%s byte=%02x", self._name, byte)
+            response = classify_init_response(chunk)
+            if response is True:
+                return
+            if response is False:
+                raise OSError("SLCAN NACK in response")
+            _logger.debug("WebSerial SLCAN setup ignored bytes iface=%s len=%d", self._name, len(chunk))
 
     def _fail(self, ex: BaseException) -> None:
         if self._failure is None:

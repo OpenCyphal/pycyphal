@@ -16,6 +16,8 @@ on top of Cyphal v1.0.
 Due to the significant changes, the new version is published under a different name ``pycyphal2`` to allow coexistence
 with v1 in the same Python environment.
 
+- Add Cyphal/CAN SLCAN media with a browser WebSerial backend.
+
 Changelog v1
 ============
 

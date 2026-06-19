@@ -3,7 +3,13 @@ from __future__ import annotations
 import pytest
 
 from pycyphal2.can import Frame
-from pycyphal2.can._slcan import SLCANParser, encode_frame
+from pycyphal2.can._media_slcan import (
+    SLCANParser,
+    classify_init_response,
+    encode_deinit,
+    encode_frame,
+    encode_init_sequence,
+)
 
 
 def test_encode_classic_extended_frames() -> None:
@@ -18,6 +24,28 @@ def test_encode_validation() -> None:
 
     with pytest.raises(ValueError, match="Invalid CAN data length"):
         encode_frame(0x123, bytes(range(9)))
+
+
+def test_encode_deinit() -> None:
+    assert encode_deinit() == b"C\r"
+
+
+def test_encode_init_sequence() -> None:
+    assert encode_init_sequence(None) == [b"O\r"]  # No bitrate is guessed.
+    assert encode_init_sequence(1_000_000) == [b"S8\r", b"O\r"]
+    assert encode_init_sequence(250_000) == [b"S5\r", b"O\r"]
+    assert encode_init_sequence(10_000) == [b"S0\r", b"O\r"]
+    # Non-standard bitrate is passed through as-is rather than rejected.
+    assert encode_init_sequence(123_456) == [b"S123456\r", b"O\r"]
+
+
+def test_classify_init_response() -> None:
+    assert classify_init_response(b"\r") is True
+    assert classify_init_response(b"\x07") is False
+    assert classify_init_response(b"xyz\rmore") is True  # First ACK wins.
+    assert classify_init_response(b"xyz\x07") is False
+    assert classify_init_response(b"") is None
+    assert classify_init_response(b"junk") is None
 
 
 def test_parse_classic_extended_frames() -> None:
@@ -88,9 +116,9 @@ def test_parse_drops_malformed_input_without_raising() -> None:
 
 
 def test_parser_bounds_overlong_input() -> None:
-    parser = SLCANParser(max_line_length=10)
+    parser = SLCANParser()
 
-    assert parser.feed(b"T00000123155") == []
+    assert parser.feed(b"T" + b"0" * 300) == []  # Exceeds the fixed line-length bound, dropped.
     assert parser.feed(b"\rT000001230\r") == [Frame(id=0x123, data=b"")]
 
 
@@ -98,8 +126,3 @@ def test_parser_bel_drops_buffered_error_response() -> None:
     parser = SLCANParser()
 
     assert parser.feed(b"T00000123155\aT00000123166\r") == [Frame(id=0x123, data=b"\x66")]
-
-
-def test_parser_rejects_invalid_buffer_limit() -> None:
-    with pytest.raises(ValueError, match="Invalid maximum SLCAN line length"):
-        SLCANParser(max_line_length=9)
