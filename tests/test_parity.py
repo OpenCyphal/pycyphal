@@ -95,7 +95,6 @@ async def test_association_slack_nack_capped():
 
     tracker = PublishTracker(
         tag=tag,
-        deadline_ns=(pycyphal2.Instant.now() + 10.0).ns,
         remaining={42},
         ack_event=asyncio.Event(),
     )
@@ -136,7 +135,6 @@ async def test_association_ack_resets_slack():
 
     tracker = PublishTracker(
         tag=tag,
-        deadline_ns=(pycyphal2.Instant.now() + 10.0).ns,
         remaining={42},
         ack_event=asyncio.Event(),
     )

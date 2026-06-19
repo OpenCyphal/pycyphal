@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 import sys
 import threading
+import time
 from typing import cast
 from unittest.mock import MagicMock
 
@@ -825,6 +826,44 @@ async def test_unit_tx_loop_multiple_deadline_drops() -> None:
         assert frame.data == b"good"
     finally:
         _close_all(a, b)
+
+
+async def test_unit_tx_retry_preserves_intra_transfer_order() -> None:
+    """A frame that fails once and is retried keeps its place ahead of later frames of the transfer.
+
+    Regression: the retry path used to re-queue with the global tx_seq counter, which could sort a
+    retried frame after its successors. The two payloads below sort opposite to their enqueue order
+    by byte value, so only a preserved seq keeps them in order after the first one is retried.
+    """
+    sent: list[bytes] = []
+    failed_once = threading.Event()
+
+    class _RetryOnceBus:
+        channel_info = "retry:0"
+
+        def recv(self, timeout: float | None = None) -> _can.Message | None:
+            if timeout:
+                time.sleep(min(timeout, 0.02))
+            return None
+
+        def send(self, msg: _can.Message, timeout: float | None = None) -> None:
+            data = bytes(msg.data)
+            if data == b"\x02" and not failed_once.is_set():
+                failed_once.set()
+                raise _can.CanError("transient")
+            sent.append(data)
+
+        def shutdown(self) -> None:
+            pass
+
+    itf = PythonCANInterface(cast(_can.BusABC, _RetryOnceBus()), fd=False)
+    try:
+        itf.enqueue(0x123, [memoryview(b"\x02"), memoryview(b"\x01")], Instant.now() + 5.0)
+        await wait_for(lambda: len(sent) == 2, timeout=5.0)
+        assert failed_once.is_set()
+        assert sent == [b"\x02", b"\x01"]  # Enqueue order preserved despite the retry of the first frame.
+    finally:
+        itf.close()
 
 
 async def test_unit_enqueue_after_purge_still_works() -> None:

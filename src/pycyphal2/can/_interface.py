@@ -7,7 +7,8 @@ import itertools
 
 from .. import Closable, Instant
 
-_CAN_EXT_ID_MASK = (1 << 29) - 1
+CAN_EXT_ID_MASK = (1 << 29) - 1
+CAN_STD_ID_MASK = (1 << 11) - 1
 
 
 @dataclass(frozen=True)
@@ -18,7 +19,7 @@ class Frame:
     data: bytes
 
     def __post_init__(self) -> None:
-        if not isinstance(self.id, int) or not (0 <= self.id <= _CAN_EXT_ID_MASK):
+        if not isinstance(self.id, int) or not (0 <= self.id <= CAN_EXT_ID_MASK):
             raise ValueError(f"Invalid CAN identifier: {self.id!r}")
         data = bytes(self.data)
         if len(data) > 64:
@@ -39,9 +40,9 @@ class Filter:
     mask: int
 
     def __post_init__(self) -> None:
-        if not (0 <= self.id <= _CAN_EXT_ID_MASK):
+        if not (0 <= self.id <= CAN_EXT_ID_MASK):
             raise ValueError(f"Invalid CAN identifier: {self.id!r}")
-        if not (0 <= self.mask <= _CAN_EXT_ID_MASK):
+        if not (0 <= self.mask <= CAN_EXT_ID_MASK):
             raise ValueError(f"Invalid CAN mask: {self.mask!r}")
 
     @property
