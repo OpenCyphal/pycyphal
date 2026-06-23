@@ -1,0 +1,15 @@
+@import url("https://fonts.googleapis.com/css2?family=Ubuntu+Mono:wght@400;700&display=swap");
+
+.pdoc {
+    font-family: "Ubuntu Mono", monospace;
+}
+
+@media (min-width: 770px) {
+    main.pdoc {
+        width: calc(90rem + var(--sidebar-width));
+    }
+}
+
+main.pdoc .docstring h3 {
+    font-size: 1.2rem;
+}

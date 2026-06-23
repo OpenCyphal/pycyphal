@@ -2,7 +2,8 @@
 """Build API docs using pdoc. Invoked via ``nox -s docs``."""
 
 import ast
-import shutil
+from datetime import datetime, timezone
+import subprocess
 from pathlib import Path
 import pkgutil
 import importlib
@@ -11,17 +12,12 @@ import sys
 import pdoc
 import pycyphal2
 
-OUTPUT_DIRECTORY = Path("html_docs")
-EXAMPLES_DIRECTORY = Path("examples")
-
-
-def _discover_examples(directory: Path) -> list[Path]:
-    if not directory.is_dir():
-        raise RuntimeError(f"Examples directory {directory!s} not found while building docs")
-    examples = sorted(path for path in directory.rglob("*.py") if path.is_file())
-    if not examples:
-        raise RuntimeError(f"No example scripts found under {directory!s} while building docs")
-    return examples
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_DIRECTORY = REPOSITORY_ROOT / "html_docs"
+EXAMPLES_DIRECTORY = REPOSITORY_ROOT / "examples"
+REPOSITORY_URL = "https://github.com/OpenCyphal/pycyphal"
+REVISION = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+REPOSITORY_REVISION_ROOT_URL = f"{REPOSITORY_URL}/blob/{REVISION}"
 
 
 def _load_summary(path: Path) -> str:
@@ -39,33 +35,17 @@ def _load_summary(path: Path) -> str:
     return ""
 
 
-def _make_examples_section(examples: list[Path]) -> str:
-    if not examples:
-        return ""
+def _inject_examples_section() -> None:
     lines = ["## Examples", "", "Runnable examples:"]
-    for path in examples:
-        relative = path.relative_to(EXAMPLES_DIRECTORY).as_posix()
+    for path in sorted(EXAMPLES_DIRECTORY.rglob("*.py")):
+        source = path.relative_to(REPOSITORY_ROOT).as_posix()
         summary = _load_summary(path)
         suffix = f" - {summary}" if summary else ""
-        lines.append(f"- [`examples/{relative}`](examples/{relative}){suffix}")
-    return "\n".join(lines) + "\n"
-
-
-def _inject_examples_section(examples: list[Path]) -> None:
-    section = _make_examples_section(examples)
-    doc = pycyphal2.__doc__ or ""
-    pycyphal2.__doc__ = doc.rstrip() + f"\n\n{section}"
-
-
-def _copy_examples(examples_source: Path, output_directory: Path, examples: list[Path]) -> None:
-    destination = output_directory / examples_source.name
-    shutil.rmtree(destination, ignore_errors=True)
-    if not examples:
-        return
-    for source in examples:
-        target = destination / source.relative_to(examples_source)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
+        lines.append(
+            f'- <a href="{REPOSITORY_REVISION_ROOT_URL}/{source}" '
+            f'target="_blank" rel="noopener noreferrer"><code>{path.name}</code></a>{suffix}'
+        )
+    pycyphal2.__doc__ = pycyphal2.__doc__.rstrip() + "\n\n" + "\n".join(lines) + "\n"
 
 
 def main() -> None:
@@ -84,13 +64,16 @@ def main() -> None:
         if hasattr(parent, "__all__") and leaf not in parent.__all__:
             parent.__all__.append(leaf)
 
+    now = datetime.now(timezone.utc).isoformat(timespec='seconds')
+
     # Customization is necessary to expose special members like __aiter__, __call__, etc.
     # We also use it to tweak the colors.
-    pdoc.render.configure(template_directory=Path(__file__).resolve().with_name("pdoc"))
-    examples = _discover_examples(EXAMPLES_DIRECTORY)
-    _inject_examples_section(examples)
+    pdoc.render.configure(
+        template_directory=Path(__file__).resolve().with_name("pdoc"),
+        footer_text=f"{now} #{REVISION} v{pycyphal2.__version__}",
+    )
+    _inject_examples_section()
     pdoc.pdoc("pycyphal2", output_directory=OUTPUT_DIRECTORY)
-    _copy_examples(EXAMPLES_DIRECTORY, OUTPUT_DIRECTORY, examples)
 
 
 if __name__ == "__main__":
