@@ -452,7 +452,13 @@ class SerialTransport(pycyphal.transport.Transport):
                     self._serial_port,
                 )
             self._closed = True
-            self._serial_port.close()
+            try:
+                self._serial_port.close()
+            except Exception:
+                # close() is not atomic (see __init__), so when SerialTransport.close() runs at the
+                # same time, the reader thread can try to close an already-closed port. The resulting
+                # OSError is harmless, so ignore it.
+                pass
 
         finally:
             _logger.debug("%s: Reader thread is exiting. Head aega.", self)
