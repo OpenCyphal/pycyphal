@@ -1,5 +1,11 @@
-PyCyphal documentation
-======================
+PyCyphal v1 documentation
+=========================
+
+..  attention:: Not recommended for new designs
+
+    PyCyphal v1 is still maintained but it is unlikely to receive new features.
+    Please consider migrating to `PyCyphal v2 <https://github.com/OpenCyphal/pycyphal>`_ instead,
+    which offers much simpler API and support for Cyphal v1.1.
 
 PyCyphal is a full-featured implementation of the `Cyphal protocol stack <https://opencyphal.org>`_ in Python.
 PyCyphal aims to support all features and transport layers of UAVCAN,
