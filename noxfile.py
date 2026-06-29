@@ -63,6 +63,7 @@ def examples(session: nox.Session) -> None:
     import json as _json
     import subprocess
     import sys
+    import tempfile
     import time
 
     if sys.platform == "darwin":
@@ -145,9 +146,54 @@ def examples(session: nox.Session) -> None:
             assert "remaining" in obj
             assert "sent_at" in obj
 
+    def run_file_case() -> None:
+        session.log("--- examples smoke: file RPC ---")
+        server_proc = None
+        client_proc = None
+        missing_proc = None
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = Path(tmp_dir) / "source.bin"
+            payload = bytes(range(256)) * 20
+            file_path.write_bytes(payload)
+            try:
+                server_proc = subprocess.Popen(
+                    [python, "examples/file_server.py"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                time.sleep(1)
+                client_proc = subprocess.Popen(
+                    [python, "examples/file_client.py", str(file_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                client_stdout, client_stderr = client_proc.communicate(timeout=30)
+                assert client_proc.returncode == 0, f"File client failed: {client_stderr.decode()}"
+                assert client_stdout == payload
+
+                missing_proc = subprocess.Popen(
+                    [python, "examples/file_client.py", str(file_path.with_name("missing.bin"))],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                missing_stdout, missing_stderr = missing_proc.communicate(timeout=30)
+                assert missing_proc.returncode == 1
+                assert missing_stdout == ""
+                assert "Remote error" in missing_stderr
+
+                time.sleep(1)
+                assert server_proc.poll() is None, "File server exited unexpectedly"
+            finally:
+                terminate_process(client_proc)
+                terminate_process(missing_proc)
+                terminate_process(server_proc)
+
     run_case("udp", [])
     if sys.platform == "linux" and Path("/sys/class/net/vcan0").exists():
         run_case("socketcan:vcan0", ["--transport", "socketcan:vcan0"])
     else:
         session.log("Skipping socketcan:vcan0 case (vcan0 not available)")
     run_streaming_case()
+    run_file_case()
