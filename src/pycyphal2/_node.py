@@ -246,7 +246,9 @@ def compute_subject_id(topic_hash: int, evictions: int, modulus: int) -> int:
     """Compute the subject-ID for a topic given its hash, evictions, and subject-ID modulus."""
     if evictions >= EVICTIONS_PINNED_MIN:
         return 0xFFFFFFFF - evictions
-    return SUBJECT_ID_PINNED_MAX + 1 + ((topic_hash + (evictions * evictions)) % modulus)
+    h = topic_hash % modulus
+    e = evictions % modulus
+    return SUBJECT_ID_PINNED_MAX + 1 + ((h + ((e * e) % modulus)) % modulus)
 
 
 # =====================================================================================================================

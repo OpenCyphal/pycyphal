@@ -270,12 +270,12 @@ async def test_subject_id_computation():
     """Verify subject-ID computation matches the reference formula."""
     modulus = 8378431  # 23bit
 
-    # Non-pinned: 0x2000 + ((hash + evictions^2) % modulus)
+    # Non-pinned: 0x2000 + (((hash % modulus) + ((evictions % modulus)^2 % modulus)) % modulus)
     sid = compute_subject_id(0xDEADBEEF, 0, modulus)
     assert sid == 0x2000 + (0xDEADBEEF % modulus)
 
     sid = compute_subject_id(0xDEADBEEF, 3, modulus)
-    assert sid == 0x2000 + ((0xDEADBEEF + 9) % modulus)
+    assert sid == 0x2000 + (((0xDEADBEEF % modulus) + ((3 % modulus) ** 2 % modulus)) % modulus)
 
     # Pinned: UINT32_MAX - evictions
     sid = compute_subject_id(0xDEADBEEF, EVICTIONS_PINNED_MIN, modulus)

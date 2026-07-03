@@ -40,19 +40,38 @@ def test_compute_subject_id_pinned_boundary():
 
 def test_compute_subject_id_non_pinned_zero_evictions():
     """Non-pinned with zero evictions: offset + hash % modulus."""
-    topic_hash = rapidhash("my/topic")
-    sid = compute_subject_id(topic_hash, 0, DEFAULT_MODULUS)
-    expected = SUBJECT_ID_PINNED_MAX + 1 + (topic_hash % DEFAULT_MODULUS)
-    assert sid == expected
+    for topic_hash in (0, 1, rapidhash("my/topic"), (1 << 64) - 1):
+        sid = compute_subject_id(topic_hash, 0, DEFAULT_MODULUS)
+        expected = SUBJECT_ID_PINNED_MAX + 1 + (topic_hash % DEFAULT_MODULUS)
+        assert sid == expected
 
 
 def test_compute_subject_id_non_pinned_with_evictions():
-    """Non-pinned formula: offset + (hash + evictions^2) % modulus."""
+    """Non-pinned formula: offset + ((hash % modulus) + ((evictions % modulus)^2 % modulus)) % modulus."""
     topic_hash = rapidhash("some/topic")
     for ev in (1, 2, 5, 100):
         sid = compute_subject_id(topic_hash, ev, DEFAULT_MODULUS)
-        expected = SUBJECT_ID_PINNED_MAX + 1 + ((topic_hash + ev * ev) % DEFAULT_MODULUS)
+        expected = (
+            SUBJECT_ID_PINNED_MAX
+            + 1
+            + (
+                ((topic_hash % DEFAULT_MODULUS) + (((ev % DEFAULT_MODULUS) * (ev % DEFAULT_MODULUS)) % DEFAULT_MODULUS))
+                % DEFAULT_MODULUS
+            )
+        )
         assert sid == expected
+
+
+def test_compute_subject_id_non_pinned_does_not_wrap_uint64_sum():
+    topic_hash = (1 << 64) - 1
+    evictions = EVICTIONS_PINNED_MIN - 1
+    sid = compute_subject_id(topic_hash, evictions, DEFAULT_MODULUS)
+    uint64_wrapping = (
+        SUBJECT_ID_PINNED_MAX + 1 + (((topic_hash + (evictions * evictions)) & ((1 << 64) - 1)) % DEFAULT_MODULUS)
+    )
+    assert sid == 49564
+    assert uint64_wrapping == 74897
+    assert sid != uint64_wrapping
 
 
 def test_compute_subject_id_evictions_changes_sid():
@@ -70,7 +89,14 @@ def test_compute_subject_id_just_below_pinned():
     ev = EVICTIONS_PINNED_MIN - 1
     topic_hash = 12345
     sid = compute_subject_id(topic_hash, ev, DEFAULT_MODULUS)
-    expected = SUBJECT_ID_PINNED_MAX + 1 + ((topic_hash + ev * ev) % DEFAULT_MODULUS)
+    expected = (
+        SUBJECT_ID_PINNED_MAX
+        + 1
+        + (
+            ((topic_hash % DEFAULT_MODULUS) + (((ev % DEFAULT_MODULUS) * (ev % DEFAULT_MODULUS)) % DEFAULT_MODULUS))
+            % DEFAULT_MODULUS
+        )
+    )
     assert sid == expected
 
 
@@ -361,9 +387,10 @@ async def test_gossip_unknown_collision_we_lose():
     # produces the same subject-ID and a very high lage.
     remote_lage = 50  # Very old.
     # Build a fake hash that produces the same SID as our topic.
-    # Since sid = PINNED_MAX + 1 + (hash + ev^2) % modulus, we need:
-    # (remote_hash + 0) % modulus == (topic.hash + old_evictions^2) % modulus
-    target_remainder = (topic.hash + old_evictions * old_evictions) % DEFAULT_MODULUS
+    target_remainder = (
+        (topic.hash % DEFAULT_MODULUS)
+        + (((old_evictions % DEFAULT_MODULUS) * (old_evictions % DEFAULT_MODULUS)) % DEFAULT_MODULUS)
+    ) % DEFAULT_MODULUS
     # Pick remote_hash such that remote_hash % modulus == target_remainder AND remote_hash != topic.hash.
     remote_hash = target_remainder + DEFAULT_MODULUS  # Different from topic.hash but same modular result.
 
