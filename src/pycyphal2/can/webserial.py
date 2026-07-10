@@ -9,8 +9,9 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 
-from .._api import ClosedError, Instant
-from ._interface import Filter, Interface, TimestampedFrame
+from .._api import ClosedError, Instant, SendError
+from ._interface import Filter, Interface, TimestampedFrame, closed_error
+from ._tx import TxQueue
 from ._media_slcan import (
     SLCANParser,
     classify_init_response,
@@ -59,8 +60,7 @@ class WebSerialSLCANInterface(Interface):
         self._closed = False
         self._failure: BaseException | None = None
         self._parser = SLCANParser()
-        self._tx_seq = 0
-        self._tx_queue: asyncio.PriorityQueue[tuple[int, int, int, bytes]] = asyncio.PriorityQueue()
+        self._tx = TxQueue()
         self._rx_queue: asyncio.Queue[TimestampedFrame | BaseException] = asyncio.Queue()
         self._init_task: asyncio.Task[None] | None = None
         self._tx_task: asyncio.Task[None] | None = None
@@ -82,27 +82,20 @@ class WebSerialSLCANInterface(Interface):
         self._raise_if_closed()
         # No-op: WebSerial adapters do not provide hardware acceptance filtering.
 
-    def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> None:
+    def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> asyncio.Future[None]:
         self._raise_if_closed()
         chunks = tuple(bytes(item) for item in data)
         for chunk in chunks:
-            encode_frame(id, chunk)  # Validate before mutating the queue.
+            encode_frame(id, chunk)  # Validate before creating the transfer.
         if self._tx_task is None:
             self._tx_task = asyncio.get_running_loop().create_task(self._tx_loop())
-        for chunk in chunks:
-            self._tx_seq += 1
-            self._tx_queue.put_nowait((id, self._tx_seq, deadline.ns, chunk))
+            self._tx_task.add_done_callback(self._on_tx_done)
+        return self._tx.push(id, chunks, deadline)
 
     def purge(self) -> None:
         if self._closed:
             return
-        dropped = 0
-        try:
-            while True:
-                self._tx_queue.get_nowait()
-                dropped += 1
-        except asyncio.QueueEmpty:
-            pass
+        dropped = self._tx.abort_all(lambda: SendError(f"WebSerial SLCAN interface {self._name} tx purged"))
         if dropped > 0:
             _logger.debug("WebSerial SLCAN purge iface=%s dropped=%d", self._name, dropped)
 
@@ -130,21 +123,27 @@ class WebSerialSLCANInterface(Interface):
             self._fail(ex)
             return
         while not self._closed:
-            identifier, seq, deadline_ns, payload = await self._tx_queue.get()
+            entry = await self._tx.pop()
             if self._closed:
-                return
-            timeout = (deadline_ns - Instant.now().ns) * 1e-9
+                return  # _close() already failed every pending transfer.
+            job = entry.job
+            if job.settled:
+                continue  # Tail of an aborted transfer.
+            timeout = (job.deadline.ns - Instant.now().ns) * 1e-9
             if timeout <= 0.0:
-                _logger.debug("WebSerial SLCAN tx drop expired iface=%s id=%08x", self._name, identifier)
+                _logger.debug("WebSerial SLCAN tx drop expired iface=%s id=%08x", self._name, entry.id)
+                job.abort(SendError(f"WebSerial SLCAN interface {self._name} tx deadline expired"))
                 continue
             try:
-                await asyncio.wait_for(self._port.write(encode_frame(identifier, payload)), timeout=timeout)
+                await asyncio.wait_for(self._port.write(encode_frame(entry.id, entry.payload)), timeout=timeout)
             except asyncio.TimeoutError:
-                self._tx_queue.put_nowait((identifier, seq, deadline_ns, payload))
+                self._tx.requeue(entry)  # Still owed; the deadline is rechecked on the next pop.
                 await asyncio.sleep(0.001)
             except Exception as ex:
                 self._fail(ex)
                 return
+            else:
+                job.complete_one()
 
     async def _rx_loop(self) -> None:
         try:
@@ -168,6 +167,14 @@ class WebSerialSLCANInterface(Interface):
         if self._init_task is None:
             self._init_task = asyncio.get_running_loop().create_task(self._init_adapter())
             self._init_task.add_done_callback(self._on_init_done)
+
+    def _on_tx_done(self, task: asyncio.Task[None]) -> None:
+        # A crashed TX loop would otherwise leave its pending transfers unresolved forever.
+        if task.cancelled() or self._closed:
+            return
+        ex = task.exception()
+        if ex is not None:
+            self._fail(ex)
 
     def _on_init_done(self, task: asyncio.Task[None]) -> None:
         if task.cancelled():
@@ -239,6 +246,7 @@ class WebSerialSLCANInterface(Interface):
             return
         self._closed = True
         self._cancel_worker_tasks()
+        self._tx.abort_all(self._closed_error)
         self._drain_rx_queue()
         self._rx_queue.put_nowait(unblock)
         self._close_port()
@@ -275,9 +283,10 @@ class WebSerialSLCANInterface(Interface):
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            if self._failure is not None:
-                raise ClosedError(f"WebSerial SLCAN interface {self._name} failed") from self._failure
-            raise ClosedError(f"WebSerial SLCAN interface {self._name} closed")
+            raise self._closed_error()
+
+    def _closed_error(self) -> ClosedError:
+        return closed_error(f"WebSerial SLCAN interface {self._name}", self._failure)
 
     def _drain_rx_queue(self) -> None:
         try:

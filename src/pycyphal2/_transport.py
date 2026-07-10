@@ -20,6 +20,11 @@ SUBJECT_ID_MODULUS_32bit = 4294954663  # Incompatible with Cyphal/CAN and Cyphal
 class SubjectWriter(Closable):
     @abstractmethod
     async def __call__(self, deadline: Instant, priority: Priority, message: bytes | memoryview) -> None:
+        """
+        Send one message on the subject. Returning means every frame of the transfer has been handed over to the
+        OS or the driver on at least one interface; implementations that queue internally must await that handover.
+        Raises :class:`SendError` if the message could not be handed over before the deadline.
+        """
         raise NotImplementedError
 
 

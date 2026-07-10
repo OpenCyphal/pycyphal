@@ -11,8 +11,9 @@ import socket
 import struct
 import sys
 
-from .._api import ClosedError, Instant
-from ._interface import Filter, Interface, TimestampedFrame
+from .._api import ClosedError, Instant, SendError
+from ._interface import Filter, Interface, TimestampedFrame, closed_error
+from ._tx import TxQueue
 
 if sys.platform != "linux" or not hasattr(socket, "AF_CAN"):
     raise ImportError("SocketCAN is available only on Linux with AF_CAN support")
@@ -44,8 +45,7 @@ class SocketCANInterface(Interface):
             self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)
         self._closed = False
         self._failure: BaseException | None = None
-        self._tx_seq = 0
-        self._tx_queue: asyncio.PriorityQueue[tuple[int, int, int, bytes]] = asyncio.PriorityQueue()
+        self._tx = TxQueue()
         self._tx_task: asyncio.Task[None] | None = None
 
     @property
@@ -72,25 +72,17 @@ class SocketCANInterface(Interface):
             )
         self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FILTER, bytes(packed))
 
-    def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> None:
+    def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> asyncio.Future[None]:
         self._raise_if_closed()
         if self._tx_task is None:
             self._tx_task = asyncio.get_running_loop().create_task(self._tx_loop())
             self._tx_task.add_done_callback(self._on_task_done)
-        for chunk in data:
-            self._tx_seq += 1
-            self._tx_queue.put_nowait((id, self._tx_seq, deadline.ns, bytes(chunk)))
+        return self._tx.push(id, (bytes(chunk) for chunk in data), deadline)
 
     def purge(self) -> None:
         if self._closed:
             return
-        dropped = 0
-        try:
-            while True:
-                self._tx_queue.get_nowait()
-                dropped += 1
-        except asyncio.QueueEmpty:
-            pass
+        dropped = self._tx.abort_all(lambda: SendError(f"SocketCAN interface {self._name} tx purged"))
         if dropped > 0:
             _logger.debug("SocketCAN purge iface=%s dropped=%d", self._name, dropped)
 
@@ -117,6 +109,7 @@ class SocketCANInterface(Interface):
         if self._tx_task is not None:
             self._tx_task.cancel()
             self._tx_task = None
+        self._tx.abort_all(self._closed_error)
         self._sock.close()
 
     def __repr__(self) -> str:
@@ -125,36 +118,39 @@ class SocketCANInterface(Interface):
     async def _tx_loop(self) -> None:
         loop = asyncio.get_running_loop()
         while not self._closed:
-            try:
-                identifier, seq, deadline_ns, payload = await self._tx_queue.get()
-            except asyncio.CancelledError:
-                raise
+            entry = await self._tx.pop()
             if self._closed:
-                return
-            timeout = (deadline_ns - Instant.now().ns) * 1e-9
+                return  # close() already failed every pending transfer.
+            job = entry.job
+            if job.settled:
+                continue  # Tail of an aborted transfer.
+            timeout = (job.deadline.ns - Instant.now().ns) * 1e-9
             if timeout <= 0.0:
-                _logger.debug("SocketCAN tx drop expired iface=%s id=%08x", self._name, identifier)
+                _logger.debug("SocketCAN tx drop expired iface=%s id=%08x", self._name, entry.id)
+                job.abort(SendError(f"SocketCAN interface {self._name} tx deadline expired"))
                 continue
             try:
-                frame = self._encode(identifier, payload)
+                frame = self._encode(entry.id, entry.payload)
             except ValueError as ex:
-                # An unencodable frame (e.g. oversized on a Classic-only interface) is a single bad
-                # frame, not an interface failure: drop it instead of letting it kill the TX task.
-                _logger.warning("SocketCAN tx drop unencodable iface=%s id=%08x: %s", self._name, identifier, ex)
+                # An unencodable frame (e.g. oversized on Classic CAN) dooms its transfer, not the interface.
+                _logger.warning("SocketCAN tx drop unencodable iface=%s id=%08x: %s", self._name, entry.id, ex)
+                job.abort(SendError(str(ex)))
                 continue
             try:
                 await asyncio.wait_for(loop.sock_sendall(self._sock, frame), timeout=timeout)
             except asyncio.TimeoutError:
-                self._tx_queue.put_nowait((identifier, seq, deadline_ns, payload))
+                self._tx.requeue(entry)  # Still owed; the deadline is rechecked on the next pop.
                 await asyncio.sleep(0.001)
             except OSError as ex:
                 if self._is_transient_tx_error(ex):
                     _logger.debug("SocketCAN tx retry iface=%s err=%s", self._name, ex)
-                    self._tx_queue.put_nowait((identifier, seq, deadline_ns, payload))
+                    self._tx.requeue(entry)
                     await asyncio.sleep(0.001)
                     continue
                 self._fail(ex)
                 return
+            else:
+                job.complete_one()
 
     def _read_iface_mtu(self) -> int:
         return int(Path(f"/sys/class/net/{self._name}/mtu").read_text().strip())
@@ -175,9 +171,10 @@ class SocketCANInterface(Interface):
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            if self._failure is not None:
-                raise ClosedError(f"SocketCAN interface {self._name} failed") from self._failure
-            raise ClosedError(f"SocketCAN interface {self._name} closed")
+            raise self._closed_error()
+
+    def _closed_error(self) -> ClosedError:
+        return closed_error(f"SocketCAN interface {self._name}", self._failure)
 
     @staticmethod
     def _is_transient_tx_error(ex: OSError) -> bool:

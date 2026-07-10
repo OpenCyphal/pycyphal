@@ -7,12 +7,13 @@ from pathlib import Path
 import sys
 import threading
 import time
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
 
-from pycyphal2 import ClosedError, Instant, Priority
+from pycyphal2 import ClosedError, Instant, Priority, SendError
 from pycyphal2._transport import TransportArrival
 from pycyphal2.can import CANTransport, Filter, TimestampedFrame
 from tests.can._support import wait_for
@@ -1250,11 +1251,16 @@ async def test_unit_purge_partial() -> None:
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
-        itf.enqueue(0x00020001, [memoryview(b"a")], Instant.now() + 60.0)
-        itf.enqueue(0x00020002, [memoryview(b"b")], Instant.now() + 60.0)
-        itf.enqueue(0x00020003, [memoryview(b"c")], Instant.now() + 60.0)
+        futures = [
+            itf.enqueue(0x00020001, [memoryview(b"a")], Instant.now() + 60.0),
+            itf.enqueue(0x00020002, [memoryview(b"b")], Instant.now() + 60.0),
+            itf.enqueue(0x00020003, [memoryview(b"c")], Instant.now() + 60.0),
+        ]
         itf.purge()
-        assert itf._tx_queue.empty()
+        assert itf._tx.qsize() == 0
+        for fut in futures:
+            with pytest.raises(SendError):
+                await fut
     finally:
         itf.close()
 
@@ -1371,6 +1377,32 @@ async def test_unit_multiple_close_with_failure() -> None:
     itf.close()
     itf.close()
     itf.close()
+
+
+async def test_unit_close_does_not_deadlock_on_a_dying_rx_thread() -> None:
+    """
+    The RX thread sends its last gate notification while still alive, and nothing notifies once it has died,
+    so a close() sampling the predicate at that instant must not wait for a notification that never arrives.
+    """
+    mock_bus = MagicMock(spec=_can.BusABC)
+    mock_bus.recv.side_effect = _can.CanError("fail")
+    mock_bus.channel_info = "mock:dying-rx"
+    itf = PythonCANInterface(mock_bus)
+    with pytest.raises(ClosedError):
+        await asyncio.wait_for(itf.receive(), timeout=2.0)
+
+    itf._rx_thread.join(timeout=5.0)  # The thread has run its finally block and is gone.
+    itf._closed = False  # Re-arm close() so that it takes the admin path again.
+    itf._rx_thread = cast(threading.Thread, SimpleNamespace(is_alive=lambda: True))  # ...but it claims otherwise.
+
+    closed = threading.Event()
+
+    def close_and_signal() -> None:
+        itf.close()
+        closed.set()
+
+    threading.Thread(target=close_and_signal, daemon=True).start()
+    assert closed.wait(timeout=5.0), "close() deadlocked waiting on a thread that had already exited"
 
 
 async def test_unit_tx_os_error_fails_interface() -> None:
