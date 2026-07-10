@@ -1,10 +1,4 @@
-"""Hash and CRC utilities"""
-
 from __future__ import annotations
-
-# =====================================================================================================================
-# CRC-32C (Castagnoli)
-# =====================================================================================================================
 
 CRC32C_INITIAL = 0xFFFFFFFF
 CRC32C_OUTPUT_XOR = 0xFFFFFFFF
@@ -59,10 +53,6 @@ def crc32c_full(data: bytes | memoryview) -> int:
     return crc32c_add(CRC32C_INITIAL, data) ^ CRC32C_OUTPUT_XOR
 
 
-# =====================================================================================================================
-# CRC-16/CCITT-FALSE
-# =====================================================================================================================
-
 CRC16CCITT_FALSE_INITIAL = 0xFFFF
 CRC16CCITT_FALSE_RESIDUE = 0x0000
 # fmt: off
@@ -103,10 +93,7 @@ def crc16ccitt_false_full(data: bytes | memoryview) -> int:
     return crc16ccitt_false_add(CRC16CCITT_FALSE_INITIAL, data)
 
 
-# =====================================================================================================================
 # rapidhash V3
-# =====================================================================================================================
-
 _RAPID_MASK = 0xFFFFFFFFFFFFFFFF
 _RAPID_SECRET = (
     0x2D358DCCAA6C78A5,

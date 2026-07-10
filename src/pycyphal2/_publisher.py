@@ -297,11 +297,6 @@ class PublisherImpl(Publisher):
         _logger.info("Publisher closed for '%s'", self._topic.name)
 
 
-# =====================================================================================================================
-# Response Stream
-# =====================================================================================================================
-
-
 class ResponseStreamImpl(ResponseStream):
     def __init__(
         self,
@@ -367,7 +362,6 @@ class ResponseStreamImpl(ResponseStream):
         hdr: RspBeHeader | RspRelHeader,
         payload: bytes,
     ) -> bool:
-        """Called by the node when a response arrives matching our message_tag."""
         reliable = isinstance(hdr, RspRelHeader)
         if self.closed:
             if not reliable:

@@ -9,8 +9,9 @@ from typing import Any, Awaitable, cast
 
 import pytest
 
-from pycyphal2 import ClosedError, Instant
+from pycyphal2 import ClosedError, Instant, SendError
 from pycyphal2.can import Filter, TimestampedFrame
+from pycyphal2.can._tx import TxEntry, TxJob, TxQueue, new_tx_job
 
 _SOURCE = Path(__file__).resolve().parents[2] / "src/pycyphal2/can/socketcan.py"
 
@@ -57,6 +58,11 @@ class _FakeLoop:
         self.created_tasks.append(task)
         return task
 
+    def create_future(self) -> asyncio.Future[Any]:
+        # These tests patch asyncio.get_running_loop, so the TX machinery reaches this fake loop when it
+        # builds a completion future. asyncio.events holds the unpatched function.
+        return asyncio.events.get_running_loop().create_future()
+
     async def sock_recv(self, _sock: object, _size: int) -> bytes:
         item = self.recv.pop(0)
         if isinstance(item, BaseException):
@@ -72,33 +78,44 @@ class _FakeLoop:
                 raise item
 
 
-class _QueueScript:
+def _entry(id: int, seq: int, deadline_ns: int, payload: bytes) -> TxEntry:
+    return TxEntry(id, seq, payload, new_tx_job(1, Instant(ns=deadline_ns)))
+
+
+class _TxScript:
+    """Stands in for TxQueue, feeding _tx_loop a scripted sequence of entries."""
+
     def __init__(self, iface: object, items: list[object]) -> None:
         self._iface = iface
         self._items = list(items)
-        self.requeued: list[tuple[int, int, int, bytes]] = []
+        self.requeued: list[TxEntry] = []
+        self.popped = 0
+        self.inflight: TxJob | None = None
 
-    async def get(self) -> tuple[int, int, int, bytes]:
+    async def pop(self) -> TxEntry:
         if self._items:
             item = self._items.pop(0)
-            if callable(item):
-                out = item()
-                assert isinstance(out, tuple)
-                return out
-            assert isinstance(item, tuple)
-            return item
+            entry = item() if callable(item) else item
+            assert isinstance(entry, TxEntry)
+            self.inflight = entry.job
+            self.popped += 1
+            return entry
         self._iface._closed = True  # type: ignore[attr-defined]
-        return 0, 0, 0, b""
+        return _entry(0, 0, 0, b"")
 
-    def get_nowait(self) -> tuple[int, int, int, bytes]:
-        if not self._items:
-            raise asyncio.QueueEmpty
-        item = self._items.pop(0)
-        assert isinstance(item, tuple)
-        return item
+    def requeue(self, entry: TxEntry) -> None:
+        self.requeued.append(entry)
 
-    def put_nowait(self, item: tuple[int, int, int, bytes]) -> None:
-        self.requeued.append(item)
+    def abort_all(self, make_error: object) -> int:
+        dropped = 0
+        for item in self._items:
+            if isinstance(item, TxEntry):
+                item.job.abort(cast(Any, make_error)())
+                dropped += 1
+        self._items.clear()
+        if self.inflight is not None:
+            self.inflight.abort(cast(Any, make_error)())
+        return dropped
 
 
 def _make_socket_module() -> tuple[types.SimpleNamespace, list[_FakeRawSocket]]:
@@ -150,8 +167,7 @@ def _make_iface(
     iface._fd = fd
     iface._closed = closed
     iface._failure = failure
-    iface._tx_seq = 0
-    iface._tx_queue = asyncio.PriorityQueue()
+    iface._tx = TxQueue()
     iface._tx_task = None
     return iface
 
@@ -211,21 +227,26 @@ async def test_enqueue_purge_and_close_paths(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
 
     deadline = Instant(ns=10)
-    iface.enqueue(123, [memoryview(b"a")], deadline)
-    iface.enqueue(123, [memoryview(b"b")], deadline)
+    purged_a = iface.enqueue(123, [memoryview(b"a")], deadline)
+    purged_b = iface.enqueue(123, [memoryview(b"b")], deadline)
     assert len(loop.created_tasks) == 1
-    assert iface._tx_seq == 2
-    assert iface._tx_queue.qsize() == 2
+    assert iface._tx.qsize() == 2
 
     iface.purge()
-    assert iface._tx_queue.qsize() == 0
+    assert iface._tx.qsize() == 0
+    for fut in (purged_a, purged_b):
+        with pytest.raises(SendError):
+            await fut
     iface.purge()
 
+    closed_fut = iface.enqueue(123, [memoryview(b"c")], deadline)
     task = iface._tx_task
     assert isinstance(task, _TaskStub)
     iface.close()
     iface.close()
     assert task.cancelled is True
+    with pytest.raises(ClosedError):
+        await closed_fut
 
     closed = _make_iface(module, closed=True)
     closed.purge()
@@ -376,7 +397,8 @@ async def test_tx_loop_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
 
     success = _make_iface(module)
-    success._tx_queue = _QueueScript(success, [(10, 1, 100, b"abc")])
+    success_entry = _entry(10, 1, 100, b"abc")
+    success._tx = _TxScript(success, [success_entry])
     success_loop = _FakeLoop()
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: success_loop)
     monkeypatch.setattr(module.Instant, "now", staticmethod(lambda: Instant(ns=0)))
@@ -389,40 +411,56 @@ async def test_tx_loop_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(module.asyncio, "wait_for", wait_success)
     await success._tx_loop()
     assert success_loop.sent_frames
+    assert success_entry.job.future.result() is None
 
     cancelled = _make_iface(module)
 
     class _CancelledQueue:
-        async def get(self) -> tuple[int, int, int, bytes]:
+        async def pop(self) -> TxEntry:
             raise asyncio.CancelledError
 
-    cancelled._tx_queue = _CancelledQueue()
+    cancelled._tx = _CancelledQueue()
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: _FakeLoop())
     with pytest.raises(asyncio.CancelledError):
         await cancelled._tx_loop()
 
     post_get_close = _make_iface(module)
-    post_get_close._tx_queue = _QueueScript(
-        post_get_close, [lambda: _close_then_return(post_get_close, (11, 1, 100, b"x"))]
+    post_get_close._tx = _TxScript(
+        post_get_close, [lambda: _close_then_return(post_get_close, _entry(11, 1, 100, b"x"))]
     )
-    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: _FakeLoop())
+    post_get_loop = _FakeLoop()
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: post_get_loop)
     await post_get_close._tx_loop()
+    assert post_get_loop.sent_frames == []
+
+    aborted = _make_iface(module)  # The tail of an already-failed transfer is skipped, not sent.
+    aborted_entry = _entry(17, 1, 100, b"x")
+    aborted_entry.job.abort(SendError("already failed"))
+    aborted._tx = _TxScript(aborted, [aborted_entry])
+    aborted_loop = _FakeLoop()
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: aborted_loop)
+    await aborted._tx_loop()
+    assert aborted_loop.sent_frames == []
 
     expired = _make_iface(module)
-    expired._tx_queue = _QueueScript(expired, [(12, 1, 0, b"x")])
+    expired_entry = _entry(12, 1, 0, b"x")
+    expired._tx = _TxScript(expired, [expired_entry])
     monkeypatch.setattr(module.Instant, "now", staticmethod(lambda: Instant(ns=1)))
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: _FakeLoop())
     await expired._tx_loop()
+    with pytest.raises(SendError):
+        await expired_entry.job.future
 
     timeout_zero = _make_iface(module)
-    timeout_zero._tx_queue = _QueueScript(timeout_zero, [(13, 1, 1, b"x")])
+    timeout_zero._tx = _TxScript(timeout_zero, [_entry(13, 1, 1, b"x")])
     times = iter([Instant(ns=0), Instant(ns=2)])
     monkeypatch.setattr(module.Instant, "now", staticmethod(lambda: next(times)))
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: _FakeLoop())
     await timeout_zero._tx_loop()
 
     timeout_retry = _make_iface(module)
-    timeout_retry._tx_queue = _QueueScript(timeout_retry, [(14, 1, 100, b"x")])
+    retry_entry = _entry(14, 1, 100, b"x")
+    timeout_retry._tx = _TxScript(timeout_retry, [retry_entry])
     monkeypatch.setattr(module.Instant, "now", staticmethod(lambda: Instant(ns=0)))
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: _FakeLoop())
 
@@ -438,10 +476,12 @@ async def test_tx_loop_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(module.asyncio, "wait_for", wait_timeout)
     monkeypatch.setattr(module.asyncio, "sleep", sleep_timeout)
     await timeout_retry._tx_loop()
-    assert timeout_retry._tx_queue.requeued == [(14, 1, 100, b"x")]
+    assert timeout_retry._tx.requeued == [retry_entry]
+    assert not retry_entry.job.settled  # Still owed.
 
     transient_retry = _make_iface(module)
-    transient_retry._tx_queue = _QueueScript(transient_retry, [(15, 1, 100, b"x")])
+    transient_entry = _entry(15, 1, 100, b"x")
+    transient_retry._tx = _TxScript(transient_retry, [transient_entry])
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: _FakeLoop())
 
     async def wait_transient(_coro: object, timeout: float) -> None:
@@ -456,10 +496,12 @@ async def test_tx_loop_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(module.asyncio, "wait_for", wait_transient)
     monkeypatch.setattr(module.asyncio, "sleep", sleep_transient)
     await transient_retry._tx_loop()
-    assert transient_retry._tx_queue.requeued == [(15, 1, 100, b"x")]
+    assert transient_retry._tx.requeued == [transient_entry]
+    assert not transient_entry.job.settled
 
     permanent_fail = _make_iface(module)
-    permanent_fail._tx_queue = _QueueScript(permanent_fail, [(16, 1, 100, b"x")])
+    permanent_entry = _entry(16, 1, 100, b"x")
+    permanent_fail._tx = _TxScript(permanent_fail, [permanent_entry])
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: _FakeLoop())
 
     async def wait_permanent(_coro: object, timeout: float) -> None:
@@ -472,6 +514,8 @@ async def test_tx_loop_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     await permanent_fail._tx_loop()
     assert permanent_fail._closed is True
     assert isinstance(permanent_fail._failure, OSError)
+    with pytest.raises(ClosedError):  # A fatal error fails the in-flight transfer.
+        await permanent_entry.job.future
 
     repeated = _make_iface(module)
     repeated._fail(OSError("first"))
@@ -481,9 +525,9 @@ async def test_tx_loop_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     assert repeated._failure is first
 
 
-def _close_then_return(iface: object, item: tuple[int, int, int, bytes]) -> tuple[int, int, int, bytes]:
+def _close_then_return(iface: object, entry: TxEntry) -> TxEntry:
     iface._closed = True  # type: ignore[attr-defined]
-    return item
+    return entry
 
 
 async def test_tx_loop_drops_oversized_classic_frame(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -492,7 +536,9 @@ async def test_tx_loop_drops_oversized_classic_frame(monkeypatch: pytest.MonkeyP
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
 
     iface = _make_iface(module)  # fd=False -> Classic CAN, so a >8-byte payload is unencodable.
-    iface._tx_queue = _QueueScript(iface, [(20, 1, 100, b"0" * 9), (21, 2, 100, b"abc")])
+    oversized = _entry(20, 1, 100, b"0" * 9)
+    ok = _entry(21, 2, 100, b"abc")
+    iface._tx = _TxScript(iface, [oversized, ok])
     loop = _FakeLoop()
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
     monkeypatch.setattr(module.Instant, "now", staticmethod(lambda: Instant(ns=0)))
@@ -505,5 +551,60 @@ async def test_tx_loop_drops_oversized_classic_frame(monkeypatch: pytest.MonkeyP
     await iface._tx_loop()
 
     assert len(loop.sent_frames) == 1  # Oversized frame dropped; the following valid frame still sent.
-    assert iface._tx_queue.requeued == []  # The oversized frame was not re-queued.
+    assert iface._tx.requeued == []  # The oversized frame was not re-queued.
+    with pytest.raises(SendError):
+        await oversized.job.future
+    assert ok.job.future.result() is None
     assert iface._failure is None  # And it was not treated as an interface failure.
+
+
+async def test_expired_frame_aborts_the_whole_transfer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tail of an expired transfer is useless to the far side, so it must not be emitted."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+
+    job = new_tx_job(2, Instant(ns=0))  # Deadline already in the past.
+    head, tail = TxEntry(30, 1, b"aa", job), TxEntry(30, 2, b"bb", job)
+    iface._tx = _TxScript(iface, [head, tail])
+    loop = _FakeLoop()
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
+    monkeypatch.setattr(module.Instant, "now", staticmethod(lambda: Instant(ns=1)))
+
+    await iface._tx_loop()
+
+    assert loop.sent_frames == []
+    assert iface._tx.popped == 2  # The tail was skipped, not left stranded.
+    with pytest.raises(SendError):
+        await job.future
+
+
+async def test_close_resolves_the_in_flight_transfer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A popped-but-unsent transfer must also be failed by close(), or its publisher waits forever."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+
+    sending = asyncio.Event()
+    release = asyncio.Event()
+
+    class _BlockingLoop(_FakeLoop):
+        async def sock_sendall(self, _sock: object, frame: bytes) -> None:
+            self.sent_frames.append(frame)
+            sending.set()
+            await release.wait()
+
+    loop = _BlockingLoop()
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
+
+    future = iface._tx.push(0x10, [b"a", b"b"], Instant.now() + 30.0)
+    task = asyncio.create_task(iface._tx_loop())
+    await asyncio.wait_for(sending.wait(), timeout=5.0)  # Frame 1 is off the queue and mid-send.
+    assert iface._tx.qsize() == 1  # Frame 1 is only reachable as in-flight.
+
+    iface.close()
+    with pytest.raises(ClosedError):
+        await asyncio.wait_for(future, timeout=5.0)
+
+    release.set()
+    await asyncio.wait_for(task, timeout=5.0)

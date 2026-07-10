@@ -4,8 +4,9 @@ import asyncio
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
-from pycyphal2 import ClosedError, Instant
+from pycyphal2 import ClosedError, Instant, SendError
 from pycyphal2.can import Filter, Frame, Interface, TimestampedFrame
+from pycyphal2.can._tx import TxJob, new_tx_job
 from pycyphal2.can._wire import match_filters
 
 
@@ -54,7 +55,7 @@ class MockCANInterface(Interface):
         self.enqueue_history: list[tuple[int, tuple[bytes, ...], Instant]] = []
         self.tx_history: list[Frame] = []
         self.purge_calls = 0
-        self._pending_tx: list[tuple[Frame, Instant]] = []
+        self._pending_tx: list[tuple[int, tuple[bytes, ...], TxJob]] = []
         self._rx_queue: asyncio.Queue[TimestampedFrame | None] = asyncio.Queue()
         self.bus.attach(self)
 
@@ -65,6 +66,11 @@ class MockCANInterface(Interface):
     @property
     def fd(self) -> bool:
         return self._fd
+
+    @property
+    def pending_tx(self) -> int:
+        """Transfers accepted but not yet handed to the media."""
+        return len(self._pending_tx)
 
     def filter(self, filters: Iterable[Filter]) -> None:
         if self.closed:
@@ -79,7 +85,7 @@ class MockCANInterface(Interface):
         self.filters = flt
         self.filter_history.append(list(flt))
 
-    def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> None:
+    def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> asyncio.Future[None]:
         if self.closed:
             raise ClosedError(f"{self._name} closed")
         if self.fail_enqueue_closed:
@@ -90,22 +96,24 @@ class MockCANInterface(Interface):
             raise OSError(f"{self._name} enqueue failed")
         chunks = tuple(bytes(item) for item in data)
         self.enqueue_history.append((id, chunks, deadline))
-        for item in chunks:
-            frame = Frame(id=id, data=item)
-            if self.defer_tx:
-                self._pending_tx.append((frame, deadline))
-            else:
-                self._emit(frame, deadline)
+        job = new_tx_job(len(chunks), deadline)
+        if self.defer_tx:
+            # As in a real backend, the frames reach the media only when the test calls flush_tx().
+            self._pending_tx.append((id, chunks, job))
+        else:
+            self._transmit(id, chunks, job)
+        return job.future
 
     def purge(self) -> None:
         self.purge_calls += 1
-        self._pending_tx.clear()
+        pending, self._pending_tx = self._pending_tx, []
+        for _id, _chunks, job in pending:
+            job.abort(SendError(f"{self._name} tx purged"))
 
     def flush_tx(self) -> None:
-        pending = list(self._pending_tx)
-        self._pending_tx.clear()
-        for frame, deadline in pending:
-            self._emit(frame, deadline)
+        pending, self._pending_tx = self._pending_tx, []
+        for id_, chunks, job in pending:
+            self._transmit(id_, chunks, job)
 
     async def receive(self) -> TimestampedFrame:
         if self.closed:
@@ -128,11 +136,24 @@ class MockCANInterface(Interface):
         if self.closed:
             return
         self.closed = True
+        pending, self._pending_tx = self._pending_tx, []
+        for _id, _chunks, job in pending:
+            job.abort(ClosedError(f"{self._name} closed"))
         self.bus.detach(self)
         self._rx_queue.put_nowait(None)
 
     def __repr__(self) -> str:
         return f"MockCANInterface(name={self._name!r}, fd={self._fd}, closed={self.closed})"
+
+    def _transmit(self, id: int, chunks: tuple[bytes, ...], job: TxJob) -> None:
+        if job.settled:  # Aborted while queued.
+            return
+        if Instant.now().ns >= job.deadline.ns:
+            job.abort(SendError(f"{self._name} tx deadline expired"))
+            return
+        for item in chunks:
+            self._emit(Frame(id=id, data=item), job.deadline)
+            job.complete_one()
 
     def _emit(self, frame: Frame, deadline: Instant) -> None:
         self.tx_history.append(frame)

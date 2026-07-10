@@ -1,5 +1,3 @@
-"""Comprehensive tests for pycyphal2.udp -- Cyphal/UDP transport."""
-
 from __future__ import annotations
 
 import asyncio
@@ -43,14 +41,9 @@ from pycyphal2.udp import (
     _UDPTransportImpl,
 )
 
-# =====================================================================================================================
-# Header Tests
-# =====================================================================================================================
-
 
 class TestHeader:
     def test_roundtrip(self):
-        """Serialize then deserialize; all fields must match."""
         cases = [
             (0, 0, 0, 0, 0),
             (4, 0xDEADBEEF, 0x0200001234567890, 0, 5),
@@ -89,9 +82,7 @@ class TestHeader:
 
     def test_wrong_version(self):
         hdr = bytearray(_header_serialize(4, 42, 12345, 0, 100, 0))
-        # Set version to 3 (clear bit 1, keep bit 0 set, set bit 1 to make version=3)
         hdr[0] = (hdr[0] & 0xE0) | 3  # version=3, keep priority
-        # Re-compute header CRC
         struct.pack_into("<I", hdr, 28, crc32c_full(bytes(hdr[:28])))
         assert _header_deserialize(bytes(hdr)) is None
 
@@ -106,17 +97,11 @@ class TestHeader:
         assert _header_deserialize(b"\x00" * 31) is None
 
     def test_transfer_id_48bit_wrap(self):
-        """transfer_id > 48 bits gets truncated to 48 bits."""
         big_tid = (1 << 48) + 42
         hdr = _header_serialize(0, big_tid, 0, 0, 0, crc32c_full(b""))
         parsed = _header_deserialize(hdr)
         assert parsed is not None
         assert parsed.transfer_id == 42  # Only low 48 bits
-
-
-# =====================================================================================================================
-# TX Segmentation Tests
-# =====================================================================================================================
 
 
 class TestTXSegmentation:
@@ -136,7 +121,6 @@ class TestTXSegmentation:
         assert frames[0][HEADER_SIZE:] == payload
 
     def test_multi_frame(self):
-        """Payload of 350 bytes with MTU 100 -> 4 frames."""
         payload = os.urandom(350)
         frames = _segment_transfer(2, 99, 200, payload, mtu=100)
         assert len(frames) == 4  # ceil(350/100) = 4
@@ -164,7 +148,7 @@ class TestTXSegmentation:
     def test_empty_payload(self):
         frames = _segment_transfer(0, 0, 0, b"", mtu=1400)
         assert len(frames) == 1
-        assert len(frames[0]) == HEADER_SIZE  # Header only, no payload
+        assert len(frames[0]) == HEADER_SIZE
         hdr = _header_deserialize(frames[0][:HEADER_SIZE])
         assert hdr is not None
         assert hdr.frame_payload_offset == 0
@@ -172,13 +156,11 @@ class TestTXSegmentation:
         assert hdr.prefix_crc == crc32c_full(b"")
 
     def test_exact_mtu_boundary(self):
-        """Payload exactly equal to MTU -> single frame."""
         payload = os.urandom(100)
         frames = _segment_transfer(0, 0, 0, payload, mtu=100)
         assert len(frames) == 1
 
     def test_one_byte_over_mtu(self):
-        """Payload one byte over MTU -> two frames."""
         payload = os.urandom(101)
         frames = _segment_transfer(0, 0, 0, payload, mtu=100)
         assert len(frames) == 2
@@ -191,12 +173,10 @@ class TestTXSegmentation:
         assert len(frames[1]) == HEADER_SIZE + 1
 
     def test_large_payload(self):
-        """3.5x MTU -> 4 frames."""
         mtu = 200
-        payload = os.urandom(mtu * 3 + mtu // 2)  # 700 bytes
+        payload = os.urandom(mtu * 3 + mtu // 2)
         frames = _segment_transfer(0, 0, 0, payload, mtu=mtu)
         assert len(frames) == 4  # ceil(700/200) = 4
-        # Reassemble and verify
         reassembled = b""
         for frame in frames:
             reassembled += frame[HEADER_SIZE:]
@@ -209,16 +189,10 @@ class TestTXSegmentation:
         assert frames[0][HEADER_SIZE:] == payload
 
 
-# =====================================================================================================================
-# RX Reassembly Tests
-# =====================================================================================================================
-
-
 class TestRXReassembly:
     def _make_frames(
         self, payload: bytes, mtu: int, sender_uid: int = 1000, transfer_id: int = 42, priority: int = 4
     ) -> list[tuple[_FrameHeader, bytes]]:
-        """Generate (header, chunk) pairs from _segment_transfer output."""
         frames = _segment_transfer(priority, transfer_id, sender_uid, payload, mtu)
         result = []
         for frame in frames:
@@ -259,7 +233,6 @@ class TestRXReassembly:
         frame_pairs = self._make_frames(payload, mtu=100)
         assert len(frame_pairs) == 3
 
-        # Deliver in reverse order
         result = reasm.accept(frame_pairs[2][0], frame_pairs[2][1])
         assert result is None
         result = reasm.accept(frame_pairs[1][0], frame_pairs[1][1])
@@ -269,23 +242,19 @@ class TestRXReassembly:
         assert result.payload == payload
 
     def test_duplicate_frame(self):
-        """Sending the same frame twice should not cause issues."""
         payload = os.urandom(300)
         reasm = _RxReassembler()
         frame_pairs = self._make_frames(payload, mtu=100)
 
-        # Send frame 0 twice
         reasm.accept(frame_pairs[0][0], frame_pairs[0][1])
         reasm.accept(frame_pairs[0][0], frame_pairs[0][1])
 
-        # Complete with remaining frames
         reasm.accept(frame_pairs[1][0], frame_pairs[1][1])
         result = reasm.accept(frame_pairs[2][0], frame_pairs[2][1])
         assert result is not None
         assert result.payload == payload
 
     def test_transfer_id_dedup(self):
-        """A completed transfer should not be delivered again."""
         payload = b"dedup test"
         reasm = _RxReassembler()
         frame_pairs = self._make_frames(payload, mtu=1400)
@@ -293,39 +262,32 @@ class TestRXReassembly:
         result1 = reasm.accept(frame_pairs[0][0], frame_pairs[0][1])
         assert result1 is not None
 
-        # Re-send the same transfer
         result2 = reasm.accept(frame_pairs[0][0], frame_pairs[0][1])
         assert result2 is None  # Dedup
 
     def test_crc_mismatch_first_frame(self):
-        """Corrupted first-frame CRC should be rejected."""
         payload = b"corrupt me"
         reasm = _RxReassembler()
         frame_pairs = self._make_frames(payload, mtu=1400)
         hdr, chunk = frame_pairs[0]
-        # Corrupt the payload chunk
         bad_chunk = bytes([chunk[0] ^ 0xFF]) + chunk[1:]
         result = reasm.accept(hdr, bad_chunk)
         assert result is None
 
     def test_crc_mismatch_reassembled(self):
-        """Corrupted non-first frame should cause full-transfer CRC failure."""
         payload = os.urandom(200)
         reasm = _RxReassembler()
         frame_pairs = self._make_frames(payload, mtu=100)
         assert len(frame_pairs) == 2
 
-        # Good first frame
         reasm.accept(frame_pairs[0][0], frame_pairs[0][1])
 
-        # Corrupted second frame payload
         hdr1, chunk1 = frame_pairs[1]
         bad_chunk = bytes([chunk1[0] ^ 0xFF]) + chunk1[1:]
         result = reasm.accept(hdr1, bad_chunk)
         assert result is None  # CRC mismatch on full payload
 
     def test_interleaved_transfers_same_sender(self):
-        """Two concurrent transfers from the same sender with different transfer_ids."""
         payload_a = b"transfer A"
         payload_b = b"transfer B"
         reasm = _RxReassembler()
@@ -342,7 +304,6 @@ class TestRXReassembly:
         assert result_a.payload == payload_a
 
     def test_interleaved_transfers_multi_frame(self):
-        """Interleaved multi-frame transfers from the same sender."""
         payload_a = os.urandom(200)
         payload_b = os.urandom(200)
         reasm = _RxReassembler()
@@ -362,7 +323,6 @@ class TestRXReassembly:
         assert result_b.payload == payload_b
 
     def test_different_senders(self):
-        """Frames from different senders reassembled independently."""
         payload_x = b"from sender X"
         payload_y = b"from sender Y"
         reasm = _RxReassembler()
@@ -387,7 +347,6 @@ class TestRXReassembly:
     def test_bounds_violation_rejected(self):
         """Frame where offset + chunk_size > transfer_payload_size should be rejected."""
         reasm = _RxReassembler()
-        # Manually create a bad header
         hdr = _FrameHeader(
             priority=4, transfer_id=1, sender_uid=1, frame_payload_offset=5, transfer_payload_size=6, prefix_crc=0
         )
@@ -402,7 +361,6 @@ class TestRXReassembly:
         frames = self._make_frames(payload, mtu=100, transfer_id=42)
         # First frame establishes transfer_payload_size=200
         reasm.accept(frames[0][0], frames[0][1])
-        # Create a frame with different size for same transfer
         bad_hdr = _FrameHeader(
             priority=4,
             transfer_id=42,
@@ -543,11 +501,6 @@ class TestTransferSlot:
         assert result == payload
 
 
-# =====================================================================================================================
-# Multicast Address Tests
-# =====================================================================================================================
-
-
 class TestMulticastAddress:
     def test_subject_zero(self):
         ip, port = _make_subject_endpoint(0)
@@ -576,11 +529,6 @@ class TestMulticastAddress:
         assert ip == str(IPv4Address(expected_int))
 
 
-# =====================================================================================================================
-# UID Generation Tests
-# =====================================================================================================================
-
-
 class TestUID:
     def test_bit_57_set(self):
         uid = eui64()
@@ -594,7 +542,6 @@ class TestUID:
         assert eui64() != 0
 
     def test_unique(self):
-        """Two calls should produce different UIDs (random component)."""
         uid1 = eui64()
         uid2 = eui64()
         assert uid1 != uid2
@@ -602,11 +549,6 @@ class TestUID:
     def test_fits_64_bits(self):
         uid = eui64()
         assert 0 < uid < (1 << 64)
-
-
-# =====================================================================================================================
-# Interface Enumeration Tests
-# =====================================================================================================================
 
 
 class TestInterfaces:
@@ -637,14 +579,8 @@ class TestInterfaces:
         assert iface.address == IPv4Address("127.0.0.1")
 
 
-# =====================================================================================================================
-# Wire Compatibility Tests
-# =====================================================================================================================
-
-
 class TestWireCompatibility:
     def test_header_byte_layout(self):
-        """Verify specific byte positions in a known header."""
         priority = 4
         transfer_id = 0x0000DEADBEEF
         sender_uid = 0x0200001234567890
@@ -678,7 +614,6 @@ class TestWireCompatibility:
         assert struct.unpack_from("<I", hdr, 28)[0] == crc32c_full(hdr[:28])
 
     def test_frame_roundtrip_with_payload(self):
-        """Complete frame (header + payload) serialized and deserialized."""
         payload = b"hello"
         frames = _segment_transfer(4, 0xDEADBEEF, 12345, payload, mtu=1400)
         assert len(frames) == 1
@@ -688,7 +623,6 @@ class TestWireCompatibility:
         assert frame[HEADER_SIZE:] == payload
 
     def test_multiframe_reassembly_matches_segmentation(self):
-        """Segment then reassemble via the RX path; verify byte-identical output."""
         payload = os.urandom(1000)
         mtu = 200
         frames = _segment_transfer(3, 555, 9999, payload, mtu)
@@ -702,11 +636,6 @@ class TestWireCompatibility:
                 result = r
         assert result is not None
         assert result.payload == payload
-
-
-# =====================================================================================================================
-# Integration Tests (real loopback sockets)
-# =====================================================================================================================
 
 
 def _get_loopback_iface() -> Interface:
@@ -725,7 +654,6 @@ def loopback_iface():
 class TestIntegrationPubSub:
     @pytest.mark.asyncio
     async def test_single_frame_pubsub(self):
-        """Two transports on loopback: one publishes, the other subscribes."""
         pub = UDPTransport.new_loopback()
         sub = UDPTransport.new_loopback()
         try:
@@ -749,7 +677,6 @@ class TestIntegrationPubSub:
 
     @pytest.mark.asyncio
     async def test_multi_frame_pubsub(self, loopback_iface):
-        """Send payload larger than MTU, verify correct reassembly."""
         small_iface = Interface(address=loopback_iface.address, mtu_link=608)
         # mtu_cyphal = 508, so payload of 2000 bytes -> 4 frames
         pub = UDPTransport.new(interfaces=[small_iface])
@@ -774,7 +701,6 @@ class TestIntegrationPubSub:
 
     @pytest.mark.asyncio
     async def test_multiple_messages(self):
-        """Send several messages, all received in order."""
         pub = UDPTransport.new_loopback()
         sub = UDPTransport.new_loopback()
         try:
@@ -823,23 +749,18 @@ class TestIntegrationUnicast:
         a = UDPTransport.new_loopback()
         b = UDPTransport.new_loopback()
         try:
-            # B subscribes to subject 50 (to learn A's endpoint)
             subject_received: list[TransportArrival] = []
             b.subject_listen(50, subject_received.append)
 
-            # A registers unicast handler
             unicast_received: list[TransportArrival] = []
             a.unicast_listen(unicast_received.append)
 
-            # A publishes on subject 50
             writer = a.subject_advertise(50)
             await writer(Instant.now() + 2.0, Priority.NOMINAL, b"discover me")
             await asyncio.sleep(0.1)
 
-            # B should have received the subject message and learned A's endpoint
             assert len(subject_received) == 1
 
-            # B unicasts to A
             assert isinstance(a, _UDPTransportImpl)
             assert isinstance(b, _UDPTransportImpl)
             await b.unicast(Instant.now() + 2.0, Priority.HIGH, a._uid, b"unicast hello")
@@ -857,7 +778,6 @@ class TestIntegrationUnicast:
 class TestIntegrationListenerLifecycle:
     @pytest.mark.asyncio
     async def test_listener_close_stops_delivery(self):
-        """After closing a listener, no more messages are delivered to it."""
         pub = UDPTransport.new_loopback()
         sub = UDPTransport.new_loopback()
         try:
@@ -869,12 +789,10 @@ class TestIntegrationListenerLifecycle:
             await asyncio.sleep(0.1)
             assert len(received) == 1
 
-            # Close the listener
             listener.close()
 
             await writer(Instant.now() + 2.0, Priority.NOMINAL, b"after close")
             await asyncio.sleep(0.1)
-            # Should still be 1 (no new messages after close)
             assert len(received) == 1
         finally:
             pub.close()
@@ -1046,7 +964,6 @@ class TestIntegrationRXParity:
 class TestIntegrationSelfSendFilter:
     @pytest.mark.asyncio
     async def test_self_send_filtered(self):
-        """A transport should NOT receive its own multicast messages."""
         t = UDPTransport.new_loopback()
         try:
             received: list[TransportArrival] = []
@@ -1062,7 +979,6 @@ class TestIntegrationSelfSendFilter:
 class TestIntegrationDifferentSubjects:
     @pytest.mark.asyncio
     async def test_messages_isolated_by_subject(self):
-        """Messages on different subjects don't cross-deliver."""
         pub = UDPTransport.new_loopback()
         sub = UDPTransport.new_loopback()
         try:
@@ -1087,25 +1003,14 @@ class TestIntegrationDifferentSubjects:
             sub.close()
 
 
-# =====================================================================================================================
-# Empty Interfaces Tests
-# =====================================================================================================================
-
-
 class TestEmptyInterfaces:
     @pytest.mark.asyncio
     async def test_empty_list_auto_discovers(self):
-        """Empty list is treated as None — auto-discovers interfaces."""
         t = UDPTransport.new(interfaces=[])
         try:
             assert len(t.interfaces) >= 1
         finally:
             t.close()
-
-
-# =====================================================================================================================
-# Async Sendto Tests
-# =====================================================================================================================
 
 
 class TestAsyncSendto:
@@ -1134,7 +1039,6 @@ class TestAsyncSendto:
 
     @pytest.mark.asyncio
     async def test_sendto_delegates_to_loop(self):
-        """Verify _async_sendto delegates to loop.sock_sendto."""
         t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
@@ -1154,7 +1058,6 @@ class TestAsyncSendto:
 
     @pytest.mark.asyncio
     async def test_deadline_exceeded_during_wait(self):
-        """sock_sendto hangs forever, short deadline -> SendError."""
         t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)
         try:
@@ -1163,7 +1066,7 @@ class TestAsyncSendto:
             async def mock_sock_sendto(s, data, addr):
                 await asyncio.sleep(100)
 
-            deadline = Instant.now() + 0.05  # 50ms
+            deadline = Instant.now() + 0.05
             with patch.object(t._loop, "sock_sendto", mock_sock_sendto):
                 with pytest.raises(SendError):
                     await t.async_sendto(sock, b"block", ("127.0.0.1", 9999), deadline)

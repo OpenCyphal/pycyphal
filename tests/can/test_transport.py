@@ -6,7 +6,7 @@ import logging
 import pytest
 
 import pycyphal2
-from pycyphal2 import Instant, Priority
+from pycyphal2 import Instant, Priority, SendError
 from pycyphal2._header import MsgBeHeader
 from pycyphal2.can import CANTransport
 from pycyphal2.can._wire import HEARTBEAT_SUBJECT_ID, TransferKind, make_filter, parse_frame, serialize_transfer
@@ -142,8 +142,11 @@ async def test_collision_intentionally_purges_backend_queue_before_flush() -> No
     writer = transport.subject_advertise(9000)
     payload = MsgBeHeader(topic_log_age=0, topic_evictions=0, topic_hash=1, tag=1).serialize() + bytes(range(16))
 
-    await writer(Instant.now() + 1.0, Priority.NOMINAL, payload)
+    # The publisher stays suspended until the frames reach the media, so it runs as a task here.
+    publish = asyncio.create_task(writer(Instant.now() + 1.0, Priority.NOMINAL, payload))
+    await wait_for(lambda: bool(tx_if.enqueue_history))
     assert tx_if.tx_history == []
+    assert not publish.done()
     old_id = transport.id
 
     collision_id, collision_frames = serialize_transfer(
@@ -160,11 +163,16 @@ async def test_collision_intentionally_purges_backend_queue_before_flush() -> No
 
     assert transport.id != old_id
     assert tx_if.purge_calls >= 1
+    # The queued continuations carry the stale node-ID, so they are dropped.
+    with pytest.raises(SendError):
+        await asyncio.wait_for(publish, timeout=1.0)
     tx_if.flush_tx()
     assert tx_if.tx_history == []
 
-    await writer(Instant.now() + 1.0, Priority.NOMINAL, payload)
+    publish = asyncio.create_task(writer(Instant.now() + 1.0, Priority.NOMINAL, payload))
+    await wait_for(lambda: len(tx_if.enqueue_history) > 1)
     tx_if.flush_tx()
+    await asyncio.wait_for(publish, timeout=1.0)
     assert tx_if.tx_history
     first = parse_frame(tx_if.tx_history[0].id, tx_if.tx_history[0].data)
     assert first is not None

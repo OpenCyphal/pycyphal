@@ -1,5 +1,3 @@
-"""Tests for the subscriber reordering window."""
-
 from __future__ import annotations
 
 import asyncio
@@ -212,7 +210,6 @@ async def test_reorder_no_reordering():
         node=node, remote_id=99, topic=topic, message_tag=1, initial_priority=pycyphal2.Priority.NOMINAL
     )
 
-    # Deliver out-of-order.
     sub.deliver(_make_arrival(0.0, bc, b"m2"), 1002, 99)
     sub.deliver(_make_arrival(0.0, bc, b"m0"), 1000, 99)
     sub.deliver(_make_arrival(0.0, bc, b"m1"), 1001, 99)
@@ -220,7 +217,7 @@ async def test_reorder_no_reordering():
     items = []
     while not sub.queue.empty():
         items.append(expect_arrival(sub.queue.get_nowait()))
-    # Should arrive in delivery order, not tag order.
+    # Delivery order, not tag order.
     assert [i.message for i in items] == [b"m2", b"m0", b"m1"]
 
     sub.close()

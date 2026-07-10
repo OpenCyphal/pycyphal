@@ -1,5 +1,3 @@
-"""Tests for transport-agnostic hash and CRC helpers."""
-
 from __future__ import annotations
 
 from pycyphal2._hash import (

@@ -219,7 +219,7 @@ class Publisher(Closable, ABC):
     Represents the intent to send messages on a topic.
 
     Calling the publisher sends one message.
-    By default this is best-effort publication: the message is sent once and only immediate send failures are reported.
+    By default this is best-effort publication: the message is sent once and delivery is not confirmed.
     With ``reliable=True``, the library retransmits until the deadline and waits for acknowledgments from remote
     subscribers.
 
@@ -261,6 +261,9 @@ class Publisher(Closable, ABC):
         Send one message.
         Blocks at most until ``deadline``.
         Raises :class:`SendError` if the message could not be sent before the deadline.
+
+        Returning means the message has been handed over to the network, not that anyone received it.
+        The call waits for that handover, so a congested network applies backpressure to the publisher.
 
         If ``reliable`` is false, the message is sent once.
         If ``reliable`` is true, the library retransmits until ``deadline`` leveraging :attr:`ack_timeout`.
@@ -552,21 +555,17 @@ class Node(Closable, ABC):
         """
         from ._node import NodeImpl
 
-        # Add random suffix if requested or generate pure random home.
         # Leading/trailing separators will be normalized away.
         home = home.strip() or "/"
         if home.endswith("/"):
             uid = transport.uid if hasattr(transport, "uid") else eui64()
             home += f"{uid:016x}"
 
-        # Initialize the namespace: if not given explicitly, read it from the standard environment.
         namespace = namespace.strip() or os.getenv("CYPHAL_NAMESPACE", "").strip()
 
-        # Construct the node.
         node = NodeImpl(transport, home=home, namespace=namespace)
         _logger.info("Constructed %s", node)
 
-        # Set up default name remapping.
         try:
             node.remap(os.getenv("CYPHAL_REMAP", ""))
         except Exception as ex:

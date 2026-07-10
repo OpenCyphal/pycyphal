@@ -1,5 +1,3 @@
-"""Tests for reliable publish, request/response, gossip handling, and scout responses."""
-
 from __future__ import annotations
 
 import asyncio
@@ -56,11 +54,6 @@ class _CountingFailingWriter(pycyphal2.SubjectWriter):
         self.closed = True
 
 
-# =====================================================================================================================
-# Reliable Publish
-# =====================================================================================================================
-
-
 async def test_reliable_publish_no_associations():
     """Reliable publish with no known associations needs at least one ACK before deadline."""
     net = MockNetwork()
@@ -82,7 +75,6 @@ async def test_reliable_publish_no_associations():
 
 
 async def test_reliable_publish_unacked_deadline():
-    """Reliable publish with unresponsive association should raise DeliveryError."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -100,7 +92,6 @@ async def test_reliable_publish_unacked_deadline():
 
 
 async def test_reliable_publish_with_ack():
-    """Reliable publish should succeed when ACK is received."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -108,23 +99,19 @@ async def test_reliable_publish_with_ack():
 
     topic = list(node.topics_by_name.values())[0]
 
-    # Pre-register an association.
     topic.associations[42] = Association(remote_id=42, last_seen=0.0)
 
-    # Start reliable publish in background.
     async def publish_and_ack() -> None:
-        # Start publish.
         pub_task = asyncio.create_task(pub(pycyphal2.Instant.now() + 2.0, b"data", reliable=True))
         await asyncio.sleep(0.01)
 
-        # Find the tracker and simulate ACK.
         for tag, tracker in topic.publish_futures.items():
             tracker.remaining.discard(42)
             tracker.acknowledged = True
             tracker.ack_event.set()
             break
 
-        await pub_task  # Should succeed now.
+        await pub_task
 
     await publish_and_ack()
 
@@ -261,7 +248,6 @@ async def test_gossip_reallocation_to_occupied_subject_preserves_writer():
 
 
 async def test_reliable_publish_closed_publisher():
-    """Publishing on a closed publisher should raise SendError."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -275,7 +261,6 @@ async def test_reliable_publish_closed_publisher():
 
 
 async def test_publisher_priority_and_ack_timeout():
-    """Publisher priority and ack_timeout properties should work."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -296,13 +281,7 @@ async def test_publisher_priority_and_ack_timeout():
     node.close()
 
 
-# =====================================================================================================================
-# Request / Response
-# =====================================================================================================================
-
-
 async def test_request_creates_stream():
-    """request() should return a ResponseStream and register it."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -365,13 +344,7 @@ async def test_request_retransmits_and_surfaces_delivery_failure():
     node.close()
 
 
-# =====================================================================================================================
-# Dedup State
-# =====================================================================================================================
-
-
 def test_dedup_state_basic():
-    """DedupState should accept new tags and reject duplicates."""
     ds = DedupState()
     assert ds.check_and_record(100, 1.0) is True
     assert ds.check_and_record(100, 1.0) is False  # duplicate
@@ -380,20 +353,12 @@ def test_dedup_state_basic():
 
 
 def test_dedup_state_frontier_prune():
-    """DedupState should prune old tags beyond the history window."""
     ds = DedupState()
-    # Add many tags.
     for i in range(DEDUP_HISTORY + 100):
         assert ds.check_and_record(i, 1.0) is True
 
-    # Very old tags should have been pruned and re-accepted.
-    # Tag 0 was far below frontier, so it was pruned.
+    # Tag 0 was far below frontier, so it was pruned and is re-accepted.
     assert ds.check_and_record(0, 1.0) is True
-
-
-# =====================================================================================================================
-# Gossip Handling via Transport Message
-# =====================================================================================================================
 
 
 async def test_gossip_known_topic_divergence():
@@ -422,7 +387,6 @@ async def test_gossip_known_topic_divergence():
     )
     node.on_subject_arrival(node.broadcast_subject_id, arrival)
 
-    # Topic should have been reallocated (evictions changed).
     # The exact outcome depends on CRDT logic.
     await asyncio.sleep(0.02)
 
@@ -442,11 +406,9 @@ async def test_gossip_unknown_topic_collision():
     old_sid = topic_a.subject_id(tr.subject_id_modulus)
 
     # Craft a gossip from a different topic that happens to claim the same subject-ID.
-    # Use a fake hash that maps to the same subject-ID with evictions=0.
     fake_hash = topic_a.hash + 1  # different hash
     fake_evictions = 0
     modulus = tr.subject_id_modulus
-    # Adjust evictions until we collide.
     while compute_subject_id(fake_hash, fake_evictions, modulus) != old_sid:
         fake_evictions += 1
         if fake_evictions > 10000:
@@ -468,16 +430,10 @@ async def test_gossip_unknown_topic_collision():
         )
         node.on_subject_arrival(node.broadcast_subject_id, arrival)
         await asyncio.sleep(0.02)
-        # Our topic should have been reallocated.
         assert topic_a.subject_id(tr.subject_id_modulus) != old_sid or topic_a.evictions > 0
 
     pub.close()
     node.close()
-
-
-# =====================================================================================================================
-# Scout Response
-# =====================================================================================================================
 
 
 async def test_scout_triggers_gossip_response():
@@ -490,7 +446,6 @@ async def test_scout_triggers_gossip_response():
     node = new_node(tr, home="n1")
     pub = node.advertise("/sensor/temp/data")
 
-    # Send a scout message asking for "sensor/*/data".
     pattern = "sensor/*/data"
     scout_hdr = ScoutHeader(pattern_len=len(pattern))
     scout_data = scout_hdr.serialize() + pattern.encode("utf-8")
@@ -502,7 +457,6 @@ async def test_scout_triggers_gossip_response():
     )
     node.dispatch_arrival(arrival, subject_id=node.broadcast_subject_id, unicast=False)
 
-    # Give the response tasks time to run.
     await asyncio.sleep(0.05)
 
     assert len(requester_arrivals) == 1
@@ -514,13 +468,7 @@ async def test_scout_triggers_gossip_response():
     requester_tr.close()
 
 
-# =====================================================================================================================
-# Message ACK/NACK Dispatch
-# =====================================================================================================================
-
-
 async def test_msg_ack_dispatch():
-    """ACK arriving via unicast should be routed to the publish tracker."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -528,7 +476,6 @@ async def test_msg_ack_dispatch():
 
     topic = list(node.topics_by_name.values())[0]
 
-    # Set up a fake publish tracker.
     tag = topic.next_tag()
     tracker = PublishTracker(
         tag=tag,
@@ -537,7 +484,6 @@ async def test_msg_ack_dispatch():
     )
     topic.publish_futures[tag] = tracker
 
-    # Send a MsgAckHeader via unicast.
     ack_hdr = MsgAckHeader(topic_hash=topic.hash, tag=tag)
     ack_data = ack_hdr.serialize()
     arrival = TransportArrival(
@@ -548,12 +494,11 @@ async def test_msg_ack_dispatch():
     )
     node.on_unicast_arrival(arrival)
 
-    # Tracker should be updated.
     assert tracker.acknowledged is True
     assert 42 not in tracker.remaining
     assert tracker.ack_event.is_set()
 
-    # Association should be created.
+    # ACK auto-creates an association.
     assert 42 in topic.associations
 
     del topic.publish_futures[tag]
@@ -596,13 +541,7 @@ async def test_msg_nack_dispatch():
     node.close()
 
 
-# =====================================================================================================================
-# RSP dispatch
-# =====================================================================================================================
-
-
 async def test_rsp_dispatch_to_stream():
-    """RSP_BE arriving should be routed to the correct response stream."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -618,7 +557,6 @@ async def test_rsp_dispatch_to_stream():
     )
     topic.request_futures[msg_tag] = stream
 
-    # Send RSP_BE.
     rsp_hdr = RspBeHeader(tag=0xFF, seqno=0, topic_hash=topic.hash, message_tag=msg_tag)
     rsp_data = rsp_hdr.serialize() + b"rsp_payload"
     arrival = TransportArrival(
@@ -675,13 +613,7 @@ async def test_rsp_dispatch_routes_by_topic_hash():
     node.close()
 
 
-# =====================================================================================================================
-# Reliable response (Breadcrumb)
-# =====================================================================================================================
-
-
 async def test_breadcrumb_reliable_response_timeout():
-    """Reliable response without ACK should raise DeliveryError."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -703,7 +635,6 @@ async def test_breadcrumb_reliable_response_timeout():
 
 
 async def test_respond_tracker_ack():
-    """RespondTracker should set done on ACK."""
     tracker = RespondTracker(remote_id=1, message_tag=2, topic_hash=3, seqno=4, tag=5)
     assert not tracker.done
     tracker.on_ack(True)
@@ -713,16 +644,10 @@ async def test_respond_tracker_ack():
 
 
 async def test_respond_tracker_nack():
-    """RespondTracker should set nacked on NACK."""
     tracker = RespondTracker(remote_id=1, message_tag=2, topic_hash=3, seqno=4, tag=5)
     tracker.on_ack(False)
     assert tracker.done
     assert tracker.nacked
-
-
-# =====================================================================================================================
-# Reliable message reception and dedup via node dispatch
-# =====================================================================================================================
 
 
 async def test_reliable_msg_sends_ack():
@@ -737,7 +662,6 @@ async def test_reliable_msg_sends_ack():
 
     topic = list(node.topics_by_name.values())[0]
 
-    # Send a MsgRel message.
     hdr = MsgRelHeader(
         topic_log_age=0,
         topic_evictions=topic.evictions,
@@ -753,7 +677,6 @@ async def test_reliable_msg_sends_ack():
     )
     node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), arrival)
 
-    # Give ACK task time to run.
     await asyncio.sleep(0.02)
 
     assert len(remote_arrivals) == 1
@@ -763,7 +686,6 @@ async def test_reliable_msg_sends_ack():
     assert ack_hdr.topic_hash == topic.hash
     assert remote_arrivals[0].priority == pycyphal2.Priority.FAST
 
-    # The subscriber should have received the message.
     assert sub.queue.qsize() == 1
 
     sub.close()
@@ -804,7 +726,6 @@ async def test_reliable_msg_wrong_subject_dropped():
 
 
 async def test_reliable_msg_dedup():
-    """Duplicate reliable messages should be dropped."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -826,11 +747,9 @@ async def test_reliable_msg_dedup():
         message=msg_data,
     )
 
-    # Deliver twice.
     node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), arrival)
     node.on_subject_arrival(topic.subject_id(tr.subject_id_modulus), arrival)
 
-    # Should only get one message.
     assert sub.queue.qsize() == 1
 
     sub.close()
@@ -917,11 +836,6 @@ async def test_reliable_msg_ordered_late_drop_sends_no_ack_or_nack():
     node.close()
 
 
-# =====================================================================================================================
-# Reliable response ACK/NACK
-# =====================================================================================================================
-
-
 async def test_reliable_rsp_sends_ack_with_response_priority():
     net = MockNetwork()
     remote_tr = MockTransport(node_id=42, network=net)
@@ -957,13 +871,7 @@ async def test_reliable_rsp_sends_ack_with_response_priority():
     remote_tr.close()
 
 
-# =====================================================================================================================
-# RSP ACK/NACK dispatch
-# =====================================================================================================================
-
-
 async def test_rsp_ack_dispatch():
-    """RSP_ACK should be dispatched to the respond tracker."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -1094,13 +1002,7 @@ async def test_closed_response_stream_replays_ack_and_nacks_new_reliable_respons
     node.close()
 
 
-# =====================================================================================================================
-# Edge cases
-# =====================================================================================================================
-
-
 async def test_drop_short_message():
-    """Messages shorter than HEADER_SIZE should be dropped."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -1116,7 +1018,6 @@ async def test_drop_short_message():
 
 
 async def test_drop_unknown_type():
-    """Messages with unknown type should be dropped."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -1134,7 +1035,6 @@ async def test_drop_unknown_type():
 
 
 async def test_msg_for_unknown_topic_dropped():
-    """Messages for unknown topic hashes should be dropped."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")

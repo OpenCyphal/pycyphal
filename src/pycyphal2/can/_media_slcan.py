@@ -15,7 +15,7 @@ _CR = 0x0D  # ACK / carriage return
 _LF = 0x0A
 _BEL = 0x07  # NACK / bell
 _MAX_LINE_LENGTH = 256
-_STRIP_CHARS = b" \t\r\n\x07\x03"
+_STRIP_CHARS = b" \t\r\n\x07\x03"  # Whitespace plus the BEL and ETX control bytes some adapters emit.
 
 _CMD_TERMINATOR = bytes([_CR])
 _CMD_CLOSE = b"C"
@@ -120,7 +120,6 @@ class SLCANParser:
 
 def _parse_line(line: bytes) -> Frame | None:
     # Based on the original PyUAVCAN/PyDroneCAN implementation.
-    # Strips surrounding whitespace and control characters like BEL/ETX.
     line = line.strip(_STRIP_CHARS)
     if not line:
         return None

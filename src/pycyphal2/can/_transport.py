@@ -290,25 +290,34 @@ class _CANTransportImpl(CANTransport):
             fd=self._fd,
         )
         views = tuple(memoryview(frm) for frm in frames)
-        accepted = 0
+        pending: set[asyncio.Future[None]] = set()
         errors: list[BaseException] = []
         for itf in tuple(self._interfaces):
             try:
-                itf.enqueue(identifier, views, deadline)
+                pending.add(itf.enqueue(identifier, views, deadline))
             except ClosedError as ex:
                 errors.append(ex)
                 self._drop_interface(itf, ex)
             except Exception as ex:  # pragma: no cover - exercised via tests with injected failures
                 errors.append(ex)
                 _logger.debug("CAN iface %s tx rejected: %s", itf.name, ex)
-            else:
-                accepted += 1
-        if accepted > 0:
-            return
+        # asyncio.wait() never cancels its inputs, so the slower interfaces keep transmitting in the background.
+        # Resolved futures are inspected before giving up on the deadline: an interface that handed the transfer
+        # over exactly at the deadline did send it, and reporting that as a failure would invite a retransmission.
+        while pending:
+            timeout = (deadline.ns - Instant.now().ns) * 1e-9
+            done, pending = await asyncio.wait(pending, timeout=max(timeout, 0.0), return_when=asyncio.FIRST_COMPLETED)
+            for fut in done:
+                failure = fut.exception()
+                if failure is None:
+                    return
+                errors.append(failure)
+            if timeout <= 0.0:
+                break
         first_error = errors[0] if errors else None
         if self._closed:
             raise ClosedError("CAN transport closed") from first_error
-        raise SendError("CAN transfer rejected by all interfaces") from first_error
+        raise SendError("CAN transfer could not be sent on any interface") from first_error
 
     def remove_subject_listener(self, subject_id: int, handler: Callable[[TransportArrival], None]) -> None:
         if self._subject_handlers.get(subject_id) is not handler:
