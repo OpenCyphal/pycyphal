@@ -1,5 +1,3 @@
-"""Tests for publish/subscribe: message delivery, patterns, liveness, and cleanup."""
-
 from __future__ import annotations
 
 import asyncio
@@ -13,13 +11,8 @@ from pycyphal2._node import resolve_name
 from tests.mock_transport import MockTransport, MockNetwork
 from tests.typing_helpers import new_node, subscribe_impl
 
-# =====================================================================================================================
-# Basic publish and subscribe
-# =====================================================================================================================
-
 
 async def test_basic_best_effort_pubsub():
-    """Publish a message best-effort and receive it on a subscriber."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -62,7 +55,7 @@ async def test_node_close_unblocks_pending_subscriber():
     node = new_node(tr, home="test_node")
     sub = node.subscribe("my/topic")
     task = asyncio.create_task(sub.__anext__())
-    await asyncio.sleep(0)  # Let the task start awaiting on the queue.
+    await asyncio.sleep(0)
 
     node.close()
 
@@ -83,8 +76,8 @@ async def test_gossip_rejects_malformed_names():
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
     try:
-        node.subscribe(">")  # Match-all pattern: the name guard is then the only thing that can reject.
-        # Sanity: a valid normalized name IS created through this subscriber, proving the path is live.
+        node.subscribe(">")
+        # Control: a valid normalized name IS created through this subscriber, proving the path is live.
         good = node.topic_subscribe_if_matching("sensor/temp", rapidhash("sensor/temp"), 0, 0, 0.0)
         assert good is not None
 
@@ -97,7 +90,7 @@ async def test_gossip_rejects_malformed_names():
 
 
 async def test_publish_multiple_messages():
-    """Multiple messages should arrive in order."""
+    """Multiple messages arrive in order."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -118,7 +111,6 @@ async def test_publish_multiple_messages():
 
 
 async def test_publish_empty_message():
-    """Empty payload should be delivered correctly."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -136,7 +128,6 @@ async def test_publish_empty_message():
 
 
 async def test_arrival_has_breadcrumb():
-    """Each arrival should carry a breadcrumb with remote_id, topic, and tag."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -147,7 +138,7 @@ async def test_arrival_has_breadcrumb():
     await pub(pycyphal2.Instant.now() + 1.0, b"data")
     arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
     assert arrival.breadcrumb is not None
-    assert arrival.breadcrumb.remote_id == 1  # sender's node_id
+    assert arrival.breadcrumb.remote_id == 1
     assert arrival.breadcrumb.topic.name is not None
     assert isinstance(arrival.breadcrumb.tag, int)
 
@@ -156,13 +147,7 @@ async def test_arrival_has_breadcrumb():
     node.close()
 
 
-# =====================================================================================================================
-# Multiple subscribers on same topic
-# =====================================================================================================================
-
-
 async def test_multiple_subscribers_same_topic():
-    """Two subscribers on the same topic should both receive each message."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -185,7 +170,6 @@ async def test_multiple_subscribers_same_topic():
 
 
 async def test_multiple_subscribers_independent_queues():
-    """Each subscriber should maintain its own queue."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -197,13 +181,11 @@ async def test_multiple_subscribers_independent_queues():
     await pub(pycyphal2.Instant.now() + 1.0, b"msg1")
     await pub(pycyphal2.Instant.now() + 1.0, b"msg2")
 
-    # Consume from sub1 only.
     arr1a = await asyncio.wait_for(sub1.__anext__(), timeout=1.0)
     arr1b = await asyncio.wait_for(sub1.__anext__(), timeout=1.0)
     assert arr1a.message == b"msg1"
     assert arr1b.message == b"msg2"
 
-    # sub2 should still have both queued.
     arr2a = await asyncio.wait_for(sub2.__anext__(), timeout=1.0)
     arr2b = await asyncio.wait_for(sub2.__anext__(), timeout=1.0)
     assert arr2a.message == b"msg1"
@@ -215,18 +197,12 @@ async def test_multiple_subscribers_independent_queues():
     node.close()
 
 
-# =====================================================================================================================
-# Pattern subscriber
-# =====================================================================================================================
-
-
 async def test_pattern_subscriber_star():
-    """A subscriber with '*' should match topics in the same segment position."""
+    """A '*' subscriber matches a single segment in that position."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
 
-    # Advertise first so the topic exists, then subscribe with a pattern that matches it.
     pub = node.advertise("~/sensor/data")
     sub = node.subscribe("test_node/*/data")
 
@@ -240,12 +216,11 @@ async def test_pattern_subscriber_star():
 
 
 async def test_pattern_subscriber_chevron():
-    """A subscriber with '>' should match all remaining segments."""
+    """A trailing '>' subscriber matches all remaining segments."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
 
-    # Advertise first so the topic exists, then subscribe with a chevron pattern.
     pub = node.advertise("~/deep/nested/topic")
     sub = node.subscribe("test_node/>")
 
@@ -259,7 +234,6 @@ async def test_pattern_subscriber_chevron():
 
 
 async def test_pattern_subscriber_no_match():
-    """A pattern subscriber should not receive messages from non-matching topics."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -269,7 +243,6 @@ async def test_pattern_subscriber_no_match():
 
     await pub(pycyphal2.Instant.now() + 1.0, b"no_match")
 
-    # The subscriber should not receive anything.
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(sub.__anext__(), timeout=0.05)
 
@@ -279,7 +252,7 @@ async def test_pattern_subscriber_no_match():
 
 
 async def test_pattern_subscriber_substitutions():
-    """Substitutions should report which segments were captured."""
+    """substitutions() reports which topic segments a wildcard captured."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -300,7 +273,7 @@ async def test_pattern_subscriber_substitutions():
 
 
 async def test_pattern_subscriber_verbatim_flag():
-    """Verbatim subscribers have no wildcards; pattern subscribers do."""
+    """A subscriber is verbatim iff it has no wildcards."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -316,19 +289,13 @@ async def test_pattern_subscriber_verbatim_flag():
     node.close()
 
 
-# =====================================================================================================================
-# Subscriber timeout (liveness)
-# =====================================================================================================================
-
-
 async def test_subscriber_timeout_raises_liveness_error():
-    """Setting a finite timeout and not sending messages should raise LivenessError."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
 
     sub = node.subscribe("my/topic")
-    sub.timeout = 0.05  # 50 ms
+    sub.timeout = 0.05
 
     with pytest.raises(LivenessError):
         await sub.__anext__()
@@ -338,7 +305,7 @@ async def test_subscriber_timeout_raises_liveness_error():
 
 
 async def test_subscriber_timeout_default_infinite():
-    """By default, timeout is infinite (no LivenessError)."""
+    """The default timeout is infinite, so no LivenessError fires."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -346,7 +313,6 @@ async def test_subscriber_timeout_default_infinite():
     sub = node.subscribe("my/topic")
     assert sub.timeout == float("inf")
 
-    # With infinite timeout, __anext__ should block indefinitely; verify with a short wait.
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(sub.__anext__(), timeout=0.05)
 
@@ -355,7 +321,7 @@ async def test_subscriber_timeout_default_infinite():
 
 
 async def test_subscriber_timeout_resets_on_message():
-    """Receiving a message should not interfere with the timeout for the next call."""
+    """The liveness timeout applies per call, so a received message does not disarm it for the next."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -364,12 +330,10 @@ async def test_subscriber_timeout_resets_on_message():
     sub = node.subscribe("my/topic")
     sub.timeout = 0.5
 
-    # Send a message and receive it before timeout.
     await pub(pycyphal2.Instant.now() + 1.0, b"ok")
     arrival = await asyncio.wait_for(sub.__anext__(), timeout=1.0)
     assert arrival.message == b"ok"
 
-    # Now wait without messages -- should eventually raise LivenessError.
     with pytest.raises(LivenessError):
         await sub.__anext__()
 
@@ -378,13 +342,7 @@ async def test_subscriber_timeout_resets_on_message():
     node.close()
 
 
-# =====================================================================================================================
-# Publisher close
-# =====================================================================================================================
-
-
 async def test_publisher_close_decrements_pub_count():
-    """Closing a publisher should decrement the topic's pub_count."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -400,7 +358,6 @@ async def test_publisher_close_decrements_pub_count():
 
 
 async def test_publisher_close_idempotent():
-    """Closing a publisher twice should be safe."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -410,14 +367,13 @@ async def test_publisher_close_idempotent():
     pub.close()
     assert topic.pub_count == 0
 
-    pub.close()  # second close should be harmless
+    pub.close()
     assert topic.pub_count == 0
 
     node.close()
 
 
 async def test_publisher_closed_rejects_publish():
-    """Publishing on a closed publisher should raise SendError."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -432,7 +388,6 @@ async def test_publisher_closed_rejects_publish():
 
 
 async def test_publisher_close_topic_becomes_implicit():
-    """When all publishers close, the topic should become implicit."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -447,13 +402,7 @@ async def test_publisher_close_topic_becomes_implicit():
     node.close()
 
 
-# =====================================================================================================================
-# Subscriber close
-# =====================================================================================================================
-
-
 async def test_subscriber_close_removes_from_root():
-    """Closing a subscriber should remove it from its root's subscriber list."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -471,7 +420,6 @@ async def test_subscriber_close_removes_from_root():
 
 
 async def test_subscriber_close_cleans_up_empty_root():
-    """Closing the last subscriber should remove the root from the node's index."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -487,20 +435,18 @@ async def test_subscriber_close_cleans_up_empty_root():
 
 
 async def test_subscriber_close_idempotent():
-    """Closing a subscriber twice should be safe."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
 
     sub = node.subscribe("my/topic")
     sub.close()
-    sub.close()  # no error
+    sub.close()
 
     node.close()
 
 
 async def test_subscriber_close_stops_iteration():
-    """After close, __anext__ should raise StopAsyncIteration."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -515,7 +461,6 @@ async def test_subscriber_close_stops_iteration():
 
 
 async def test_subscriber_close_pattern_cleans_up():
-    """Closing the last pattern subscriber should remove the root and couplings."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -531,20 +476,14 @@ async def test_subscriber_close_pattern_cleans_up():
 
     sub.close()
     assert resolved_pattern not in node.sub_roots_pattern
-    # Couplings pointing to the removed root should be cleaned up.
     assert not any(c.root.is_pattern for c in topic.couplings)
 
     pub.close()
     node.close()
 
 
-# =====================================================================================================================
-# Two-node publish/subscribe
-# =====================================================================================================================
-
-
 async def test_two_node_pubsub():
-    """Messages published by one node should be received by another node on the same network."""
+    """A message published by one node is received by another node on the same network."""
     net = MockNetwork()
     tr1 = MockTransport(node_id=1, network=net)
     tr2 = MockTransport(node_id=2, network=net)
@@ -565,13 +504,7 @@ async def test_two_node_pubsub():
     node2.close()
 
 
-# =====================================================================================================================
-# Publisher and subscriber properties
-# =====================================================================================================================
-
-
 async def test_publisher_priority():
-    """Publisher priority can be read and set."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -587,7 +520,6 @@ async def test_publisher_priority():
 
 
 async def test_publisher_ack_timeout():
-    """Publisher ack_timeout can be read and set."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -607,7 +539,6 @@ async def test_publisher_ack_timeout():
 
 
 async def test_subscriber_pattern_property():
-    """Subscriber pattern property reflects the resolved name."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -620,13 +551,7 @@ async def test_subscriber_pattern_property():
     node.close()
 
 
-# =====================================================================================================================
-# Subscriber.listen(callback)
-# =====================================================================================================================
-
-
 async def test_listen_sync_callback():
-    """A sync callback should receive every published Arrival."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -639,7 +564,6 @@ async def test_listen_sync_callback():
 
     for i in range(3):
         await pub(pycyphal2.Instant.now() + 1.0, f"msg{i}".encode())
-    # Let the listen loop drain the queue.
     for _ in range(20):
         if len(received) >= 3:
             break
@@ -656,7 +580,6 @@ async def test_listen_sync_callback():
 
 
 async def test_listen_async_callback():
-    """An async callback should be awaited for every published Arrival."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -746,7 +669,6 @@ async def test_listen_non_error_exception_fails_task(caplog: pytest.LogCaptureFi
 
 
 async def test_listen_task_cancellation():
-    """Cancelling the returned task should stop the loop cleanly."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -755,7 +677,6 @@ async def test_listen_task_cancellation():
     received: list[Arrival | Error] = []
     task = sub.listen(received.append)
 
-    # Give the loop a chance to enter its first await.
     await asyncio.sleep(0.01)
     task.cancel()
     results = await asyncio.gather(task, return_exceptions=True)
@@ -767,7 +688,6 @@ async def test_listen_task_cancellation():
 
 
 async def test_listen_close_stops_task_cleanly():
-    """Closing the subscriber should terminate the task with no exception."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")
@@ -785,7 +705,7 @@ async def test_listen_close_stops_task_cleanly():
 
 
 async def test_listen_callback_exception_fails_task(caplog: pytest.LogCaptureFixture) -> None:
-    """A callback that raises should fail the task; the error should be logged."""
+    """A callback that raises fails the task, and the error is logged."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="test_node")

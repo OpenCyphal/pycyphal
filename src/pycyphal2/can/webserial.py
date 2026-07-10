@@ -194,8 +194,8 @@ class WebSerialSLCANInterface(Interface):
 
     async def _init_adapter(self) -> None:
         _logger.info("WebSerial SLCAN setup iface=%s bitrate=%s", self._name, self._bitrate)
-        # Reset an adapter that may be in an unknown state: close, settle, discard whatever it was
-        # forwarding under the old config, then configure and open.
+        # The adapter may be in an unknown state: close it, let it settle, and discard whatever it was
+        # forwarding under the old config before reconfiguring.
         await self._port.write(encode_deinit())
         await asyncio.sleep(_DEINIT_SETTLE)
         await self._purge_input()

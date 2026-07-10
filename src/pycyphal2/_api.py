@@ -555,21 +555,17 @@ class Node(Closable, ABC):
         """
         from ._node import NodeImpl
 
-        # Add random suffix if requested or generate pure random home.
         # Leading/trailing separators will be normalized away.
         home = home.strip() or "/"
         if home.endswith("/"):
             uid = transport.uid if hasattr(transport, "uid") else eui64()
             home += f"{uid:016x}"
 
-        # Initialize the namespace: if not given explicitly, read it from the standard environment.
         namespace = namespace.strip() or os.getenv("CYPHAL_NAMESPACE", "").strip()
 
-        # Construct the node.
         node = NodeImpl(transport, home=home, namespace=namespace)
         _logger.info("Constructed %s", node)
 
-        # Set up default name remapping.
         try:
             node.remap(os.getenv("CYPHAL_REMAP", ""))
         except Exception as ex:

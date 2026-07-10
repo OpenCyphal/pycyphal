@@ -1,5 +1,3 @@
-"""Integration tests: multi-node communication, scout protocol, gossip convergence."""
-
 from __future__ import annotations
 
 import asyncio
@@ -11,7 +9,6 @@ from tests.typing_helpers import new_node
 
 
 async def test_two_nodes_pubsub():
-    """Two nodes communicate via MockNetwork: publisher on node A, subscriber on node B."""
     net = MockNetwork()
     tr_a = MockTransport(node_id=1, network=net)
     tr_b = MockTransport(node_id=2, network=net)
@@ -24,12 +21,11 @@ async def test_two_nodes_pubsub():
     await pub(pycyphal2.Instant.now() + 1.0, b"hello_from_a")
     await asyncio.sleep(0.01)
 
-    # The message should arrive at node B.
     try:
         arrival = await asyncio.wait_for(sub.__anext__(), timeout=0.5)
         assert arrival.message == b"hello_from_a"
     except asyncio.TimeoutError:
-        pass  # May not arrive in mock without proper subject-ID matching; that's okay for integration smoke.
+        pass  # May not arrive in mock without proper subject-ID matching; okay for an integration smoke test.
 
     pub.close()
     sub.close()
@@ -38,7 +34,6 @@ async def test_two_nodes_pubsub():
 
 
 async def test_node_creation_and_home():
-    """Test node creation with various home configurations."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="my_home")
@@ -56,14 +51,12 @@ async def test_node_exposes_transport_property():
 
 
 async def test_node_namespace():
-    """Namespace should affect name resolution."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h", namespace="ns")
     assert node.namespace == "ns"
 
     pub = node.advertise("topic")
-    # The resolved topic name should include the namespace.
     topic = list(node.topics_by_name.values())[0]
     assert topic.name == "ns/topic"
 
@@ -72,7 +65,6 @@ async def test_node_namespace():
 
 
 async def test_node_namespace_from_env(monkeypatch):
-    """When namespace is not provided, it should be read from the CYPHAL_NAMESPACE environment variable."""
     monkeypatch.setenv("CYPHAL_NAMESPACE", "env_ns")
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
@@ -88,7 +80,6 @@ async def test_node_namespace_from_env(monkeypatch):
 
 
 async def test_node_namespace_from_env_whitespace(monkeypatch):
-    """CYPHAL_NAMESPACE value should be stripped of whitespace."""
     monkeypatch.setenv("CYPHAL_NAMESPACE", "  spaced_ns  ")
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
@@ -98,7 +89,6 @@ async def test_node_namespace_from_env_whitespace(monkeypatch):
 
 
 async def test_node_namespace_explicit_overrides_env(monkeypatch):
-    """Explicitly provided namespace should take precedence over the environment variable."""
     monkeypatch.setenv("CYPHAL_NAMESPACE", "env_ns")
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
@@ -108,7 +98,6 @@ async def test_node_namespace_explicit_overrides_env(monkeypatch):
 
 
 async def test_node_homeful_topic():
-    """Homeful topic names should expand ~ to home."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="my_home")
@@ -122,7 +111,6 @@ async def test_node_homeful_topic():
 
 
 async def test_pinned_topic():
-    """Pinned topics should get a fixed subject-ID."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h")
@@ -137,7 +125,6 @@ async def test_pinned_topic():
 
 
 async def test_multiple_publishers_same_topic():
-    """Multiple publishers on the same topic should share the topic state."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h")
@@ -160,7 +147,6 @@ async def test_multiple_publishers_same_topic():
 
 
 async def test_subscriber_liveness_timeout():
-    """Subscriber with finite timeout should raise LivenessError."""
     import pytest
 
     net = MockNetwork()
@@ -168,7 +154,7 @@ async def test_subscriber_liveness_timeout():
     node = new_node(tr, home="h")
 
     sub = node.subscribe("/topic")
-    sub.timeout = 0.05  # 50ms
+    sub.timeout = 0.05
 
     with pytest.raises(pycyphal2.LivenessError):
         await sub.__anext__()
@@ -178,7 +164,6 @@ async def test_subscriber_liveness_timeout():
 
 
 async def test_subscriber_close_stops_iteration():
-    """Closed subscriber should raise StopAsyncIteration."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h")
@@ -195,17 +180,14 @@ async def test_subscriber_close_stops_iteration():
 
 
 async def test_pattern_subscriber():
-    """Pattern subscriber should match multiple topics."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h")
 
     sub = node.subscribe("/sensor/*/data")
 
-    # Create a topic that matches.
     pub = node.advertise("/sensor/temp/data")
 
-    # The subscriber should now be coupled to the topic.
     topic = node.topics_by_name.get("sensor/temp/data")
     assert topic is not None
     assert any(c.root.name == "sensor/*/data" for c in topic.couplings)
@@ -216,7 +198,6 @@ async def test_pattern_subscriber():
 
 
 async def test_gossip_message_format():
-    """Verify gossip messages are properly formatted."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h")
@@ -224,10 +205,8 @@ async def test_gossip_message_format():
     pub = node.advertise("/test/gossip")
     topic = list(node.topics_by_name.values())[0]
 
-    # Trigger a gossip send.
     await node.send_gossip(topic, broadcast=True)
 
-    # Check that a message was sent on the broadcast writer.
     writer = tr.writers.get(node.broadcast_subject_id)
     if writer is not None:
         assert writer.send_count > 0
@@ -237,18 +216,15 @@ async def test_gossip_message_format():
 
 
 async def test_scout_message_format():
-    """Scout messages should be broadcast for pattern subscribers."""
+    """A pattern subscription broadcasts a scout."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h")
 
-    # Subscribe with a pattern -- this should send a scout.
     sub = node.subscribe("/sensor/>")
 
-    # Give the scout task a moment to execute.
     await asyncio.sleep(0.01)
 
-    # Check broadcast writer was used.
     writer = tr.writers.get(node.broadcast_subject_id)
     if writer is not None:
         assert writer.send_count >= 1
@@ -258,16 +234,15 @@ async def test_scout_message_format():
 
 
 async def test_node_close_idempotent():
-    """Closing a node twice should be safe."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h")
     node.close()
-    node.close()  # Should not raise.
+    node.close()
 
 
 async def test_subject_id_computation():
-    """Verify subject-ID computation matches the reference formula."""
+    """Subject-ID computation matches the reference formula."""
     modulus = 8378431  # 23bit
 
     # Non-pinned: 0x2000 + (((hash % modulus) + ((evictions % modulus)^2 % modulus)) % modulus)
@@ -287,7 +262,6 @@ async def test_subject_id_computation():
 
 
 async def test_advertise_pattern_rejected():
-    """Advertising on a pattern name should raise ValueError."""
     import pytest
 
     net = MockNetwork()
@@ -301,7 +275,7 @@ async def test_advertise_pattern_rejected():
 
 
 async def test_remap_string_parsing():
-    """Remap from a whitespace-separated string of from=to pairs."""
+    """Remap accepts a whitespace-separated string of from=to pairs."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h", namespace="ns")
@@ -316,7 +290,6 @@ async def test_remap_string_parsing():
 
 
 async def test_remap_dict():
-    """Remap from a dict."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h", namespace="ns")
@@ -347,7 +320,7 @@ async def test_remap_incremental():
 
 
 async def test_remap_advertise_pinned():
-    """Remap target with pin suffix applies pin to the topic."""
+    """A pin suffix on the remap target applies to the topic."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="h", namespace="ns")
@@ -363,7 +336,6 @@ async def test_remap_advertise_pinned():
 
 
 async def test_remap_from_env(monkeypatch):
-    """CYPHAL_REMAP environment variable should be applied at node construction."""
     monkeypatch.setenv("CYPHAL_REMAP", "sensor=mapped")
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)

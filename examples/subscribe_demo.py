@@ -23,7 +23,6 @@ NAME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random
 
 
 async def run(transport_spec: str, topic: str, timeout: float) -> None:
-    # Construct a transport -- this part determines how the node connects to the network.
     if transport_spec == "udp":
         from pycyphal2.udp import UDPTransport
 

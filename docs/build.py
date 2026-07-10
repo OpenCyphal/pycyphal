@@ -49,9 +49,8 @@ def _inject_examples_section() -> None:
 
 
 def main() -> None:
-    # Discover and import all public submodules so pdoc can see them,
-    # then inject them into their parent's __all__ so pdoc lists them in the sidebar.
-    # Public modules are expected to be importable in the docs environment; failures are treated as hard errors.
+    # Import public submodules so pdoc sees them, and add them to the parent __all__ so they appear in the sidebar.
+    # Public modules must be importable in the docs environment; an import failure is a hard error.
     for mi in pkgutil.walk_packages(pycyphal2.__path__, pycyphal2.__name__ + "."):
         leaf = mi.name.rsplit(".", 1)[-1]
         if leaf.startswith("_"):
@@ -66,8 +65,7 @@ def main() -> None:
 
     now = datetime.now(timezone.utc).isoformat(timespec='seconds')
 
-    # Customization is necessary to expose special members like __aiter__, __call__, etc.
-    # We also use it to tweak the colors.
+    # Template customization is necessary to expose special members (__aiter__, __call__, ...) and to tweak colors.
     pdoc.render.configure(
         template_directory=Path(__file__).resolve().with_name("pdoc"),
         footer_text=f"{now} #{REVISION} v{pycyphal2.__version__}",

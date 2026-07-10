@@ -1,5 +1,3 @@
-"""Tests for pycyphal2.can.pythoncan -- python-can Interface backend."""
-
 from __future__ import annotations
 
 import asyncio
@@ -26,10 +24,6 @@ import pycyphal2.can.pythoncan as pythoncan  # noqa: E402
 
 PythonCANInterface = pythoncan.PythonCANInterface
 
-# ============================================================================
-# Helpers
-# ============================================================================
-
 _CHANNEL_SEQ = 0
 
 
@@ -49,7 +43,6 @@ def _force_distinct_ids(a: CANTransport, b: CANTransport) -> None:
 def _virtual_pair(
     *, fd: bool = False, receive_own_messages: bool = False
 ) -> tuple[PythonCANInterface, PythonCANInterface]:
-    """Create a pair of PythonCANInterface instances on the same virtual channel."""
     ch = _unique_channel()
     a = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=receive_own_messages),
@@ -67,13 +60,10 @@ def _close_all(*interfaces: PythonCANInterface) -> None:
         itf.close()
 
 
-# ============================================================================
-# Tier 1: Virtual bus tests (cross-platform, always runnable)
-# ============================================================================
+# Tier 1: virtual-bus tests -- cross-platform, always runnable.
 
 
 async def test_virtual_send_receive_classic() -> None:
-    """Two interfaces on the same virtual channel: A sends extended frame, B receives it."""
     a, b = _virtual_pair()
     try:
         ts_before = Instant.now()
@@ -88,7 +78,6 @@ async def test_virtual_send_receive_classic() -> None:
 
 
 async def test_virtual_send_receive_fd() -> None:
-    """CAN FD mode with >8 byte payload."""
     a, b = _virtual_pair(fd=True)
     try:
         payload = bytes(range(48))
@@ -101,7 +90,7 @@ async def test_virtual_send_receive_fd() -> None:
 
 
 async def test_virtual_send_receive_classic_8_bytes() -> None:
-    """Classic CAN with exactly 8 bytes -- the maximum for non-FD."""
+    """8 bytes is the classic-CAN payload maximum."""
     a, b = _virtual_pair()
     try:
         payload = bytes(range(8))
@@ -114,7 +103,6 @@ async def test_virtual_send_receive_classic_8_bytes() -> None:
 
 
 async def test_virtual_send_receive_empty_payload() -> None:
-    """Frame with zero-length data field."""
     a, b = _virtual_pair()
     try:
         a.enqueue(0x12345678, [memoryview(b"")], Instant.now() + 2.0)
@@ -126,7 +114,6 @@ async def test_virtual_send_receive_empty_payload() -> None:
 
 
 async def test_virtual_multi_frame_enqueue() -> None:
-    """Multiple frames from a single enqueue() call arrive in order."""
     a, b = _virtual_pair()
     try:
         frames_data = [memoryview(bytes([i]) * 4) for i in range(5)]
@@ -144,7 +131,6 @@ async def test_virtual_multi_frame_enqueue() -> None:
 
 
 async def test_virtual_multi_frame_different_payloads() -> None:
-    """Enqueue frames with varying payload sizes."""
     a, b = _virtual_pair()
     try:
         payloads = [b"", b"\x01", b"\x02\x03", b"\x04\x05\x06\x07\x08\x09\x0a\x0b"]
@@ -158,7 +144,6 @@ async def test_virtual_multi_frame_different_payloads() -> None:
 
 
 async def test_virtual_bidirectional() -> None:
-    """Both sides can send and receive."""
     a, b = _virtual_pair()
     try:
         a.enqueue(0x00000001, [memoryview(b"from_a")], Instant.now() + 2.0)
@@ -174,11 +159,9 @@ async def test_virtual_bidirectional() -> None:
 
 
 async def test_virtual_deadline_expired() -> None:
-    """Frames with an already-expired deadline are dropped."""
     a, b = _virtual_pair()
     try:
         a.enqueue(0x1FFFFFFF, [memoryview(b"expired")], Instant.now() + (-1.0))
-        # Send a second frame with a valid deadline so we can verify the first was dropped.
         await asyncio.sleep(0.05)
         a.enqueue(0x00000042, [memoryview(b"valid")], Instant.now() + 2.0)
         frame = await asyncio.wait_for(b.receive(), timeout=2.0)
@@ -189,17 +172,14 @@ async def test_virtual_deadline_expired() -> None:
 
 
 async def test_virtual_purge() -> None:
-    """Purged frames are not transmitted."""
     ch = _unique_channel()
     a = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     b = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
-        # Enqueue a bunch of frames but purge before the TX loop processes them.
-        # Using a very distant deadline to ensure they won't expire on their own.
+        # Distant deadline so the frames can't expire on their own -- purge must be the cause.
         for i in range(10):
             a.enqueue(0x00000010 + i, [memoryview(b"purge_me")], Instant.now() + 60.0)
         a.purge()
-        # Send a sentinel frame to prove the bus is still functional.
         a.enqueue(0x000000FF, [memoryview(b"sentinel")], Instant.now() + 2.0)
         frame = await asyncio.wait_for(b.receive(), timeout=2.0)
         assert frame.id == 0x000000FF
@@ -209,15 +189,12 @@ async def test_virtual_purge() -> None:
 
 
 async def test_virtual_filter_acceptance() -> None:
-    """Hardware filter configuration: only matching frames pass through."""
     a, b = _virtual_pair()
     try:
-        # Accept only id=0x100 with exact mask for the lower 12 bits.
         b.filter([Filter(id=0x00000100, mask=0x00000FFF)])
         a.enqueue(0x00000100, [memoryview(b"pass")], Instant.now() + 2.0)
         a.enqueue(0x00000200, [memoryview(b"reject")], Instant.now() + 2.0)
         a.enqueue(0x00000100, [memoryview(b"pass2")], Instant.now() + 2.0)
-        # We expect exactly two frames through.
         frame1 = await asyncio.wait_for(b.receive(), timeout=2.0)
         frame2 = await asyncio.wait_for(b.receive(), timeout=2.0)
         assert frame1.data == b"pass"
@@ -227,7 +204,6 @@ async def test_virtual_filter_acceptance() -> None:
 
 
 async def test_virtual_filter_promiscuous() -> None:
-    """Promiscuous filter accepts all frames."""
     a, b = _virtual_pair()
     try:
         b.filter([Filter.promiscuous()])
@@ -242,9 +218,7 @@ async def test_virtual_filter_promiscuous() -> None:
 
 
 async def test_virtual_filter_multiple() -> None:
-    """Multiple filters: frame must match at least one.
-    Note: TX PriorityQueue sorts by CAN ID, so arrival order may differ from enqueue order across different IDs.
-    """
+    """TX PriorityQueue sorts by CAN ID, so arrival order may differ from enqueue order across IDs."""
     a, b = _virtual_pair()
     try:
         b.filter(
@@ -270,7 +244,6 @@ async def test_virtual_filter_multiple() -> None:
 
 
 async def test_virtual_close_idempotent() -> None:
-    """Calling close() multiple times does not raise."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     itf.close()
@@ -279,7 +252,6 @@ async def test_virtual_close_idempotent() -> None:
 
 
 async def test_virtual_operations_after_close_enqueue() -> None:
-    """enqueue() after close raises ClosedError."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     itf.close()
@@ -288,7 +260,6 @@ async def test_virtual_operations_after_close_enqueue() -> None:
 
 
 async def test_virtual_operations_after_close_filter() -> None:
-    """filter() after close raises ClosedError."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     itf.close()
@@ -297,7 +268,6 @@ async def test_virtual_operations_after_close_filter() -> None:
 
 
 async def test_virtual_operations_after_close_receive() -> None:
-    """receive() after close raises ClosedError."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     itf.close()
@@ -306,7 +276,6 @@ async def test_virtual_operations_after_close_receive() -> None:
 
 
 async def test_virtual_receive_unblocks_on_close() -> None:
-    """A pending receive() call raises ClosedError when the interface is closed."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
 
@@ -321,7 +290,6 @@ async def test_virtual_receive_unblocks_on_close() -> None:
 
 
 async def test_virtual_properties() -> None:
-    """Verify name, fd, and repr properties."""
     ch = _unique_channel()
     bus = _can.ThreadSafeBus(interface="virtual", channel=ch)
     itf = PythonCANInterface(bus, fd=False)
@@ -334,7 +302,6 @@ async def test_virtual_properties() -> None:
 
 
 async def test_virtual_properties_fd() -> None:
-    """Verify fd property when FD mode is enabled."""
     ch = _unique_channel()
     bus = _can.ThreadSafeBus(interface="virtual", channel=ch, fd=True)
     itf = PythonCANInterface(bus, fd=True)
@@ -346,7 +313,7 @@ async def test_virtual_properties_fd() -> None:
 
 
 async def test_virtual_fd_default_from_protocol() -> None:
-    """fd defaults from bus.protocol; virtual bus reports CAN_20 so fd=False."""
+    """Virtual bus reports protocol CAN_20, so fd defaults to False."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
@@ -356,7 +323,6 @@ async def test_virtual_fd_default_from_protocol() -> None:
 
 
 async def test_virtual_fd_explicit_true() -> None:
-    """Explicit fd=True overrides bus.protocol."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch), fd=True)
     try:
@@ -366,7 +332,6 @@ async def test_virtual_fd_explicit_true() -> None:
 
 
 async def test_virtual_fd_explicit_false() -> None:
-    """Explicit fd=False overrides bus.protocol."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch), fd=False)
     try:
@@ -376,16 +341,14 @@ async def test_virtual_fd_explicit_false() -> None:
 
 
 async def test_virtual_non_extended_dropped() -> None:
-    """Standard (non-extended) ID frames are silently dropped by the receiver."""
     ch = _unique_channel()
     bus_a = _can.ThreadSafeBus(interface="virtual", channel=ch)
     bus_b = _can.ThreadSafeBus(interface="virtual", channel=ch)
     b = PythonCANInterface(bus_b)
     try:
-        # Send a standard-ID frame directly via the raw bus (bypass PythonCANInterface which always sets extended).
+        # Raw bus bypasses PythonCANInterface, which always sets extended.
         std_msg = _can.Message(arbitration_id=0x100, is_extended_id=False, data=b"std")
         bus_a.send(std_msg)
-        # Now send an extended-ID frame that should arrive.
         ext_msg = _can.Message(arbitration_id=0x00000200, is_extended_id=True, data=b"ext")
         bus_a.send(ext_msg)
         frame = await asyncio.wait_for(b.receive(), timeout=2.0)
@@ -397,7 +360,6 @@ async def test_virtual_non_extended_dropped() -> None:
 
 
 async def test_virtual_remote_frame_dropped() -> None:
-    """Remote (RTR) frames are silently dropped."""
     ch = _unique_channel()
     bus_a = _can.ThreadSafeBus(interface="virtual", channel=ch)
     bus_b = _can.ThreadSafeBus(interface="virtual", channel=ch)
@@ -416,16 +378,14 @@ async def test_virtual_remote_frame_dropped() -> None:
 
 
 async def test_virtual_overlength_frame_dropped() -> None:
-    """A malformed >64-byte frame from the bus is silently dropped, not crash the RX thread."""
+    """Malformed >64-byte frame is dropped without crashing the RX thread."""
     ch = _unique_channel()
     bus_a = _can.ThreadSafeBus(interface="virtual", channel=ch)
     bus_b = _can.ThreadSafeBus(interface="virtual", channel=ch)
     b = PythonCANInterface(bus_b)
     try:
-        # Inject a malformed overlength message directly through the raw bus.
         bad_msg = _can.Message(arbitration_id=0x00000600, is_extended_id=True, data=bytes(65))
         bus_a.send(bad_msg)
-        # Send a valid frame afterwards to prove the RX thread survived.
         good_msg = _can.Message(arbitration_id=0x00000601, is_extended_id=True, data=b"ok")
         bus_a.send(good_msg)
         frame = await asyncio.wait_for(b.receive(), timeout=2.0)
@@ -437,7 +397,6 @@ async def test_virtual_overlength_frame_dropped() -> None:
 
 
 async def test_virtual_self_loopback() -> None:
-    """With receive_own_messages, the sender also receives its own frames."""
     ch = _unique_channel()
     bus = _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True)
     itf = PythonCANInterface(bus)
@@ -451,7 +410,6 @@ async def test_virtual_self_loopback() -> None:
 
 
 async def test_virtual_many_frames_throughput() -> None:
-    """Send many frames in sequence to exercise the TX/RX path under load."""
     a, b = _virtual_pair()
     n = 50
     try:
@@ -470,7 +428,6 @@ async def test_virtual_many_frames_throughput() -> None:
 
 
 async def test_virtual_timestamp_ordering() -> None:
-    """Timestamps of received frames are monotonically non-decreasing."""
     a, b = _virtual_pair()
     n = 20
     try:
@@ -486,7 +443,6 @@ async def test_virtual_timestamp_ordering() -> None:
 
 
 async def test_virtual_max_extended_id() -> None:
-    """Frame with the maximum 29-bit extended CAN ID."""
     a, b = _virtual_pair()
     try:
         a.enqueue(0x1FFFFFFF, [memoryview(b"max")], Instant.now() + 2.0)
@@ -498,7 +454,6 @@ async def test_virtual_max_extended_id() -> None:
 
 
 async def test_virtual_min_extended_id() -> None:
-    """Frame with CAN ID = 0."""
     a, b = _virtual_pair()
     try:
         a.enqueue(0x00000000, [memoryview(b"min")], Instant.now() + 2.0)
@@ -510,7 +465,6 @@ async def test_virtual_min_extended_id() -> None:
 
 
 async def test_virtual_transport_pubsub() -> None:
-    """Full transport-level publish/subscribe through PythonCANInterface."""
     ch = _unique_channel()
     a_itf = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True),
@@ -535,7 +489,6 @@ async def test_virtual_transport_pubsub() -> None:
 
 
 async def test_virtual_transport_unicast() -> None:
-    """Full transport-level unicast through PythonCANInterface."""
     ch = _unique_channel()
     a_itf = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True),
@@ -558,7 +511,6 @@ async def test_virtual_transport_unicast() -> None:
 
 
 async def test_virtual_transport_multi_message() -> None:
-    """Multiple messages through the transport layer."""
     ch = _unique_channel()
     a_itf = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True),
@@ -585,15 +537,13 @@ async def test_virtual_transport_multi_message() -> None:
 
 
 async def test_virtual_purge_does_not_raise_when_closed() -> None:
-    """purge() on a closed interface is a no-op."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     itf.close()
-    itf.purge()  # Should not raise.
+    itf.purge()
 
 
 async def test_virtual_fd_various_payload_sizes() -> None:
-    """CAN FD with various payload sizes up to 64 bytes."""
     a, b = _virtual_pair(fd=True)
     try:
         sizes = [0, 1, 8, 12, 16, 20, 24, 32, 48, 64]
@@ -609,7 +559,6 @@ async def test_virtual_fd_various_payload_sizes() -> None:
 
 
 async def test_virtual_interleaved_enqueue_receive() -> None:
-    """Interleaved enqueue and receive operations."""
     a, b = _virtual_pair()
     try:
         for i in range(10):
@@ -621,13 +570,10 @@ async def test_virtual_interleaved_enqueue_receive() -> None:
         _close_all(a, b)
 
 
-# ============================================================================
-# Tier 2: Unit tests (mocking python-can internals)
-# ============================================================================
+# Tier 2: unit tests mocking python-can internals.
 
 
 def test_parse_message_valid_extended() -> None:
-    """_parse_message accepts a valid extended-ID data frame."""
     msg = _can.Message(arbitration_id=0x1BADC0DE, is_extended_id=True, data=b"valid")
     frame = pythoncan._parse_message(msg)
     assert frame is not None
@@ -637,25 +583,21 @@ def test_parse_message_valid_extended() -> None:
 
 
 def test_parse_message_error_frame() -> None:
-    """_parse_message drops error frames."""
     msg = _can.Message(arbitration_id=0x100, is_extended_id=True, is_error_frame=True)
     assert pythoncan._parse_message(msg) is None
 
 
 def test_parse_message_non_extended() -> None:
-    """_parse_message drops standard (non-extended) frames."""
     msg = _can.Message(arbitration_id=0x100, is_extended_id=False, data=b"std")
     assert pythoncan._parse_message(msg) is None
 
 
 def test_parse_message_remote_frame() -> None:
-    """_parse_message drops remote (RTR) frames."""
     msg = _can.Message(arbitration_id=0x100, is_extended_id=True, is_remote_frame=True, dlc=4)
     assert pythoncan._parse_message(msg) is None
 
 
 def test_parse_message_id_mask() -> None:
-    """_parse_message masks the arbitration_id to 29 bits."""
     msg = _can.Message(arbitration_id=0xFFFFFFFF, is_extended_id=True, data=b"")
     frame = pythoncan._parse_message(msg)
     assert frame is not None
@@ -663,7 +605,6 @@ def test_parse_message_id_mask() -> None:
 
 
 async def test_close_unblocks_pending_receive() -> None:
-    """A receive() that's already awaiting must raise ClosedError on close."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     task = asyncio.ensure_future(itf.receive())
@@ -675,7 +616,6 @@ async def test_close_unblocks_pending_receive() -> None:
 
 
 async def test_fail_records_first_exception_only() -> None:
-    """_fail() only records the first exception."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     ex1 = OSError("first")
@@ -686,7 +626,6 @@ async def test_fail_records_first_exception_only() -> None:
 
 
 async def test_raise_if_closed_with_failure() -> None:
-    """_raise_if_closed chains the original failure exception."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     original = OSError("root cause")
@@ -697,7 +636,6 @@ async def test_raise_if_closed_with_failure() -> None:
 
 
 async def test_raise_if_closed_without_failure() -> None:
-    """_raise_if_closed without a failure gives a clean ClosedError."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     itf.close()
@@ -706,7 +644,6 @@ async def test_raise_if_closed_without_failure() -> None:
 
 
 async def test_enqueue_creates_tx_task_lazily() -> None:
-    """TX task is not created until the first enqueue()."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
@@ -718,7 +655,6 @@ async def test_enqueue_creates_tx_task_lazily() -> None:
 
 
 async def test_rx_thread_exits_on_bus_error() -> None:
-    """If bus.recv() raises, the RX thread pushes the exception and exits."""
     mock_bus = MagicMock(spec=_can.BusABC)
     mock_bus.recv.side_effect = _can.CanError("hardware failure")
     mock_bus.channel_info = "mock:0"
@@ -729,7 +665,6 @@ async def test_rx_thread_exits_on_bus_error() -> None:
 
 
 async def test_filter_on_closed_raises() -> None:
-    """filter() on a closed interface raises ClosedError."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     itf.close()
@@ -738,7 +673,6 @@ async def test_filter_on_closed_raises() -> None:
 
 
 async def test_filter_can_error_raises_oserror() -> None:
-    """can.CanError from set_filters is wrapped as OSError."""
     mock_bus = MagicMock(spec=_can.BusABC)
     mock_bus.recv.return_value = None
     mock_bus.channel_info = "mock:0"
@@ -798,22 +732,18 @@ async def test_filter_waits_for_rx_thread_before_reconfiguring() -> None:
 
 
 async def test_purge_empty_queue() -> None:
-    """Purging an empty queue is harmless."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
-        itf.purge()  # Should not raise.
+        itf.purge()
     finally:
         itf.close()
 
 
-# ============================================================================
-# Tier 2b: More unit/integration tests (extended coverage)
-# ============================================================================
+# Tier 2b: more unit/integration coverage.
 
 
 async def test_unit_tx_loop_multiple_deadline_drops() -> None:
-    """Multiple consecutive expired frames are all dropped."""
     ch = _unique_channel()
     a = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     b = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
@@ -830,11 +760,11 @@ async def test_unit_tx_loop_multiple_deadline_drops() -> None:
 
 
 async def test_unit_tx_retry_preserves_intra_transfer_order() -> None:
-    """A frame that fails once and is retried keeps its place ahead of later frames of the transfer.
+    """Regression: a retried frame keeps its place ahead of later frames of the transfer.
 
-    Regression: the retry path used to re-queue with the global tx_seq counter, which could sort a
-    retried frame after its successors. The two payloads below sort opposite to their enqueue order
-    by byte value, so only a preserved seq keeps them in order after the first one is retried.
+    The retry path once re-queued with the global tx_seq counter, which could sort a retried frame
+    after its successors. The two payloads sort opposite to their enqueue order by byte value, so only
+    a preserved seq keeps them in order after the first one is retried.
     """
     sent: list[bytes] = []
     failed_once = threading.Event()
@@ -862,13 +792,12 @@ async def test_unit_tx_retry_preserves_intra_transfer_order() -> None:
         itf.enqueue(0x123, [memoryview(b"\x02"), memoryview(b"\x01")], Instant.now() + 5.0)
         await wait_for(lambda: len(sent) == 2, timeout=5.0)
         assert failed_once.is_set()
-        assert sent == [b"\x02", b"\x01"]  # Enqueue order preserved despite the retry of the first frame.
+        assert sent == [b"\x02", b"\x01"]
     finally:
         itf.close()
 
 
 async def test_unit_enqueue_after_purge_still_works() -> None:
-    """After purge, new enqueue'd frames are still sent."""
     a, b = _virtual_pair()
     try:
         a.enqueue(0x00007000, [memoryview(b"before")], Instant.now() + 60.0)
@@ -882,7 +811,6 @@ async def test_unit_enqueue_after_purge_still_works() -> None:
 
 
 async def test_unit_close_cancels_tx_task() -> None:
-    """Closing the interface cancels the TX task."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     itf.enqueue(0x00000001, [memoryview(b"x")], Instant.now() + 1.0)
@@ -894,7 +822,6 @@ async def test_unit_close_cancels_tx_task() -> None:
 
 
 async def test_unit_rx_thread_stops_on_close() -> None:
-    """The RX thread exits promptly after close."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     assert itf._rx_thread.is_alive()
@@ -904,7 +831,6 @@ async def test_unit_rx_thread_stops_on_close() -> None:
 
 
 async def test_unit_prebuilt_bus_name_from_channel_info() -> None:
-    """When constructed with a pre-built bus, name comes from channel_info."""
     ch = _unique_channel()
     bus = _can.ThreadSafeBus(interface="virtual", channel=ch)
     itf = PythonCANInterface(bus)
@@ -916,7 +842,6 @@ async def test_unit_prebuilt_bus_name_from_channel_info() -> None:
 
 
 async def test_unit_prebuilt_bus_fd_default_false() -> None:
-    """Pre-built bus defaults to fd=False when not specified."""
     ch = _unique_channel()
     bus = _can.ThreadSafeBus(interface="virtual", channel=ch)
     itf = PythonCANInterface(bus)
@@ -927,7 +852,6 @@ async def test_unit_prebuilt_bus_fd_default_false() -> None:
 
 
 async def test_unit_prebuilt_bus_fd_true() -> None:
-    """Pre-built bus with fd=True."""
     ch = _unique_channel()
     bus = _can.ThreadSafeBus(interface="virtual", channel=ch, fd=True)
     itf = PythonCANInterface(bus, fd=True)
@@ -938,7 +862,6 @@ async def test_unit_prebuilt_bus_fd_true() -> None:
 
 
 async def test_unit_repr_includes_class_name() -> None:
-    """repr() always includes the class name."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
@@ -949,7 +872,6 @@ async def test_unit_repr_includes_class_name() -> None:
 
 
 async def test_unit_filter_empty_list() -> None:
-    """Setting an empty filter list does not raise."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
@@ -959,7 +881,6 @@ async def test_unit_filter_empty_list() -> None:
 
 
 async def test_unit_filter_many_filters() -> None:
-    """Setting many filters at once does not raise."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
@@ -970,7 +891,6 @@ async def test_unit_filter_many_filters() -> None:
 
 
 async def test_unit_enqueue_single_byte_payloads() -> None:
-    """Single-byte payloads are handled correctly."""
     a, b = _virtual_pair()
     try:
         for byte_val in range(256):
@@ -983,7 +903,6 @@ async def test_unit_enqueue_single_byte_payloads() -> None:
 
 
 async def test_unit_concurrent_receive_and_enqueue() -> None:
-    """receive() and enqueue() can be used concurrently from different coroutines."""
     a, b = _virtual_pair()
     received: list[TimestampedFrame] = []
 
@@ -1005,7 +924,6 @@ async def test_unit_concurrent_receive_and_enqueue() -> None:
 
 
 async def test_unit_concurrent_receivers() -> None:
-    """Multiple tasks awaiting receive() on the same interface each get distinct frames."""
     ch = _unique_channel()
     bus_a = _can.ThreadSafeBus(interface="virtual", channel=ch)
     bus_b = _can.ThreadSafeBus(interface="virtual", channel=ch)
@@ -1031,7 +949,6 @@ async def test_unit_concurrent_receivers() -> None:
 
 
 async def test_unit_receive_timeout_does_not_drop_frames() -> None:
-    """A timeout on receive does not cause subsequent frames to be lost."""
     ch = _unique_channel()
     a = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     b = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
@@ -1046,7 +963,6 @@ async def test_unit_receive_timeout_does_not_drop_frames() -> None:
 
 
 async def test_unit_multiple_enqueue_calls() -> None:
-    """Multiple separate enqueue() calls accumulate in the TX queue."""
     a, b = _virtual_pair()
     try:
         a.enqueue(0x0000C001, [memoryview(b"first")], Instant.now() + 2.0)
@@ -1062,12 +978,11 @@ async def test_unit_multiple_enqueue_calls() -> None:
 
 
 async def test_unit_tx_priority_ordering() -> None:
-    """TX PriorityQueue sends lower CAN IDs first (bus arbitration approximation)."""
+    """TX PriorityQueue sends lower CAN IDs first, approximating bus arbitration."""
     ch = _unique_channel()
     a = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     b = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
-        # Enqueue high-ID first, then low-ID.
         a.enqueue(0x1FFFFFFF, [memoryview(b"high")], Instant.now() + 5.0)
         a.enqueue(0x00000001, [memoryview(b"low")], Instant.now() + 5.0)
         f1 = await asyncio.wait_for(b.receive(), timeout=5.0)
@@ -1078,7 +993,6 @@ async def test_unit_tx_priority_ordering() -> None:
 
 
 async def test_unit_close_during_tx() -> None:
-    """Closing the interface while the TX loop is processing frames does not hang."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     for i in range(100):
@@ -1087,7 +1001,6 @@ async def test_unit_close_during_tx() -> None:
 
 
 async def test_unit_rapid_open_close() -> None:
-    """Rapidly opening and closing interfaces does not leak threads or tasks."""
     for _ in range(20):
         ch = _unique_channel()
         itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
@@ -1096,7 +1009,6 @@ async def test_unit_rapid_open_close() -> None:
 
 
 async def test_unit_interface_with_can_transport_close() -> None:
-    """CANTransport.close() properly closes the underlying PythonCANInterface."""
     ch = _unique_channel()
     itf = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True),
@@ -1107,7 +1019,6 @@ async def test_unit_interface_with_can_transport_close() -> None:
 
 
 async def test_unit_transport_multiple_subjects() -> None:
-    """Transport can handle multiple subject subscriptions and publications."""
     ch = _unique_channel()
     a_itf = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True),
@@ -1138,7 +1049,6 @@ async def test_unit_transport_multiple_subjects() -> None:
 
 
 async def test_unit_transport_writer_close_allows_readvertise() -> None:
-    """After closing a writer, the same subject can be re-advertised."""
     ch = _unique_channel()
     itf = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True),
@@ -1154,7 +1064,6 @@ async def test_unit_transport_writer_close_allows_readvertise() -> None:
 
 
 async def test_unit_transport_listener_close_allows_relisten() -> None:
-    """After closing a listener, the same subject can be re-subscribed."""
     ch = _unique_channel()
     itf = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True),
@@ -1170,7 +1079,6 @@ async def test_unit_transport_listener_close_allows_relisten() -> None:
 
 
 def test_parse_message_max_data() -> None:
-    """_parse_message with 64-byte (max FD) payload."""
     payload = bytes(range(64))
     msg = _can.Message(arbitration_id=0x00000001, is_extended_id=True, data=payload, is_fd=True)
     frame = pythoncan._parse_message(msg)
@@ -1180,7 +1088,6 @@ def test_parse_message_max_data() -> None:
 
 
 def test_parse_message_empty_data() -> None:
-    """_parse_message with empty payload."""
     msg = _can.Message(arbitration_id=0x00000001, is_extended_id=True, data=b"")
     frame = pythoncan._parse_message(msg)
     assert frame is not None
@@ -1188,7 +1095,6 @@ def test_parse_message_empty_data() -> None:
 
 
 def test_parse_message_timestamp_is_recent() -> None:
-    """_parse_message generates a recent timestamp."""
     ts_before = Instant.now()
     msg = _can.Message(arbitration_id=0x00000001, is_extended_id=True, data=b"ts")
     frame = pythoncan._parse_message(msg)
@@ -1198,7 +1104,6 @@ def test_parse_message_timestamp_is_recent() -> None:
 
 
 async def test_unit_filter_then_refilter() -> None:
-    """Filters can be changed after initial configuration."""
     a, b = _virtual_pair()
     try:
         b.filter([Filter(id=0x00000100, mask=0x1FFFFFFF)])
@@ -1216,7 +1121,6 @@ async def test_unit_filter_then_refilter() -> None:
 
 
 async def test_unit_three_way_communication() -> None:
-    """Three interfaces on the same bus: A sends, B and C both receive."""
     ch = _unique_channel()
     a = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     b = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
@@ -1232,7 +1136,6 @@ async def test_unit_three_way_communication() -> None:
 
 
 async def test_unit_large_multi_frame_transfer() -> None:
-    """Multi-frame transfer with many frames in a single enqueue."""
     a, b = _virtual_pair()
     try:
         n = 100
@@ -1247,7 +1150,6 @@ async def test_unit_large_multi_frame_transfer() -> None:
 
 
 async def test_unit_purge_partial() -> None:
-    """Purge drops all pending frames, including those from multiple enqueue calls."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
@@ -1266,13 +1168,12 @@ async def test_unit_purge_partial() -> None:
 
 
 async def test_unit_mixed_fd_and_classic_payloads() -> None:
-    """In FD mode, both small (<=8) and large (>8) payloads work."""
     a, b = _virtual_pair(fd=True)
     try:
         a.enqueue(0x00030000, [memoryview(b"short")], Instant.now() + 2.0)
         a.enqueue(0x00030001, [memoryview(bytes(range(32)))], Instant.now() + 2.0)
         a.enqueue(0x00030002, [memoryview(b"tiny")], Instant.now() + 2.0)
-        # PriorityQueue sorts by ID so order is preserved for same-ID, but we have different IDs.
+        # Different IDs: the PriorityQueue reorders by ID, so compare as a set.
         received = []
         for _ in range(3):
             received.append(await asyncio.wait_for(b.receive(), timeout=2.0))
@@ -1285,7 +1186,6 @@ async def test_unit_mixed_fd_and_classic_payloads() -> None:
 
 
 async def test_unit_enqueue_same_id_preserves_order() -> None:
-    """Frames with the same CAN ID preserve their enqueue order."""
     a, b = _virtual_pair()
     try:
         views = [memoryview(bytes([i])) for i in range(10)]
@@ -1298,7 +1198,7 @@ async def test_unit_enqueue_same_id_preserves_order() -> None:
 
 
 async def test_unit_filter_coalesce_passthrough() -> None:
-    """Python-CAN receives all filters even if there are many (no coalescing limit in PythonCANInterface)."""
+    """No filter coalescing in PythonCANInterface -- all filters pass through, unlike a limited backend."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
@@ -1309,7 +1209,6 @@ async def test_unit_filter_coalesce_passthrough() -> None:
 
 
 async def test_unit_rx_queue_ordering() -> None:
-    """Frames arrive in the RX queue in the order they were received from the bus."""
     ch = _unique_channel()
     bus_a = _can.ThreadSafeBus(interface="virtual", channel=ch)
     bus_b = _can.ThreadSafeBus(interface="virtual", channel=ch)
@@ -1329,7 +1228,6 @@ async def test_unit_rx_queue_ordering() -> None:
 
 
 async def test_unit_tx_bus_error_mock() -> None:
-    """A bus.send() that raises CanError is logged and retried."""
     ch = _unique_channel()
     bus = _can.ThreadSafeBus(interface="virtual", channel=ch)
     bus_b = _can.ThreadSafeBus(interface="virtual", channel=ch)
@@ -1356,7 +1254,6 @@ async def test_unit_tx_bus_error_mock() -> None:
 
 
 async def test_unit_rx_bus_error_propagates() -> None:
-    """A bus.recv() exception propagates as ClosedError from receive()."""
     mock_bus = MagicMock(spec=_can.BusABC)
     mock_bus.recv.side_effect = OSError("hardware gone")
     mock_bus.channel_info = "mock:err"
@@ -1367,7 +1264,6 @@ async def test_unit_rx_bus_error_propagates() -> None:
 
 
 async def test_unit_multiple_close_with_failure() -> None:
-    """Multiple close() calls after failure are harmless."""
     mock_bus = MagicMock(spec=_can.BusABC)
     mock_bus.recv.side_effect = _can.CanError("fail")
     mock_bus.channel_info = "mock:multiclose"
@@ -1380,9 +1276,10 @@ async def test_unit_multiple_close_with_failure() -> None:
 
 
 async def test_unit_close_does_not_deadlock_on_a_dying_rx_thread() -> None:
-    """
-    The RX thread sends its last gate notification while still alive, and nothing notifies once it has died,
-    so a close() sampling the predicate at that instant must not wait for a notification that never arrives.
+    """Regression: close() must not block sampling the gate predicate after the RX thread has died.
+
+    The RX thread sends its last gate notification while still alive; if close() samples the predicate
+    the instant after it has gone, it must not wait for a notification that will never arrive.
     """
     mock_bus = MagicMock(spec=_can.BusABC)
     mock_bus.recv.side_effect = _can.CanError("fail")
@@ -1406,7 +1303,6 @@ async def test_unit_close_does_not_deadlock_on_a_dying_rx_thread() -> None:
 
 
 async def test_unit_tx_os_error_fails_interface() -> None:
-    """A non-CAN OSError during TX fails the interface permanently."""
     ch = _unique_channel()
     bus = _can.ThreadSafeBus(interface="virtual", channel=ch)
     itf = PythonCANInterface(bus)
@@ -1423,7 +1319,6 @@ async def test_unit_tx_os_error_fails_interface() -> None:
 
 
 async def test_unit_filter_set_clear_set() -> None:
-    """Filters can be set, cleared (empty), then set again."""
     ch = _unique_channel()
     itf = PythonCANInterface(_can.ThreadSafeBus(interface="virtual", channel=ch))
     try:
@@ -1435,7 +1330,6 @@ async def test_unit_filter_set_clear_set() -> None:
 
 
 async def test_unit_transport_pubsub_large_message() -> None:
-    """Transport pub/sub with a message larger than one CAN frame (multi-frame transfer)."""
     ch = _unique_channel()
     a_itf = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True),
@@ -1461,7 +1355,6 @@ async def test_unit_transport_pubsub_large_message() -> None:
 
 
 async def test_unit_transport_bidirectional_unicast() -> None:
-    """Both nodes can send unicast to each other."""
     ch = _unique_channel()
     a_itf = PythonCANInterface(
         _can.ThreadSafeBus(interface="virtual", channel=ch, receive_own_messages=True),
@@ -1487,9 +1380,7 @@ async def test_unit_transport_bidirectional_unicast() -> None:
         b.close()
 
 
-# ============================================================================
-# Tier 3: SocketCAN vcan integration tests (Linux-only)
-# ============================================================================
+# Tier 3: SocketCAN vcan integration -- Linux-only.
 
 pytestmark_socketcan = pytest.mark.skipif(
     sys.platform != "linux" or not Path("/sys/class/net/vcan0").exists(),
@@ -1499,7 +1390,6 @@ pytestmark_socketcan = pytest.mark.skipif(
 
 @pytestmark_socketcan
 async def test_pythoncan_socketcan_pubsub_smoke() -> None:
-    """PythonCANInterface with SocketCAN backend: transport pub/sub."""
     a = CANTransport.new(PythonCANInterface(_can.ThreadSafeBus(interface="socketcan", channel="vcan0")))
     b = CANTransport.new(PythonCANInterface(_can.ThreadSafeBus(interface="socketcan", channel="vcan0")))
     arrivals: list[TransportArrival] = []
@@ -1517,7 +1407,6 @@ async def test_pythoncan_socketcan_pubsub_smoke() -> None:
 
 @pytestmark_socketcan
 async def test_pythoncan_socketcan_unicast_smoke() -> None:
-    """PythonCANInterface with SocketCAN backend: transport unicast."""
     a = CANTransport.new(PythonCANInterface(_can.ThreadSafeBus(interface="socketcan", channel="vcan0")))
     b = CANTransport.new(PythonCANInterface(_can.ThreadSafeBus(interface="socketcan", channel="vcan0")))
     arrivals: list[TransportArrival] = []
@@ -1533,7 +1422,6 @@ async def test_pythoncan_socketcan_unicast_smoke() -> None:
 
 @pytestmark_socketcan
 async def test_pythoncan_socketcan_send_receive_raw() -> None:
-    """Raw frame send/receive on SocketCAN vcan0."""
     a = PythonCANInterface(_can.ThreadSafeBus(interface="socketcan", channel="vcan0"))
     b = PythonCANInterface(_can.ThreadSafeBus(interface="socketcan", channel="vcan0"))
     try:

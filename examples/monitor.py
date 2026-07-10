@@ -74,10 +74,8 @@ async def run(transport_spec: str) -> None:
         while True:
             await asyncio.sleep(DISPLAY_INTERVAL)
             now = time.monotonic()
-            # Evict stale topics.
             for name in [n for n, info in topics.items() if now - info.last_seen_monotonic > EVICTION_TIMEOUT]:
                 del topics[name]
-            # Render the display.
             out = [
                 _clear(),
                 _bright(f"{'#':>3} {'HEARD':<5} {'HASH':<16} {'EVICTIONS':>10} {'SUBJECT-ID':>10} NAME\n"),

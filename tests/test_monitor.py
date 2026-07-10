@@ -1,5 +1,3 @@
-"""Tests for Node.monitor()."""
-
 from __future__ import annotations
 
 import logging
@@ -168,7 +166,7 @@ async def test_gossip_wire_path_drops_malformed_name() -> None:
     """End-to-end wire path: a gossip with a malformed name must not create a local topic, even with a
     match-all pattern subscriber present (a valid name over the same path IS created -- the control)."""
     node = new_node(MockTransport(node_id=1), home="n1")
-    node.subscribe(">")  # Match-all, so only the name validation can prevent topic creation.
+    node.subscribe(">")  # Match-all: only name validation can block topic creation.
     try:
         bad = "foo bar"  # A space is not a valid topic-name character.
         _deliver_gossip(
@@ -177,7 +175,7 @@ async def test_gossip_wire_path_drops_malformed_name() -> None:
             "broadcast",
             topic_hash=rapidhash(bad),
         )
-        assert bad not in node.topics_by_name  # Malformed name dropped on the wire path.
+        assert bad not in node.topics_by_name
 
         good = "sensor/temp"
         _deliver_gossip(
@@ -186,7 +184,7 @@ async def test_gossip_wire_path_drops_malformed_name() -> None:
             "broadcast",
             topic_hash=rapidhash(good),
         )
-        assert good in node.topics_by_name  # Control: a valid name over the same path IS created.
+        assert good in node.topics_by_name
     finally:
         node.close()
 
