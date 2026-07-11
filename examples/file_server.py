@@ -10,13 +10,9 @@ from __future__ import annotations
 import asyncio
 import errno
 import logging
-import sys
 from pathlib import Path
 
-if not __package__:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from examples._file_types import FileReadRequest, FileReadResponse
+from _file_types import FileReadRequest, FileReadResponse
 
 from pycyphal2 import Arrival, DeliveryError, NackError, Node, SendError
 from pycyphal2.udp import UDPTransport

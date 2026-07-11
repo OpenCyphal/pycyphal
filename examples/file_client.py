@@ -14,10 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-if not __package__:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from examples._file_types import FileReadRequest, FileReadResponse
+from _file_types import FileReadRequest, FileReadResponse
 
 from pycyphal2 import DeliveryError, Instant, LivenessError, Node, ResponseStream, SendError
 from pycyphal2.udp import UDPTransport
