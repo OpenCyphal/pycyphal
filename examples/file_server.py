@@ -12,7 +12,6 @@ import errno
 import logging
 import struct
 from dataclasses import dataclass
-from functools import partial
 from pathlib import Path
 
 from pycyphal2 import Arrival, DeliveryError, NackError, Node, SendError
@@ -32,36 +31,51 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class FileReadRequest:
-    read_offset: int
-    file_path: str
+    _read_offset: int
+    _file_path: str
+
+    @property
+    def read_offset(self) -> int:
+        return self._read_offset
+
+    @property
+    def file_path(self) -> str:
+        return self._file_path
+
+    @staticmethod
+    def deserialize(payload: bytes) -> FileReadRequest | None:
+        if len(payload) < REQUEST_HEADER_SIZE:
+            return None
+        read_offset, path_len = struct.unpack_from(REQUEST_HEADER_FORMAT, payload)
+        if path_len == 0 or path_len > PATH_MAX_LEN:
+            return None
+        path_end = REQUEST_HEADER_SIZE + path_len
+        if len(payload) != path_end:
+            return None
+        try:
+            file_path = payload[REQUEST_HEADER_SIZE:path_end].decode("utf8")
+        except UnicodeDecodeError:
+            return None
+        return FileReadRequest(read_offset, file_path)
 
 
 @dataclass(frozen=True)
 class FileReadResponse:
-    error: int
-    data: bytes
+    _error: int
+    _data: bytes
 
+    @property
+    def error(self) -> int:
+        return self._error
 
-def _decode_request(payload: bytes) -> FileReadRequest | None:
-    if len(payload) < REQUEST_HEADER_SIZE:
-        return None
-    read_offset, path_len = struct.unpack_from(REQUEST_HEADER_FORMAT, payload)
-    if path_len == 0 or path_len > PATH_MAX_LEN:
-        return None
-    path_end = REQUEST_HEADER_SIZE + path_len
-    if len(payload) != path_end:
-        return None
-    try:
-        file_path = payload[REQUEST_HEADER_SIZE:path_end].decode("utf8")
-    except UnicodeDecodeError:
-        return None
-    return FileReadRequest(read_offset=read_offset, file_path=file_path)
+    @property
+    def data(self) -> bytes:
+        return self._data
 
-
-def _encode_response(response: FileReadResponse) -> bytes:
-    if len(response.data) > DATA_MAX:
-        raise ValueError(f"Response data is too large: {len(response.data)}")
-    return struct.pack(RESPONSE_HEADER_FORMAT, response.error, len(response.data)) + response.data
+    def serialize(self) -> bytes:
+        if len(self._data) > DATA_MAX:
+            raise ValueError(f"Response data is too large: {len(self._data)}")
+        return struct.pack(RESPONSE_HEADER_FORMAT, self._error, len(self._data)) + self._data
 
 
 def _errno_from_exception(ex: BaseException) -> int:
@@ -78,13 +92,13 @@ def _read_chunk(file_path: str, offset: int) -> FileReadResponse:
             file.seek(offset)
             data = file.read(DATA_MAX)
     except (OSError, ValueError, OverflowError) as ex:
-        return FileReadResponse(error=_errno_from_exception(ex), data=b"")
-    return FileReadResponse(error=0, data=data)
+        return FileReadResponse(_errno_from_exception(ex), b"")
+    return FileReadResponse(0, data)
 
 
 async def _serve_request(arrival: Arrival, request: FileReadRequest) -> None:
     response = _read_chunk(request.file_path, request.read_offset)
-    payload = _encode_response(response)
+    payload = response.serialize()
     _logger.info(
         "responding: file=%r offset=%d size=%d error=%d",
         request.file_path,
@@ -104,36 +118,20 @@ async def _serve_request(arrival: Arrival, request: FileReadRequest) -> None:
         _logger.warning("response send failed: remote=%016x error=%s", arrival.breadcrumb.remote_id, ex)
 
 
-def _on_task_done(tasks: set[asyncio.Task[None]], task: asyncio.Task[None]) -> None:
-    tasks.discard(task)
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        _logger.error("file request task failed: %s", exc)
-
-
 async def run() -> None:
     transport = UDPTransport.new()
     node = Node.new(transport, NAME)
     sub = node.subscribe(TOPIC)
-    tasks: set[asyncio.Task[None]] = set()
     _logger.info("file server ready on %r via %s", TOPIC, transport)
     try:
         async for arrival in sub:
-            request = _decode_request(arrival.message)
+            request = FileReadRequest.deserialize(arrival.message)
             if request is None:
                 _logger.debug("dropping malformed request of size %d", len(arrival.message))
                 continue
-            task = asyncio.create_task(_serve_request(arrival, request), name=f"file:{arrival.breadcrumb.tag}")
-            tasks.add(task)
-            task.add_done_callback(partial(_on_task_done, tasks))
+            await _serve_request(arrival, request)
     finally:
         sub.close()
-        for task in list(tasks):
-            task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
         node.close()
         transport.close()
 

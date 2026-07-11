@@ -6,14 +6,14 @@ import struct
 
 import pytest
 
-from examples.file_client import _decode_response, _format_remote_error, _receive_valid_response
-from examples.file_server import _decode_request, _read_chunk
+from examples.file_client import FileReadResponse, _format_remote_error, _receive_valid_response
+from examples.file_server import FileReadRequest, _read_chunk
 from pycyphal2 import Instant, LivenessError, Response, ResponseStream
 
 
 def test_file_example_decoders_reject_trailing_garbage() -> None:
-    assert _decode_request(struct.pack("<QH", 0, 1) + b"x" + b"y") is None
-    assert _decode_response(struct.pack("<IH", 0, 0) + b"x") is None
+    assert FileReadRequest.deserialize(struct.pack("<QH", 0, 1) + b"x" + b"y") is None
+    assert FileReadResponse.deserialize(struct.pack("<IH", 0, 0) + b"x") is None
 
 
 def test_file_server_read_chunk_maps_invalid_inputs_to_errors() -> None:

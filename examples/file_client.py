@@ -33,29 +33,42 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
+class FileReadRequest:
+    _file_path: str
+    _read_offset: int
+
+    def serialize(self) -> bytes:
+        encoded_path = self._file_path.encode("utf8")
+        if len(encoded_path) > PATH_MAX_LEN:
+            raise ValueError(f"File path length {len(encoded_path)} is too long")
+        return struct.pack(REQUEST_HEADER_FORMAT, self._read_offset, len(encoded_path)) + encoded_path
+
+
+@dataclass(frozen=True)
 class FileReadResponse:
-    error: int
-    data: bytes
+    _error: int
+    _data: bytes
 
+    @property
+    def error(self) -> int:
+        return self._error
 
-def _encode_request(file_path: str, read_offset: int) -> bytes:
-    encoded_path = file_path.encode("utf8")
-    if len(encoded_path) > PATH_MAX_LEN:
-        raise ValueError(f"File path length {len(encoded_path)} is too long")
-    return struct.pack(REQUEST_HEADER_FORMAT, read_offset, len(encoded_path)) + encoded_path
+    @property
+    def data(self) -> bytes:
+        return self._data
 
-
-def _decode_response(payload: bytes) -> FileReadResponse | None:
-    if len(payload) < RESPONSE_HEADER_SIZE:
-        return None
-    error, data_len = struct.unpack_from(RESPONSE_HEADER_FORMAT, payload)
-    if data_len > DATA_MAX:
-        return None
-    data_start = RESPONSE_HEADER_SIZE
-    data_end = data_start + data_len
-    if len(payload) != data_end:
-        return None
-    return FileReadResponse(error=error, data=payload[data_start:data_end])
+    @staticmethod
+    def deserialize(payload: bytes) -> FileReadResponse | None:
+        if len(payload) < RESPONSE_HEADER_SIZE:
+            return None
+        error, data_len = struct.unpack_from(RESPONSE_HEADER_FORMAT, payload)
+        if data_len > DATA_MAX:
+            return None
+        data_start = RESPONSE_HEADER_SIZE
+        data_end = data_start + data_len
+        if len(payload) != data_end:
+            return None
+        return FileReadResponse(error, payload[data_start:data_end])
 
 
 def _format_remote_error(error: int) -> str:
@@ -75,7 +88,7 @@ async def _receive_response(stream: ResponseStream, expected_server_id: int | No
                 expected_server_id,
             )
             continue
-        decoded = _decode_response(response.message)
+        decoded = FileReadResponse.deserialize(response.message)
         if decoded is None:
             _logger.debug("dropping malformed response from %016x seq=%d", response.remote_id, response.seqno)
             continue
@@ -104,7 +117,7 @@ async def run(file_path: str) -> int:
             _logger.info("requesting offset %d", read_offset)
             stream: ResponseStream | None = None
             try:
-                request = _encode_request(file_path, read_offset)
+                request = FileReadRequest(file_path, read_offset).serialize()
                 stream = await pub.request(Instant.now() + REQUEST_DELIVERY_TIMEOUT, RESPONSE_TIMEOUT, request)
                 server_id, response = await _receive_valid_response(stream, discovered_server_id, RESPONSE_TIMEOUT)
             except ValueError as ex:
