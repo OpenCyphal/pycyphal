@@ -10,72 +10,22 @@ from __future__ import annotations
 import asyncio
 import errno
 import logging
-import struct
-from dataclasses import dataclass
+import sys
 from pathlib import Path
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from examples._file_types import FileReadRequest, FileReadResponse
 
 from pycyphal2 import Arrival, DeliveryError, NackError, Node, SendError
 from pycyphal2.udp import UDPTransport
 
 NAME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random ID will be added.
 TOPIC = "file/read"
-PATH_MAX_LEN = 2048
-DATA_MAX = 4096
 RESPONSE_DEADLINE = 10.0
-REQUEST_HEADER_FORMAT = "<QH"
-REQUEST_HEADER_SIZE = struct.calcsize(REQUEST_HEADER_FORMAT)
-RESPONSE_HEADER_FORMAT = "<IH"
 
 _logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class FileReadRequest:
-    _read_offset: int
-    _file_path: str
-
-    @property
-    def read_offset(self) -> int:
-        return self._read_offset
-
-    @property
-    def file_path(self) -> str:
-        return self._file_path
-
-    @staticmethod
-    def deserialize(payload: bytes) -> FileReadRequest | None:
-        if len(payload) < REQUEST_HEADER_SIZE:
-            return None
-        read_offset, path_len = struct.unpack_from(REQUEST_HEADER_FORMAT, payload)
-        if path_len == 0 or path_len > PATH_MAX_LEN:
-            return None
-        path_end = REQUEST_HEADER_SIZE + path_len
-        if len(payload) != path_end:
-            return None
-        try:
-            file_path = payload[REQUEST_HEADER_SIZE:path_end].decode("utf8")
-        except UnicodeDecodeError:
-            return None
-        return FileReadRequest(read_offset, file_path)
-
-
-@dataclass(frozen=True)
-class FileReadResponse:
-    _error: int
-    _data: bytes
-
-    @property
-    def error(self) -> int:
-        return self._error
-
-    @property
-    def data(self) -> bytes:
-        return self._data
-
-    def serialize(self) -> bytes:
-        if len(self._data) > DATA_MAX:
-            raise ValueError(f"Response data is too large: {len(self._data)}")
-        return struct.pack(RESPONSE_HEADER_FORMAT, self._error, len(self._data)) + self._data
 
 
 def _errno_from_exception(ex: BaseException) -> int:
@@ -90,7 +40,7 @@ def _read_chunk(file_path: str, offset: int) -> FileReadResponse:
     try:
         with open(file_path, "rb") as file:
             file.seek(offset)
-            data = file.read(DATA_MAX)
+            data = file.read(FileReadResponse.data_capacity())
     except (OSError, ValueError, OverflowError) as ex:
         return FileReadResponse(_errno_from_exception(ex), b"")
     return FileReadResponse(0, data)

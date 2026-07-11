@@ -11,64 +11,22 @@ import argparse
 import asyncio
 import logging
 import os
-import struct
 import sys
-from dataclasses import dataclass
 from pathlib import Path
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from examples._file_types import FileReadRequest, FileReadResponse
 
 from pycyphal2 import DeliveryError, Instant, LivenessError, Node, ResponseStream, SendError
 from pycyphal2.udp import UDPTransport
 
 NAME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random ID will be added.
 TOPIC = "file/read"
-PATH_MAX_LEN = 2048
-DATA_MAX = 4096
 RESPONSE_TIMEOUT = 30.0
 REQUEST_DELIVERY_TIMEOUT = RESPONSE_TIMEOUT / 2.0
-REQUEST_HEADER_FORMAT = "<QH"
-RESPONSE_HEADER_FORMAT = "<IH"
-RESPONSE_HEADER_SIZE = struct.calcsize(RESPONSE_HEADER_FORMAT)
-
 _logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class FileReadRequest:
-    _file_path: str
-    _read_offset: int
-
-    def serialize(self) -> bytes:
-        encoded_path = self._file_path.encode("utf8")
-        if len(encoded_path) > PATH_MAX_LEN:
-            raise ValueError(f"File path length {len(encoded_path)} is too long")
-        return struct.pack(REQUEST_HEADER_FORMAT, self._read_offset, len(encoded_path)) + encoded_path
-
-
-@dataclass(frozen=True)
-class FileReadResponse:
-    _error: int
-    _data: bytes
-
-    @property
-    def error(self) -> int:
-        return self._error
-
-    @property
-    def data(self) -> bytes:
-        return self._data
-
-    @staticmethod
-    def deserialize(payload: bytes) -> FileReadResponse | None:
-        if len(payload) < RESPONSE_HEADER_SIZE:
-            return None
-        error, data_len = struct.unpack_from(RESPONSE_HEADER_FORMAT, payload)
-        if data_len > DATA_MAX:
-            return None
-        data_start = RESPONSE_HEADER_SIZE
-        data_end = data_start + data_len
-        if len(payload) != data_end:
-            return None
-        return FileReadResponse(error, payload[data_start:data_end])
 
 
 def _format_remote_error(error: int) -> str:
@@ -117,7 +75,7 @@ async def run(file_path: str) -> int:
             _logger.info("requesting offset %d", read_offset)
             stream: ResponseStream | None = None
             try:
-                request = FileReadRequest(file_path, read_offset).serialize()
+                request = FileReadRequest(read_offset, file_path).serialize()
                 stream = await pub.request(Instant.now() + REQUEST_DELIVERY_TIMEOUT, RESPONSE_TIMEOUT, request)
                 server_id, response = await _receive_valid_response(stream, discovered_server_id, RESPONSE_TIMEOUT)
             except ValueError as ex:

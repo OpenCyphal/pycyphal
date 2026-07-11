@@ -6,8 +6,9 @@ import struct
 
 import pytest
 
-from examples.file_client import FileReadResponse, _format_remote_error, _receive_valid_response
-from examples.file_server import FileReadRequest, _read_chunk
+from examples._file_types import FileReadRequest, FileReadResponse
+from examples.file_client import _format_remote_error, _receive_valid_response
+from examples.file_server import _read_chunk
 from pycyphal2 import Instant, LivenessError, Response, ResponseStream
 
 
