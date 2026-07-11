@@ -61,7 +61,7 @@ pycyphal2 = ["py.typed"]
 
 [tool.mypy]
 strict = true
-mypy_path = "src:examples"
+mypy_path = "src"
 warn_unused_ignores = false
 implicit_reexport = false
 
@@ -89,7 +89,6 @@ directory = "htmlcov"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-pythonpath = ["examples"]
 
 [tool.ruff]
 line-length = 120
