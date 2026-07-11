@@ -40,7 +40,7 @@ def _read_chunk(file_path: str, offset: int) -> FileReadResponse:
     try:
         with open(file_path, "rb") as file:
             file.seek(offset)
-            data = file.read(FileReadResponse.data_capacity())
+            data = file.read(FileReadResponse.DATA_CAPACITY)
     except (OSError, ValueError, OverflowError) as ex:
         return FileReadResponse(_errno_from_exception(ex), b"")
     return FileReadResponse(0, data)

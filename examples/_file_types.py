@@ -9,26 +9,18 @@ from typing import ClassVar
 
 @dataclass(frozen=True)
 class FileReadRequest:
-    _read_offset: int
-    _file_path: str
+    read_offset: int
+    file_path: str
 
     _HEADER_FORMAT: ClassVar[str] = "<QH"
     _HEADER_SIZE: ClassVar[int] = struct.calcsize(_HEADER_FORMAT)
     _PATH_MAX_LEN: ClassVar[int] = 2048
 
-    @property
-    def read_offset(self) -> int:
-        return self._read_offset
-
-    @property
-    def file_path(self) -> str:
-        return self._file_path
-
     def serialize(self) -> bytes:
-        encoded_path = self._file_path.encode("utf8")
+        encoded_path = self.file_path.encode("utf8")
         if len(encoded_path) > self._PATH_MAX_LEN:
             raise ValueError(f"File path length {len(encoded_path)} is too long")
-        return struct.pack(self._HEADER_FORMAT, self._read_offset, len(encoded_path)) + encoded_path
+        return struct.pack(self._HEADER_FORMAT, self.read_offset, len(encoded_path)) + encoded_path
 
     @staticmethod
     def deserialize(payload: bytes) -> FileReadRequest | None:
@@ -49,36 +41,24 @@ class FileReadRequest:
 
 @dataclass(frozen=True)
 class FileReadResponse:
-    _error: int
-    _data: bytes
+    error: int
+    data: bytes
 
     _HEADER_FORMAT: ClassVar[str] = "<IH"
     _HEADER_SIZE: ClassVar[int] = struct.calcsize(_HEADER_FORMAT)
-    _DATA_MAX: ClassVar[int] = 4096
-
-    @property
-    def error(self) -> int:
-        return self._error
-
-    @property
-    def data(self) -> bytes:
-        return self._data
-
-    @classmethod
-    def data_capacity(cls) -> int:
-        return cls._DATA_MAX
+    DATA_CAPACITY: ClassVar[int] = 4096
 
     def serialize(self) -> bytes:
-        if len(self._data) > self._DATA_MAX:
-            raise ValueError(f"Response data is too large: {len(self._data)}")
-        return struct.pack(self._HEADER_FORMAT, self._error, len(self._data)) + self._data
+        if len(self.data) > self.DATA_CAPACITY:
+            raise ValueError(f"Response data is too large: {len(self.data)}")
+        return struct.pack(self._HEADER_FORMAT, self.error, len(self.data)) + self.data
 
     @staticmethod
     def deserialize(payload: bytes) -> FileReadResponse | None:
         if len(payload) < FileReadResponse._HEADER_SIZE:
             return None
         error, data_len = struct.unpack_from(FileReadResponse._HEADER_FORMAT, payload)
-        if data_len > FileReadResponse._DATA_MAX:
+        if data_len > FileReadResponse.DATA_CAPACITY:
             return None
         data_start = FileReadResponse._HEADER_SIZE
         data_end = data_start + data_len
