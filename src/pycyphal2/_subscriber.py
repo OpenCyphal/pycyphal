@@ -23,11 +23,6 @@ _logger = logging.getLogger(__name__)
 REORDERING_WINDOW_MAX = SESSION_LIFETIME / 2
 
 
-# =====================================================================================================================
-# Reordering
-# =====================================================================================================================
-
-
 @dataclass
 class InternedMsg:
     arrival: Arrival
@@ -114,13 +109,11 @@ class SubscriberImpl(Subscriber):
         return item
 
     def deliver(self, arrival: Arrival, tag: int, remote_id: int) -> bool:
-        """Called by the node to deliver a message to this subscriber."""
         if self.closed:
             return False
         if self._reordering_window is None:
             self.queue.put_nowait(arrival)
             return True
-        # Reordering enabled.
         self._drop_stale_reordering(arrival.timestamp.s)
         topic_hash = arrival.breadcrumb.topic.hash
         key = (remote_id, topic_hash)
@@ -148,7 +141,6 @@ class SubscriberImpl(Subscriber):
 
         expected = state.last_ejected_lin_tag + 1
         if lin_tag == expected:
-            # In-order: eject immediately and scan for consecutive.
             self.queue.put_nowait(arrival)
             state.last_ejected_lin_tag = lin_tag
             self._scan_reordering(state, force_first=False)
@@ -160,7 +152,6 @@ class SubscriberImpl(Subscriber):
             lin_tag = (tag - state.tag_baseline) & ((1 << 64) - 1)
             _logger.debug("Reorder resequence tag=%d lin=%d", tag, lin_tag)
 
-        # Out-of-order but within capacity: intern.
         if lin_tag in state.interned:
             return True
         state.interned[lin_tag] = InternedMsg(arrival=arrival, tag=tag, remote_id=remote_id, lin_tag=lin_tag)
@@ -187,7 +178,6 @@ class SubscriberImpl(Subscriber):
             break
 
     def _force_eject_all(self, state: ReorderingState, *, silenced: bool = False) -> None:
-        """Force-eject all interned messages in tag order."""
         while state.interned:
             lin_tag = min(state.interned)
             interned = state.interned.pop(lin_tag)
@@ -199,7 +189,6 @@ class SubscriberImpl(Subscriber):
             state.timeout_handle = None
 
     def _rearm_reorder_timeout(self, state: ReorderingState) -> None:
-        """Arm or rearm the reordering timeout against the current head-of-line slot."""
         if self._reordering_window is None:
             return
         if not state.interned:
@@ -254,11 +243,6 @@ class SubscriberImpl(Subscriber):
                 self._node.decouple_topic_root(topic, self._root)
         self.queue.put_nowait(StopAsyncIteration())
         _logger.info("Subscriber closed for '%s'", self._pattern)
-
-
-# =====================================================================================================================
-# Breadcrumb
-# =====================================================================================================================
 
 
 class BreadcrumbImpl(Breadcrumb):
@@ -322,7 +306,6 @@ class BreadcrumbImpl(Breadcrumb):
             _logger.debug("Response BE sent seqno=%d to %016x", seqno, self._remote_id)
             return
 
-        # Reliable response with retransmission.
         tracker = RespondTracker(
             remote_id=self._remote_id,
             message_tag=self._message_tag,

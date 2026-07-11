@@ -1,10 +1,6 @@
 import struct
 from pycyphal2._header import *
 
-# =====================================================================================================================
-# MsgBeHeader (TYPE=0) and MsgRelHeader (TYPE=1)
-# =====================================================================================================================
-
 
 def test_msg_be_roundtrip() -> None:
     h = MsgBeHeader(topic_log_age=5, topic_evictions=100, topic_hash=0xDEADBEEFCAFEBABE, tag=0x1234)
@@ -103,11 +99,6 @@ def test_msg_short_buffer() -> None:
     assert MsgRelHeader.deserialize(b"") is None
 
 
-# =====================================================================================================================
-# MsgAckHeader (TYPE=2) and MsgNackHeader (TYPE=3)
-# =====================================================================================================================
-
-
 def test_msg_ack_roundtrip() -> None:
     h = MsgAckHeader(topic_hash=0xCAFEBABEDEADBEEF, tag=42)
     assert h.TYPE == 2
@@ -148,11 +139,6 @@ def test_msg_nack_incompatibility_rejection_large() -> None:
 def test_msg_ack_short_buffer() -> None:
     assert MsgAckHeader.deserialize(b"\x02" * 10) is None
     assert MsgNackHeader.deserialize(b"") is None
-
-
-# =====================================================================================================================
-# RspBeHeader (TYPE=4) and RspRelHeader (TYPE=5)
-# =====================================================================================================================
 
 
 def test_rsp_be_roundtrip() -> None:
@@ -213,11 +199,6 @@ def test_rsp_short_buffer() -> None:
     assert RspRelHeader.deserialize(b"") is None
 
 
-# =====================================================================================================================
-# RspAckHeader (TYPE=6) and RspNackHeader (TYPE=7)
-# =====================================================================================================================
-
-
 def test_rsp_ack_roundtrip() -> None:
     h = RspAckHeader(tag=42, seqno=999, topic_hash=0xABCDABCDABCDABCD, message_tag=0x5555)
     assert h.TYPE == 6
@@ -242,11 +223,6 @@ def test_rsp_nack_roundtrip() -> None:
 def test_rsp_ack_short_buffer() -> None:
     assert RspAckHeader.deserialize(b"") is None
     assert RspNackHeader.deserialize(b"\x07" * 20) is None
-
-
-# =====================================================================================================================
-# GossipHeader (TYPE=8)
-# =====================================================================================================================
 
 
 def test_gossip_roundtrip() -> None:
@@ -284,11 +260,6 @@ def test_gossip_lage_out_of_range_rejected() -> None:
 
 def test_gossip_short_buffer() -> None:
     assert GossipHeader.deserialize(b"\x08" * 10) is None
-
-
-# =====================================================================================================================
-# ScoutHeader (TYPE=9)
-# =====================================================================================================================
 
 
 def test_scout_roundtrip() -> None:
@@ -345,11 +316,6 @@ def test_scout_reserved_both_ranges_nonzero() -> None:
 def test_scout_short_buffer() -> None:
     assert ScoutHeader.deserialize(b"\x09") is None
     assert ScoutHeader.deserialize(b"") is None
-
-
-# =====================================================================================================================
-# deserialize_header dispatcher
-# =====================================================================================================================
 
 
 def test_deserialize_header_dispatches_all_types() -> None:

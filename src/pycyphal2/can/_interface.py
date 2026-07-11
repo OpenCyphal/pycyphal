@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterable
 import itertools
 
-from .. import Closable, Instant
+from .. import Closable, ClosedError, Instant
 
 CAN_EXT_ID_MASK = (1 << 29) - 1
 CAN_STD_ID_MASK = (1 << 11) - 1
+
+
+def closed_error(interface: str, failure: BaseException | None) -> ClosedError:
+    if failure is None:
+        return ClosedError(f"{interface} closed")
+    ex = ClosedError(f"{interface} failed")
+    ex.__cause__ = failure
+    return ex
 
 
 @dataclass(frozen=True)
@@ -100,22 +109,28 @@ class Interface(Closable, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> None:
+    def enqueue(self, id: int, data: Iterable[memoryview], deadline: Instant) -> asyncio.Future[None]:
         """
         Schedule one or more frames for transmission. All frames share the same extended identifier.
         The frame order within the iterable shall be preserved. Implementations may prioritize queued
         frames by CAN identifier to approximate bus arbitration, but the relative order of frames
         belonging to one transfer shall remain unchanged.
+
+        Returns a future that completes when every frame of this transfer has been handed over to the media
+        layer. It fails with :class:`SendError` if the deadline expires or the frames are purged, and with
+        :class:`ClosedError` if the interface is closed or has failed. Awaiting is observational: neither
+        discarding the future nor cancelling it affects transmission.
         """
         # REFERENCE PARITY: TX queue ownership intentionally belongs to the interface rather than the transport.
         # This differs from libcanard's internal queue placement but it is not a parity drift because it does not
-        # affect the wire-visible behavior by itself.
+        # affect the wire-visible behavior by itself. Here the queue is drained by a background task rather than
+        # by the application spin loop (cy_spin_until -> canard_poll), so the future is what observes the drain.
         raise NotImplementedError
 
     @abstractmethod
     def purge(self) -> None:
         """
-        Drop all queued but not yet transmitted frames.
+        Drop all queued but not yet transmitted frames, failing their futures with :class:`SendError`.
         Used when the local node-ID changes and queued continuations become invalid.
         """
         raise NotImplementedError

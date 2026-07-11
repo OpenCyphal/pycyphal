@@ -1,5 +1,3 @@
-"""Tests for name resolution and pattern matching in pycyphal2._node."""
-
 from __future__ import annotations
 
 import pytest
@@ -12,10 +10,6 @@ from pycyphal2._node import (
     match_pattern,
     resolve_name,
 )
-
-# =====================================================================================================================
-# _name_normalize
-# =====================================================================================================================
 
 
 def test_normalize_simple() -> None:
@@ -48,11 +42,6 @@ def test_normalize_leading_slashes() -> None:
 
 def test_normalize_trailing_slashes() -> None:
     assert _name_normalize("a//") == "a"
-
-
-# =====================================================================================================================
-# _name_consume_pin_suffix
-# =====================================================================================================================
 
 
 def test_pin_basic() -> None:
@@ -90,7 +79,7 @@ def test_pin_non_digit_after_hash() -> None:
 
 
 def test_pin_hash_in_middle() -> None:
-    # Scanning from right: '42' digits, then '#' found -> pin extracted from the rightmost '#'.
+    # Pin is extracted from the rightmost '#' with a trailing digit run.
     assert _name_consume_pin_suffix("a#b#42") == ("a#b", 42)
 
 
@@ -107,21 +96,13 @@ def test_pin_only_hash() -> None:
 
 
 def test_pin_only_digits() -> None:
-    # "#42" -- hash at position 0, digits after it.
+    # "#42": hash at position 0 leaves an empty name and pin 42.
     assert _name_consume_pin_suffix("#42") == ("", 42)
 
 
 def test_pin_multiple_hashes_valid_suffix() -> None:
-    # "x#y#5" -- scanning from right: '5' is digit, then '#' found at index 3.
-    # But 'y' is not a digit, so the scan would return (name, None) before reaching the '#'.
-    # Actually: scanning from right: name[-1]='5' (digit), name[-2]='#' -> hash_pos=3.
-    # digits = "5", valid. Returns ("x#y", 5).
+    # Scanning from the right, the rightmost '#' before the trailing digits wins -> ("x#y", 5).
     assert _name_consume_pin_suffix("x#y#5") == ("x#y", 5)
-
-
-# =====================================================================================================================
-# resolve_name -- absolute names
-# =====================================================================================================================
 
 
 def test_resolve_absolute_simple() -> None:
@@ -141,11 +122,6 @@ def test_resolve_absolute_normalizes() -> None:
 def test_resolve_absolute_ignores_home_and_ns() -> None:
     resolved, _, _ = resolve_name("/x", "unused_home", "unused_ns")
     assert resolved == "x"
-
-
-# =====================================================================================================================
-# resolve_name -- homeful names
-# =====================================================================================================================
 
 
 def test_resolve_tilde_only() -> None:
@@ -173,11 +149,6 @@ def test_resolve_tilde_ignores_namespace() -> None:
 def test_resolve_tilde_slash_normalizes() -> None:
     resolved, _, _ = resolve_name("~///foo", "home", "ns")
     assert resolved == "home/foo"
-
-
-# =====================================================================================================================
-# resolve_name -- relative names
-# =====================================================================================================================
 
 
 def test_resolve_relative_simple() -> None:
@@ -214,11 +185,6 @@ def test_resolve_relative_namespace_tilde_slash() -> None:
 def test_resolve_relative_name_tilde_literal() -> None:
     resolved, _, _ = resolve_name("~foo", "myhome", "ns")
     assert resolved == "ns/~foo"
-
-
-# =====================================================================================================================
-# resolve_name -- pin suffix
-# =====================================================================================================================
 
 
 def test_resolve_with_pin() -> None:
@@ -263,11 +229,6 @@ def test_resolve_tilde_with_pin() -> None:
     assert pin == 7
 
 
-# =====================================================================================================================
-# resolve_name -- patterns (wildcards)
-# =====================================================================================================================
-
-
 def test_resolve_pattern_star() -> None:
     resolved, pin, verbatim = resolve_name("/a/*/c", "h", "ns")
     assert resolved == "a/*/c"
@@ -288,14 +249,9 @@ def test_resolve_pattern_star_relative() -> None:
 
 
 def test_resolve_pattern_with_pin_raises() -> None:
-    """Pinned patterns are not allowed."""
+    """Pattern names cannot be pinned."""
     with pytest.raises(ValueError, match="Pattern names cannot be pinned"):
         resolve_name("/a/*#5", "h", "ns")
-
-
-# =====================================================================================================================
-# resolve_name -- validation / error cases
-# =====================================================================================================================
 
 
 def test_resolve_empty_name_raises() -> None:
@@ -347,14 +303,9 @@ def test_resolve_name_strips_whitespace() -> None:
 
 
 def test_resolve_only_slashes_raises() -> None:
-    """A name that normalizes to empty should raise."""
+    """A name that normalizes to empty raises."""
     with pytest.raises(ValueError, match="resolves to empty"):
         resolve_name("///", "home", "")
-
-
-# =====================================================================================================================
-# match_pattern -- exact (verbatim) match
-# =====================================================================================================================
 
 
 def test_match_exact() -> None:
@@ -363,11 +314,6 @@ def test_match_exact() -> None:
 
 def test_match_exact_single_segment() -> None:
     assert match_pattern("foo", "foo") == []
-
-
-# =====================================================================================================================
-# match_pattern -- no match
-# =====================================================================================================================
 
 
 def test_match_no_match_different_segment() -> None:
@@ -384,11 +330,6 @@ def test_match_no_match_length_pattern_longer() -> None:
 
 def test_match_no_match_completely_different() -> None:
     assert match_pattern("x/y", "a/b") is None
-
-
-# =====================================================================================================================
-# match_pattern -- single wildcard (*)
-# =====================================================================================================================
 
 
 def test_match_star_middle() -> None:
@@ -413,11 +354,6 @@ def test_match_star_no_match_wrong_literal() -> None:
 def test_match_star_no_match_length() -> None:
     """Star matches exactly one segment; cannot match if lengths differ."""
     assert match_pattern("a/*", "a/b/c") is None
-
-
-# =====================================================================================================================
-# match_pattern -- multi-level wildcard (>)
-# =====================================================================================================================
 
 
 def test_match_chevron_multiple_segments() -> None:
@@ -461,11 +397,6 @@ def test_match_only_terminal_chevron_is_special() -> None:
     assert match_pattern("a/>/>", "a/b/c") is None
 
 
-# =====================================================================================================================
-# match_pattern -- multiple wildcards
-# =====================================================================================================================
-
-
 def test_match_multiple_stars() -> None:
     result = match_pattern("*/*/c", "x/y/c")
     assert result == [("x", 0), ("y", 1)]
@@ -505,13 +436,9 @@ def test_match_second_chevron_is_literal() -> None:
     assert match_pattern("a/>/>/c", "a/>/d/c") is None
 
 
-# =====================================================================================================================
-# resolve_name -- remapping
-# =====================================================================================================================
-
-
+# The next five pin the remapping examples tabulated in the Node.remap docstring, row for row.
 def test_remap_relative() -> None:
-    """Docstring row 1: foo/bar  foo/bar  zoo  ns  me  ns/zoo  -  relative remap."""
+    """Relative remap: the target is resolved under the namespace."""
     resolved, pin, verbatim = resolve_name("foo/bar", "me", "ns", {"foo/bar": "zoo"})
     assert resolved == "ns/zoo"
     assert pin is None
@@ -519,28 +446,28 @@ def test_remap_relative() -> None:
 
 
 def test_remap_pinned_target() -> None:
-    """Docstring row 2: foo/bar  foo/bar  zoo#123  ns  me  ns/zoo  123  pinned relative remap."""
+    """Pinned relative remap: the pin from the remap target applies."""
     resolved, pin, _ = resolve_name("foo/bar", "me", "ns", {"foo/bar": "zoo#123"})
     assert resolved == "ns/zoo"
     assert pin == 123
 
 
 def test_remap_user_pin_discarded() -> None:
-    """Docstring row 3: foo/bar#456  foo/bar  zoo  ns  me  ns/zoo  -  matched rule discards user pin."""
+    """A matched remap rule discards the user-supplied pin."""
     resolved, pin, _ = resolve_name("foo/bar#456", "me", "ns", {"foo/bar": "zoo"})
     assert resolved == "ns/zoo"
     assert pin is None
 
 
 def test_remap_absolute_target() -> None:
-    """Docstring row 4: foo/bar  foo/bar  /zoo  ns  me  zoo  -  absolute remap (ns ignored)."""
+    """Absolute remap target ignores the namespace."""
     resolved, pin, _ = resolve_name("foo/bar", "me", "ns", {"foo/bar": "/zoo"})
     assert resolved == "zoo"
     assert pin is None
 
 
 def test_remap_homeful_target() -> None:
-    """Docstring row 5: foo/bar  foo/bar  ~/zoo  ns  me  me/zoo  -  homeful remap (home expanded)."""
+    """Homeful remap target expands '~' to home."""
     resolved, pin, _ = resolve_name("foo/bar", "me", "ns", {"foo/bar": "~/zoo"})
     assert resolved == "me/zoo"
     assert pin is None

@@ -38,10 +38,6 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-# =====================================================================================================================
-# Constants
-# =====================================================================================================================
-
 TOPIC_NAME_MAX = 200
 EVICTIONS_PINNED_MIN = 0xFFFFE000
 GOSSIP_PERIOD = 5.0
@@ -82,11 +78,6 @@ class GossipScope(Enum):
     INLINE = auto()
 
 
-# =====================================================================================================================
-# Name Resolution
-# =====================================================================================================================
-
-
 def _name_normalize(name: str) -> str:
     """Collapse separators, strip leading/trailing separators."""
     parts: list[str] = []
@@ -120,7 +111,6 @@ def _name_consume_pin_suffix(name: str) -> tuple[str, int | None]:
 
 
 def _name_join(left: str, right: str) -> str:
-    """Join two name parts with separator, normalizing the result."""
     left = _name_normalize(left)
     right = _name_normalize(right)
     if left and right:
@@ -163,7 +153,6 @@ def resolve_name(
     if not name:
         raise ValueError("Empty name")
 
-    # Strip pin suffix first.
     name, pin = _name_consume_pin_suffix(name)
 
     # Apply remapping: lookup on normalized pin-free name; matched rule replaces both name and pin.
@@ -173,7 +162,6 @@ def resolve_name(
             name = remaps[lookup]
             name, pin = _name_consume_pin_suffix(name)
 
-    # Classify and construct.
     if name.startswith("/"):
         resolved = _name_normalize(name)
     elif _name_is_homeful(name):
@@ -191,7 +179,6 @@ def resolve_name(
         raise ValueError("Name resolves to empty string")
     if len(resolved) > TOPIC_NAME_MAX:
         raise ValueError(f"Resolved name exceeds {TOPIC_NAME_MAX} characters")
-    # Validate characters: ASCII 33-126 and '/' only.
     for ch in resolved:
         o = ord(ch)
         if o < 33 or o > 126:
@@ -201,11 +188,6 @@ def resolve_name(
     if pin is not None and not verbatim:
         raise ValueError("Pattern names cannot be pinned")
     return resolved, pin, verbatim
-
-
-# =====================================================================================================================
-# Pattern Matching
-# =====================================================================================================================
 
 
 def match_pattern(pattern: str, name: str) -> list[tuple[str, int]] | None:
@@ -237,21 +219,12 @@ def match_pattern(pattern: str, name: str) -> list[tuple[str, int]] | None:
     return subs
 
 
-# =====================================================================================================================
-# Subject-ID Computation
-# =====================================================================================================================
-
-
 def compute_subject_id(topic_hash: int, evictions: int, modulus: int) -> int:
-    """Compute the subject-ID for a topic given its hash, evictions, and subject-ID modulus."""
     if evictions >= EVICTIONS_PINNED_MIN:
         return 0xFFFFFFFF - evictions
-    return SUBJECT_ID_PINNED_MAX + 1 + ((topic_hash + (evictions * evictions)) % modulus)
-
-
-# =====================================================================================================================
-# Internal Data Structures
-# =====================================================================================================================
+    h = topic_hash % modulus
+    e = evictions % modulus
+    return SUBJECT_ID_PINNED_MAX + 1 + ((h + ((e * e) % modulus)) % modulus)
 
 
 @dataclass
@@ -394,11 +367,6 @@ class PublishTracker:
             self.ack_event.set()
 
 
-# =====================================================================================================================
-# Topic
-# =====================================================================================================================
-
-
 class TopicImpl(Topic):
 
     def __init__(self, node: NodeImpl, name: str, evictions: int, now: float) -> None:
@@ -424,7 +392,6 @@ class TopicImpl(Topic):
         self.gossip_task_is_periodic = False
         self.gossip_counter = 0
 
-    # -- Topic ABC --
     @property
     def hash(self) -> int:
         return self._topic_hash
@@ -446,7 +413,6 @@ class TopicImpl(Topic):
     def match(self, pattern: str) -> list[tuple[str, int]] | None:
         return match_pattern(pattern, self._name)
 
-    # -- Internal --
     def lage(self, now: float) -> int:
         return log_age(self.ts_origin, now)
 
@@ -527,11 +493,6 @@ def left_wins(l_lage: int, l_hash: int, r_lage: int, r_hash: int) -> bool:
     return l_lage > r_lage if l_lage != r_lage else l_hash < r_hash
 
 
-# =====================================================================================================================
-# Node
-# =====================================================================================================================
-
-
 class NodeImpl(Node):
     def __init__(self, transport: Transport, *, home: str, namespace: str) -> None:
         self._transport = transport
@@ -543,26 +504,21 @@ class NodeImpl(Node):
         self._monitor_callbacks: dict[int, Callable[[Topic], None]] = {}
         self._next_monitor_callback_id = 0
 
-        # Topic indexes.
         self.topics_by_name: dict[str, TopicImpl] = {}
         self.topics_by_hash: dict[int, TopicImpl] = {}
         self.topics_by_subject_id: dict[int, TopicImpl] = {}  # non-pinned only
 
-        # Subscriber roots.
         self.sub_roots_verbatim: dict[str, SubscriberRoot] = {}
         self.sub_roots_pattern: dict[str, SubscriberRoot] = {}
 
-        # Respond futures for reliable responses.
         self.respond_futures: dict[tuple[int, ...], RespondTracker] = {}
 
-        # Compute broadcast and gossip shard subject IDs.
         modulus = transport.subject_id_modulus
         sid_max = SUBJECT_ID_PINNED_MAX + modulus
         self.broadcast_subject_id = (1 << (int(math.log2(sid_max)) + 1)) - 1
         self.gossip_shard_count = self.broadcast_subject_id - (sid_max + 1)
         assert self.gossip_shard_count > 0
 
-        # Set up broadcast writer and listener.
         self.broadcast_writer = transport.subject_advertise(self.broadcast_subject_id)
 
         def broadcast_handler(arrival: TransportArrival) -> None:
@@ -570,16 +526,13 @@ class NodeImpl(Node):
 
         self.broadcast_listener = transport.subject_listen(self.broadcast_subject_id, broadcast_handler)
 
-        # Gossip shard state: lazily created per shard.
         self.gossip_shard_writers: dict[int, SubjectWriter] = {}
         self.gossip_shard_listeners: dict[int, Closable] = {}
         self.shared_subject_writers: dict[int, SharedSubjectWriter] = {}
         self.shared_subject_listeners: dict[int, SharedSubjectListener] = {}
 
-        # Register unicast handler.
         transport.unicast_listen(self.on_unicast_arrival)
 
-        # Implicit topic GC task, driven by the earliest implicit-topic expiry.
         self._implicit_topics: OrderedDict[TopicImpl, None] = OrderedDict()
         self._implicit_gc_wakeup = asyncio.Event()
         self._gc_task = self.loop.create_task(self.implicit_gc_loop())
@@ -592,7 +545,6 @@ class NodeImpl(Node):
             self.gossip_shard_count,
         )
 
-    # -- Node ABC --
     @property
     def home(self) -> str:
         return self._home
@@ -664,7 +616,6 @@ class NodeImpl(Node):
         if pin is not None and not verbatim:
             raise ValueError("Pattern names cannot be pinned")
 
-        # Ensure subscriber root.
         if verbatim:
             root = self.sub_roots_verbatim.get(resolved)
             if root is None:
@@ -680,12 +631,10 @@ class NodeImpl(Node):
         root.subscribers.append(subscriber)
 
         if verbatim:
-            # Ensure topic exists and couple.
             topic = self.topic_ensure(resolved, pin)
             self.couple_topic_root(topic, root)
             topic.sync_implicit()
         else:
-            # Pattern subscriber: couple with all existing matching topics and scout once per root.
             for topic in list(self.topics_by_name.values()):
                 self.couple_topic_root(topic, root)
                 topic.sync_implicit()
@@ -723,10 +672,7 @@ class NodeImpl(Node):
         except Exception as ex:
             raise SendError(f"Scout send failed for '{resolved}'") from ex
 
-    # -- Topic Management --
-
     def topic_ensure(self, name: str, pin: int | None) -> TopicImpl:
-        """Get or create a topic by resolved name."""
         topic = self.topics_by_name.get(name)
         if topic is not None:
             return topic
@@ -740,7 +686,6 @@ class NodeImpl(Node):
         self.ensure_gossip_shard(self.gossip_shard_subject_id(topic.hash))
         self.touch_implicit_topic(topic)
         self.topic_allocate(topic, evictions, now)
-        # Couple with existing pattern subscriber roots.
         for root in self.sub_roots_pattern.values():
             self.couple_topic_root(topic, root)
         topic.sync_listener()
@@ -755,12 +700,10 @@ class NodeImpl(Node):
 
     def topic_allocate(self, topic: TopicImpl, new_evictions: int, now: float) -> None:
         """Iterative subject-ID allocation with collision resolution. Mirrors topic_allocate() in cy.c."""
-        # Work queue: list of (topic, new_evictions) pairs to process.
         modulus = self.transport.subject_id_modulus
         work: list[tuple[TopicImpl, int]] = [(topic, new_evictions)]
         while work:
             t, ev = work.pop(0)
-            # Remove from subject-ID index first.
             old_sid = t.subject_id(modulus)
             if old_sid in self.topics_by_subject_id and self.topics_by_subject_id[old_sid] is t:
                 del self.topics_by_subject_id[old_sid]
@@ -780,14 +723,12 @@ class NodeImpl(Node):
                 collider = None  # same topic, no real collision
 
             if collider is None:
-                # No collision, install.
                 t.release_transport_handles()
                 t.set_evictions(ev)
                 self.topics_by_subject_id[new_sid] = t
                 t.sync_listener()
                 self.schedule_gossip_urgent(t)
             elif left_wins(t.lage(now), t.hash, collider.lage(now), collider.hash):
-                # Our topic wins: take the slot, evict the collider.
                 t.release_transport_handles()
                 t.set_evictions(ev)
                 del self.topics_by_subject_id[new_sid]
@@ -796,11 +737,9 @@ class NodeImpl(Node):
                     t.pub_writer = self.acquire_subject_writer(t, new_sid)
                 t.sync_listener()
                 self.schedule_gossip_urgent(t)
-                # Schedule collider for reallocation.
                 collider.release_transport_handles()
                 work.append((collider, collider.evictions + 1))
             else:
-                # Our topic loses: increment evictions and retry.
                 work.append((t, ev + 1))
 
     def sync_topic_lifecycle(self, topic: TopicImpl) -> None:
@@ -875,16 +814,13 @@ class NodeImpl(Node):
 
     @staticmethod
     def couple_topic_root(topic: TopicImpl, root: SubscriberRoot) -> None:
-        """Create a coupling between a topic and a subscriber root if not already coupled."""
         for c in topic.couplings:
             if c.root is root:
-                return  # already coupled
+                return
         subs = match_pattern(root.name, topic.name) if root.is_pattern else ([] if root.name == topic.name else None)
         if subs is not None:
             topic.couplings.append(Coupling(root=root, substitutions=subs))
             _logger.debug("Coupled '%s' <-> root '%s'", topic.name, root.name)
-
-    # -- Gossip --
 
     def gossip_shard_subject_id(self, topic_hash: int) -> int:
         modulus = self.transport.subject_id_modulus
@@ -948,9 +884,8 @@ class NodeImpl(Node):
             _logger.debug("Shared subject listener released sid=%d", subject_id)
 
     def schedule_gossip(self, topic: TopicImpl) -> None:
-        """Start periodic gossip for an explicit topic."""
         if topic.gossip_task is not None:
-            return  # already scheduled
+            return
         self._reschedule_gossip_periodic(topic, suppressed=False)
 
     @staticmethod
@@ -1064,8 +999,6 @@ class NodeImpl(Node):
         except (SendError, OSError) as e:
             _logger.warning("Gossip unicast send failed for '%s': %s", topic.name, e)
 
-    # -- Scout --
-
     async def _transmit_scout(self, pattern: str) -> None:
         pattern_bytes = pattern.encode("utf-8")
         hdr = ScoutHeader(pattern_len=len(pattern_bytes))
@@ -1094,14 +1027,10 @@ class NodeImpl(Node):
 
         root.scout_task = self.loop.create_task(do_send())
 
-    # -- Message Dispatch --
-
     def on_subject_arrival(self, subject_id: int, arrival: TransportArrival) -> None:
-        """Handle an arrival on a subject (multicast)."""
         self.dispatch_arrival(arrival, subject_id=subject_id, unicast=False)
 
     def on_unicast_arrival(self, arrival: TransportArrival) -> None:
-        """Handle an arrival via unicast."""
         self.dispatch_arrival(arrival, subject_id=None, unicast=True)
 
     def dispatch_arrival(self, arrival: TransportArrival, *, subject_id: int | None, unicast: bool) -> None:
@@ -1291,7 +1220,6 @@ class NodeImpl(Node):
             tracker.on_ack(remote_id, positive)
 
     def on_rsp(self, arrival: TransportArrival, hdr: RspBeHeader | RspRelHeader, payload: bytes) -> None:
-        """Handle a response message (for RPC)."""
         ack = False
         topic = self.topics_by_hash.get(hdr.topic_hash)
         if topic is not None:
@@ -1315,7 +1243,6 @@ class NodeImpl(Node):
             )
 
     def on_rsp_ack(self, arrival: TransportArrival, hdr: RspAckHeader | RspNackHeader) -> None:
-        """Handle a response ACK/NACK."""
         key = (arrival.remote_id, hdr.message_tag, hdr.topic_hash, hdr.seqno, hdr.tag)
         future = self.respond_futures.get(key)
         if future is not None:
@@ -1364,7 +1291,6 @@ class NodeImpl(Node):
 
         topic = self.topics_by_hash.get(hdr.topic_hash)
 
-        # If unknown topic with a name, check for pattern subscriber matches.
         if topic is None and name:
             if scope in {GossipScope.UNICAST, GossipScope.BROADCAST}:
                 topic = self.topic_subscribe_if_matching(
@@ -1470,8 +1396,6 @@ class NodeImpl(Node):
                     self.send_gossip_unicast(topic, arrival.remote_id, arrival.priority), "gossip unicast"
                 )
 
-    # -- Implicit Topic GC --
-
     def notify_implicit_gc(self) -> None:
         if not self._closed:
             self._implicit_gc_wakeup.set()
@@ -1531,8 +1455,6 @@ class NodeImpl(Node):
         topic.publish_futures.clear()
         self.notify_implicit_gc()
         _logger.info("Topic destroyed '%s'", name)
-
-    # -- Cleanup --
 
     def close(self) -> None:
         if self._closed:

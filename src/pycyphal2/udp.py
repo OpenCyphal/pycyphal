@@ -61,11 +61,6 @@ _RX_TRANSFER_HISTORY_COUNT = 32
 _SUBJECT_ID_MODULUS_MAX = IPv4_SUBJECT_ID_MAX - SUBJECT_ID_PINNED_MAX
 
 
-# =====================================================================================================================
-# Header Serialization / Deserialization
-# =====================================================================================================================
-
-
 @dataclass(frozen=True)
 class _FrameHeader:
     priority: int
@@ -84,7 +79,6 @@ def _header_serialize(
     transfer_payload_size: int,
     prefix_crc: int,
 ) -> bytes:
-    """Serialize a 32-byte Cyphal/UDP frame header."""
     buf = bytearray(HEADER_SIZE)
     buf[0] = HEADER_VERSION | ((priority & 0x07) << 5)
     buf[1] = 0  # incompatibility | reserved
@@ -99,7 +93,6 @@ def _header_serialize(
 
 
 def _header_deserialize(data: bytes | memoryview) -> _FrameHeader | None:
-    """Deserialize a 32-byte frame header. Returns None on validation failure."""
     # Wire data is untrusted: malformed headers are dropped here, never surfaced as exceptions.
     if len(data) < HEADER_SIZE:
         _logger.debug("UDP hdr drop short len=%d", len(data))
@@ -123,22 +116,13 @@ def _header_deserialize(data: bytes | memoryview) -> _FrameHeader | None:
     frame_payload_offset = struct.unpack_from("<I", data, 16)[0]
     transfer_payload_size = struct.unpack_from("<I", data, 20)[0]
     prefix_crc = struct.unpack_from("<I", data, 24)[0]
-    # Validate frame bounds
     return _FrameHeader(priority, transfer_id, sender_uid, frame_payload_offset, transfer_payload_size, prefix_crc)
-
-
-# =====================================================================================================================
-# TX Segmentation
-# =====================================================================================================================
 
 
 def _segment_transfer(
     priority: int, transfer_id: int, sender_uid: int, payload: bytes | memoryview, mtu: int
 ) -> list[bytes]:
-    """Segment a transfer payload into wire-format frames (header + chunk each).
-
-    The ``mtu`` parameter is the max Cyphal frame payload size per frame (mtu_cyphal).
-    """
+    """mtu is the max Cyphal frame payload per frame (mtu_cyphal), not the link MTU."""
     payload = bytes(payload)
     size = len(payload)
     frames: list[bytes] = []
@@ -154,11 +138,6 @@ def _segment_transfer(
         if offset >= size:
             break
     return frames
-
-
-# =====================================================================================================================
-# RX Reassembly
-# =====================================================================================================================
 
 
 def _frame_is_valid(header: _FrameHeader, payload_chunk: bytes | memoryview) -> bool:
@@ -342,8 +321,6 @@ class _RxSession:
 
 
 class _RxReassembler:
-    """Multi-frame transfer reassembly with per-sender session state."""
-
     def __init__(self) -> None:
         self._sessions: OrderedDict[int, _RxSession] = OrderedDict()
 
@@ -422,11 +399,6 @@ class _RxReassembler:
             _logger.debug("UDP reasm retire uid=%016x", oldest_uid)
 
 
-# =====================================================================================================================
-# Utilities
-# =====================================================================================================================
-
-
 def _make_subject_endpoint(subject_id: int) -> tuple[str, int]:
     """Return (multicast_ip, port) for a given subject_id."""
     ip_int = IPv4_MCAST_PREFIX | (subject_id & IPv4_SUBJECT_ID_MAX)
@@ -434,7 +406,6 @@ def _make_subject_endpoint(subject_id: int) -> tuple[str, int]:
 
 
 def _get_iface_mtu(ifname: str) -> int:
-    """Get link MTU via ioctl on Linux, default 1500 otherwise."""
     if sys.platform == "linux" and fcntl is not None:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -462,11 +433,6 @@ def _get_default_iface_ip() -> IPv4Address | None:
         return None
 
 
-# =====================================================================================================================
-# Interface
-# =====================================================================================================================
-
-
 @dataclass(frozen=True)
 class Interface:
     address: IPv4Address
@@ -483,11 +449,6 @@ class Interface:
     def mtu_cyphal(self) -> int:
         """Max Cyphal frame payload: mtu_link - 60 (IPv4 max) - 8 (UDP) - 32 (Cyphal header)."""
         return self.mtu_link - _CYPHAL_OVERHEAD_MAX
-
-
-# =====================================================================================================================
-# Subject Writer / Listener
-# =====================================================================================================================
 
 
 class _UDPSubjectWriter(SubjectWriter):
@@ -564,11 +525,6 @@ class _UDPSubjectListener(Closable):
         self._transport.remove_subject_listener(self._subject_id, self._handler)
 
 
-# =====================================================================================================================
-# UDPTransport
-# =====================================================================================================================
-
-
 class UDPTransport(Transport, ABC):
     """
     The public API of the Cyphal/UDP transport.
@@ -601,7 +557,6 @@ class UDPTransport(Transport, ABC):
 
         The UID is a globally unique 64-bit identifier of the local node. If not given, one will be generated randomly.
         """
-        # Resolve interfaces.
         if not interfaces:
             ifaces = UDPTransport.list_interfaces()
             if not ifaces:
@@ -612,7 +567,6 @@ class UDPTransport(Transport, ABC):
         if not isinstance(interfaces, list) or not all(isinstance(i, Interface) for i in interfaces):
             raise ValueError("interfaces must be an iterable of Interface instances")
 
-        # Resolve UID.
         uid = uid or eui64()
         if not isinstance(uid, int) or not (0 < uid < 2**64):
             raise ValueError("uid must be a positive 64-bit integer")
@@ -671,7 +625,6 @@ class _UDPTransportImpl(UDPTransport):
             _logger.error("Empty interfaces list provided")
             raise ValueError("At least one network interface is required")
 
-        # Per-interface TX/unicast sockets
         self._tx_socks: list[socket.socket] = []
         self._self_endpoints: set[tuple[str, int]] = set()
         for iface in self._interfaces:
@@ -679,23 +632,19 @@ class _UDPTransportImpl(UDPTransport):
             self._tx_socks.append(sock)
             self._self_endpoints.add(sock.getsockname()[:2])
 
-        # Subject state
         self._subject_handlers: dict[int, Callable[[TransportArrival], None]] = {}
         self._subject_writers: dict[int, _UDPSubjectWriter] = {}
         self._mcast_socks: dict[tuple[int, int], socket.socket] = {}
         self._reassemblers: dict[int, _RxReassembler] = {}
 
-        # Unicast state
         self._unicast_handler: Callable[[TransportArrival], None] | None = None
         self._unicast_reassembler = _RxReassembler()
         self._remote_endpoints: dict[tuple[int, int], tuple[str, int]] = {}
         self._next_unicast_transfer_id = int.from_bytes(os.urandom(6), "little")
 
-        # Async RX tasks (platform-agnostic, replaces add_reader)
         self._unicast_rx_tasks: list[asyncio.Task[None]] = []
         self._mcast_rx_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
 
-        # Start unicast RX tasks on TX sockets
         for i, sock in enumerate(self._tx_socks):
             task = self._loop.create_task(self._unicast_rx_loop(sock, i))
             self._unicast_rx_tasks.append(task)
@@ -730,13 +679,10 @@ class _UDPTransportImpl(UDPTransport):
             sock.bind(("", port))
         else:
             sock.bind((mcast_ip, port))
-        # Join multicast group on the specific interface
         mreq = socket.inet_aton(mcast_ip) + socket.inet_aton(str(iface.address))
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         _logger.info("Multicast socket for subject %d on %s (%s:%d)", subject_id, iface.address, mcast_ip, port)
         return sock
-
-    # -- Public accessors for internal classes --
 
     @property
     def closed(self) -> bool:
@@ -760,9 +706,6 @@ class _UDPTransportImpl(UDPTransport):
         return f"UDPTransport(uid=0x{self._uid:016x}, interfaces=[{addrs}], modulus={self._subject_id_modulus_val})"
 
     def remove_subject_listener(self, subject_id: int, handler: Callable[[TransportArrival], None]) -> None:
-        """
-        Remove the handler for a subject; clean up sockets/tasks if none remains. Internal use only.
-        """
         if self._subject_handlers.get(subject_id) is not handler:
             return
         self._subject_handlers.pop(subject_id, None)
@@ -780,10 +723,7 @@ class _UDPTransportImpl(UDPTransport):
         if self._subject_writers.get(subject_id) is writer:
             self._subject_writers.pop(subject_id, None)
 
-    # -- Async sendto helper --
-
     async def async_sendto(self, sock: socket.socket, data: bytes, addr: tuple[str, int], deadline: Instant) -> None:
-        """Send a UDP datagram, suspending until writable or deadline exceeded."""
         remaining_ns = deadline.ns - Instant.now().ns
         if remaining_ns <= 0:
             raise SendError("Deadline exceeded")
@@ -791,8 +731,6 @@ class _UDPTransportImpl(UDPTransport):
             await asyncio.wait_for(self._loop.sock_sendto(sock, data, addr), timeout=remaining_ns * 1e-9)
         except asyncio.TimeoutError:
             raise SendError("Deadline exceeded waiting for socket writability")
-
-    # -- Transport ABC --
 
     @property
     def subject_id_modulus(self) -> int:
@@ -883,10 +821,7 @@ class _UDPTransportImpl(UDPTransport):
         self._subject_writers.clear()
         self._reassemblers.clear()
 
-    # -- Internal async RX loops --
-
     async def _mcast_rx_loop(self, sock: socket.socket, subject_id: int, iface_idx: int) -> None:
-        """Async receive loop for a multicast socket. Runs until cancelled or transport is closed."""
         try:
             while not self._closed:
                 try:
@@ -900,13 +835,12 @@ class _UDPTransportImpl(UDPTransport):
                 src_ip, src_port = addr[0], addr[1]
                 if (src_ip, src_port) in self._self_endpoints:
                     _logger.debug("Multicast drop self sid=%d iface=%d", subject_id, iface_idx)
-                    continue  # Self-send filter
+                    continue
                 self._process_subject_datagram(data, src_ip, src_port, subject_id, iface_idx, Instant.now())
         except asyncio.CancelledError:
             _logger.debug("Multicast rx cancelled sid=%d iface=%d", subject_id, iface_idx)
 
     async def _unicast_rx_loop(self, sock: socket.socket, iface_idx: int) -> None:
-        """Async receive loop for a unicast socket. Runs until cancelled or transport is closed."""
         try:
             while not self._closed:
                 try:

@@ -96,6 +96,30 @@ async def test_socketcan_reroll_then_immediate_unicast() -> None:
     target.close()
 
 
+async def test_socketcan_publish_then_immediate_teardown_reaches_the_wire() -> None:
+    """Regression: closing the transport straight after the await used to discard the queued frames."""
+    sniffer = SocketCANInterface("vcan0")
+    seen: list[int] = []
+
+    async def sniff() -> None:
+        while True:
+            seen.append((await sniffer.receive()).id)
+
+    task = asyncio.create_task(sniff())
+    await asyncio.sleep(0.05)  # Let the sniffer settle before anything is transmitted.
+
+    transport = CANTransport.new(SocketCANInterface("vcan0"))
+    writer = transport.subject_advertise(1234)
+    await writer(Instant.now() + 1.0, Priority.NOMINAL, bytes(range(32)))
+    transport.close()  # Immediately: no sleep, no drain.
+
+    try:
+        await wait_for(lambda: len(seen) >= 1, timeout=2.0)
+    finally:
+        task.cancel()
+        sniffer.close()
+
+
 async def test_socketcan_self_publish_does_not_reroll() -> None:
     transport = CANTransport.new(SocketCANInterface("vcan0"))
     writer = transport.subject_advertise(1234)
