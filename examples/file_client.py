@@ -10,11 +10,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
 
-from _file_types import FileReadRequest, FileReadResponse
+from _file_types import FileReadError, FileReadRequest, FileReadResponse
 
 from pycyphal2 import DeliveryError, Instant, LivenessError, Node, ResponseStream, SendError
 from pycyphal2.udp import UDPTransport
@@ -23,15 +22,16 @@ NAME = f"{Path(__file__).stem}/"  # The trailing separator ensures that a random
 TOPIC = "file/read"
 RESPONSE_TIMEOUT = 30.0
 REQUEST_DELIVERY_TIMEOUT = RESPONSE_TIMEOUT / 2.0
+REQUEST_SIZE = 4096
 _logger = logging.getLogger(__name__)
 
 
 def _format_remote_error(error: int) -> str:
     try:
-        message = os.strerror(error)
-    except (OverflowError, ValueError):
-        message = "unknown error"
-    return f"Remote error {error}: {message}"
+        name = FileReadError(error).name
+    except ValueError:
+        name = FileReadError.ERROR_OTHER.name
+    return f"Remote error {error}: {name}"
 
 
 async def _receive_response(stream: ResponseStream, expected_server_id: int | None) -> tuple[int, FileReadResponse]:
@@ -69,10 +69,10 @@ async def run(file_path: str) -> int:
     _logger.info("file client ready on %r via %s", TOPIC, transport)
     try:
         while True:
-            _logger.info("requesting offset %d", read_offset)
+            _logger.info("requesting seek %d", read_offset)
             stream: ResponseStream | None = None
             try:
-                request = FileReadRequest(read_offset, file_path).serialize()
+                request = FileReadRequest(read_offset, REQUEST_SIZE, file_path).serialize()
                 stream = await pub.request(Instant.now() + REQUEST_DELIVERY_TIMEOUT, RESPONSE_TIMEOUT, request)
                 server_id, response = await _receive_valid_response(stream, discovered_server_id, RESPONSE_TIMEOUT)
             except ValueError as ex:
@@ -94,15 +94,25 @@ async def run(file_path: str) -> int:
             if discovered_server_id is None:
                 discovered_server_id = server_id
                 _logger.info("discovered server UID: %016x", discovered_server_id)
-            _logger.info("received response: offset %d", read_offset)
+            _logger.info("received response: seek %d", read_offset)
 
             if response.error != 0:
                 sys.stderr.write(_format_remote_error(response.error) + "\n")
                 return 1
-            if len(response.data) > 0:
+            if response.seek != read_offset:
+                sys.stderr.write(f"Invalid response seek: expected {read_offset}, got {response.seek}\n")
+                return 1
+            if len(response.data) > REQUEST_SIZE:
+                sys.stderr.write(f"Invalid response size: {len(response.data)} exceeds {REQUEST_SIZE}\n")
+                return 1
+            if not response.end and not response.data:
+                sys.stderr.write("Invalid response: an unfinished chunk is empty\n")
+                return 1
+            if response.data:
                 sys.stdout.buffer.write(response.data)
                 sys.stdout.buffer.flush()
                 read_offset += len(response.data)
+            if not response.end:
                 continue
 
             _logger.info("finished transferring %d bytes", read_offset)
