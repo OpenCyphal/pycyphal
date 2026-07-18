@@ -254,37 +254,49 @@ async def test_enqueue_purge_and_close_paths(monkeypatch: pytest.MonkeyPatch) ->
     closed.purge()
 
 
-async def test_rx_loop_decodes_skips_and_queues_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_rx_loop_decodes_skips_and_drops_cleanly_on_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_socket, _ = _make_socket_module()
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
     iface = _make_iface(module)
     good = module._CAN_FRAME_STRUCT.pack(fake_socket.CAN_EFF_FLAG | 0x123, 2, b"ab".ljust(8, b"\x00"))
-    err = OSError("rx failed")
-    loop = _FakeLoop(recv=[b"\x00", good, err])  # Undecodable, then good, then a socket error.
+    loop = _FakeLoop(recv=[b"\x00", good, asyncio.CancelledError()])  # Undecodable, good, then cancelled.
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
 
-    await iface._rx_loop()  # Returns when sock_recv raises, having queued the good frame then the error.
-    frame = iface._rx_queue.get_nowait()
+    with pytest.raises(asyncio.CancelledError):
+        await iface._rx_loop()
+    frame = iface._rx_queue.get_nowait()  # The good frame was queued; the undecodable one was dropped.
     assert isinstance(frame, TimestampedFrame)
     assert frame.id == 0x123
     assert frame.data == b"ab"
-    assert iface._rx_queue.get_nowait() is err
+    assert iface._rx_queue.empty()
 
-    # receive() surfaces a queued error as a ClosedError and marks the interface failed.
-    failing = _make_iface(module)
-    failing._rx_task = _TaskStub()  # Already spawned, so receive() only drains the queue.
-    failing._rx_queue.put_nowait(OSError("rx failed"))
-    with pytest.raises(ClosedError, match="receive failed"):
-        await failing.receive()
-    assert failing._closed is True
-    assert isinstance(failing._failure, OSError)
 
-    # A cancellation while parked in sock_recv propagates out of the RX loop.
-    cancelled = _make_iface(module)
-    cancelled_loop = _FakeLoop(recv=[asyncio.CancelledError()])
-    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: cancelled_loop)
-    with pytest.raises(asyncio.CancelledError):
-        await cancelled._rx_loop()
+async def test_rx_loop_failure_marks_interface_and_installs_sentinel(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    err = OSError("rx failed")
+    loop = _FakeLoop(recv=[err])
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
+
+    await iface._rx_loop()  # Fails the interface via _fail(), then returns.
+    assert iface._closed is True
+    assert iface._failure is err
+    sentinel = iface._rx_queue.get_nowait()
+    assert isinstance(sentinel, ClosedError)
+
+
+async def test_receive_raises_clean_close_without_recording_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit close is surfaced to a parked receive() as a plain ClosedError and is not recorded as
+    an interface failure (only a receive-side error is)."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    iface._rx_task = _TaskStub()  # Already spawned, so receive() only drains the queue.
+    iface._rx_queue.put_nowait(ClosedError("SocketCAN interface vcan0 closed"))
+    with pytest.raises(ClosedError):
+        await iface.receive()
+    assert iface._failure is None
 
 
 async def test_close_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -303,6 +315,7 @@ async def test_close_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> N
     with pytest.raises(ClosedError):
         await asyncio.wait_for(recv_task, timeout=1.0)
     assert iface._rx_task is None
+    assert iface._failure is None  # A clean close is not an interface failure.
 
 
 async def test_fail_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> None:

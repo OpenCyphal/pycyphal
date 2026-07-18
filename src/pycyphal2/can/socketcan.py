@@ -98,8 +98,9 @@ class SocketCANInterface(Interface):
             self._rx_task.add_done_callback(self._on_task_done)
         item = await self._rx_queue.get()
         if isinstance(item, BaseException):
-            self._fail(item)
-            raise ClosedError(f"SocketCAN interface {self._name} receive failed") from item
+            # Terminal sentinel: a receive-side failure already recorded itself via _fail(); an explicit
+            # close installs a plain ClosedError. Raise it directly so a clean close is not misrecorded.
+            raise item
         return item
 
     async def _rx_loop(self) -> None:
@@ -112,9 +113,9 @@ class SocketCANInterface(Interface):
                 raise
             except OSError as ex:
                 if not self._closed:
-                    self._rx_queue.put_nowait(ex)
+                    self._fail(ex)  # Records the failure, closes, and installs the terminal sentinel.
                 return
-            frame = self._decode(raw)
+            frame = self._decode(raw)  # Malformed frames decode to None and are dropped.
             if frame is not None:
                 self._rx_queue.put_nowait(frame)
 
@@ -125,8 +126,10 @@ class SocketCANInterface(Interface):
         if self._rx_task is not None and self._rx_task is not asyncio.current_task():
             self._rx_task.cancel()
         self._rx_task = None
-        # Wake a reader parked on the queue; the socket is closed last so the cancelled reader task
-        # deregisters cleanly before the fd goes away.
+        # Drop any already-queued frames and install a single terminal sentinel, so a reader parked on
+        # the queue wakes promptly; the socket is closed last so the cancelled reader deregisters cleanly.
+        while not self._rx_queue.empty():
+            self._rx_queue.get_nowait()
         self._rx_queue.put_nowait(self._closed_error())
         if self._tx_task is not None:
             self._tx_task.cancel()
