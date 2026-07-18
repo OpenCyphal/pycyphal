@@ -514,7 +514,9 @@ async def test_gossip_shard_formula():
 
 async def test_broadcast_subject_id_formula():
     """Broadcast subject-ID formula: broadcast_sid = (1 << (floor(log2(PINNED_MAX + modulus)) + 1)) - 1."""
-    for modulus in [DEFAULT_MODULUS, 8378431, 131071, 65521]:
+    # All moduli must satisfy the reference predicate (>= 57203, prime, ≡ 3 mod 4); 131071 is a Mersenne
+    # prime and 57203 is the 16-bit floor. They still span different log2 buckets of the formula.
+    for modulus in [DEFAULT_MODULUS, 8378431, 131071, 57203]:
         net = MockNetwork()
         tr = MockTransport(node_id=1, modulus=modulus, network=net)
         node = new_node(tr, home="n1")

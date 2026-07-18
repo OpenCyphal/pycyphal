@@ -202,14 +202,16 @@ async def test_reliable_publish_retry_rebuilds_writer_and_header_after_reallocat
 
 async def test_gossip_reallocation_to_occupied_subject_preserves_writer():
     net = MockNetwork()
-    tr = MockTransport(node_id=1, modulus=11, network=net)
+    # Smallest modulus satisfying the reference predicate (>= 57203, prime, ≡ 3 mod 4); the collision
+    # search below is O(modulus) but breaks on the first hit, so it typically runs in ~modulus iterations.
+    tr = MockTransport(node_id=1, modulus=57203, network=net)
     node = new_node(tr, home="n1")
     pub_a = node.advertise("/topic_a")
     topic_a = node.topics_by_name["topic_a"]
     target_sid = compute_subject_id(topic_a.hash, 1, tr.subject_id_modulus)
 
     colliding_name: str | None = None
-    for i in range(128):
+    for i in range(2_000_000):
         candidate = f"/topic_b_{i}"
         if compute_subject_id(rapidhash(candidate.removeprefix("/")), 0, tr.subject_id_modulus) == target_sid:
             colliding_name = candidate
