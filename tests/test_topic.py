@@ -41,7 +41,8 @@ def test_compute_subject_id_non_pinned_zero_evictions():
 
 
 def test_compute_subject_id_non_pinned_with_evictions():
-    """Non-pinned formula: offset + ((hash % modulus) + ((evictions % modulus)^2 % modulus)) % modulus."""
+    """Non-pinned formula: offset + ((hash + evictions^2) mod 2^64) % modulus; the modular-reduction form
+    used here for the expectation is equivalent whenever the sum does not overflow 64 bits."""
     topic_hash = rapidhash("some/topic")
     for ev in (1, 2, 5, 100):
         sid = compute_subject_id(topic_hash, ev, DEFAULT_MODULUS)
@@ -56,16 +57,17 @@ def test_compute_subject_id_non_pinned_with_evictions():
         assert sid == expected
 
 
-def test_compute_subject_id_non_pinned_does_not_wrap_uint64_sum():
+def test_compute_subject_id_wraps_uint64_sum():
+    """The hash + evictions² sum wraps mod 2^64 before reduction, matching the reference uint64 arithmetic
+    bit-for-bit. The eviction count is an untrusted uint32 gossip field, so the overflowing case is remotely
+    constructible; exact big-int arithmetic here would partition Python and C nodes onto different subject-IDs."""
     topic_hash = (1 << 64) - 1
     evictions = EVICTIONS_PINNED_MIN - 1
     sid = compute_subject_id(topic_hash, evictions, DEFAULT_MODULUS)
     uint64_wrapping = (
         SUBJECT_ID_PINNED_MAX + 1 + (((topic_hash + (evictions * evictions)) & ((1 << 64) - 1)) % DEFAULT_MODULUS)
     )
-    assert sid == 49564
-    assert uint64_wrapping == 74897
-    assert sid != uint64_wrapping
+    assert sid == uint64_wrapping == 74897
 
 
 def test_compute_subject_id_evictions_changes_sid():

@@ -222,9 +222,10 @@ def match_pattern(pattern: str, name: str) -> list[tuple[str, int]] | None:
 def compute_subject_id(topic_hash: int, evictions: int, modulus: int) -> int:
     if evictions >= EVICTIONS_PINNED_MIN:
         return 0xFFFFFFFF - evictions
-    h = topic_hash % modulus
-    e = evictions % modulus
-    return SUBJECT_ID_PINNED_MAX + 1 + ((h + ((e * e) % modulus)) % modulus)
+    # The sum wraps mod 2**64 before the reduction, matching the reference uint64 arithmetic bit-for-bit;
+    # without the wrap, a large hash plus a near-boundary eviction count (an untrusted gossip field) would
+    # place the same topic on different subject-IDs in Python and C.
+    return SUBJECT_ID_PINNED_MAX + 1 + (((topic_hash + evictions * evictions) & U64_MASK) % modulus)
 
 
 @dataclass
