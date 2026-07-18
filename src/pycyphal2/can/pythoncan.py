@@ -159,13 +159,14 @@ class PythonCANInterface(Interface):
                 _logger.debug("PythonCAN tx drop expired iface=%s id=%08x", self._name, entry.id)
                 job.abort(SendError(f"PythonCAN interface {self._name} tx deadline expired"))
                 continue
-            # The FD flag follows the interface mode, not the payload length, and BRS is never set,
-            # matching the reference (cy_can_socketcan emits every frame of an FD interface with FDF only).
+            # The FD flag follows the interface mode, not the payload length; see the REFERENCE PARITY
+            # note in socketcan._encode on why BRS is always set on an FD interface.
             msg = can.Message(
                 arbitration_id=entry.id,
                 is_extended_id=True,
                 data=entry.payload,
                 is_fd=self._fd,
+                bitrate_switch=self._fd,
             )
             try:
                 await asyncio.wait_for(loop.run_in_executor(None, self._bus.send, msg, timeout), timeout=timeout)

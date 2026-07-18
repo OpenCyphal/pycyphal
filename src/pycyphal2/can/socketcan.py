@@ -22,7 +22,10 @@ _logger = logging.getLogger(__name__)
 
 _CAN_FILTER_CAPACITY = 64
 _CAN_INTERFACE_TYPE = 280
-_CANFD_FDF = getattr(socket, "CANFD_FDF", 0)
+# CAN FD flag bits from linux/can.h. CPython's socket module does not expose these on any supported
+# version, so they are hardcoded; a getattr() fallback would silently clear them.
+_CANFD_BRS = 0x01  # Bit-rate switch: the data phase runs at the higher FD bit rate.
+_CANFD_FDF = 0x04  # Marks the frame as CAN FD for the dual-use struct canfd_frame.
 _CAN_FRAME_STRUCT = struct.Struct("=IB3x8s")
 _CANFD_FRAME_STRUCT = struct.Struct("=IBBBB64s")
 _CAN_FILTER_STRUCT = struct.Struct("=II")
@@ -207,13 +210,18 @@ class SocketCANInterface(Interface):
 
     def _encode(self, identifier: int, data: bytes) -> bytes:
         # The frame format is a property of the interface, fixed at construction, not of the payload
-        # length: every frame on an FD interface is an FD frame (FDF set, BRS never), as in the
-        # reference (cy_can_socketcan selects the FD/Classic vtable once from the netdev MTU).
+        # length: every frame on an FD interface is an FD frame, as in the reference
+        # (cy_can_socketcan selects the FD/Classic vtable once from the netdev MTU).
+        #
+        # REFERENCE PARITY: BRS is set on every FD frame, whereas the reference emits
+        # `.flags = CANFD_FDF` alone (cy_can_socketcan.c). Sending FD without BRS runs the data phase
+        # at the arbitration bit rate, forfeiting the throughput that is the point of FD, so this
+        # library always switches. BRS does not apply to Classic CAN.
         if self._fd:
             return _CANFD_FRAME_STRUCT.pack(
                 socket.CAN_EFF_FLAG | (identifier & socket.CAN_EFF_MASK),
                 len(data),
-                _CANFD_FDF,
+                _CANFD_FDF | _CANFD_BRS,
                 0,
                 0,
                 data.ljust(64, b"\x00"),

@@ -371,6 +371,17 @@ def test_encode_and_decode_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     encoded_fd_short = fd_iface._encode(456, b"abc")
     assert len(encoded_fd_short) == module._FD_FRAME_SIZE
 
+    # The flags byte must carry FDF (so the dual-use struct is unambiguous) and BRS (so the data phase
+    # actually runs at the FD bit rate) on EVERY FD frame, short payloads included. The literals are
+    # hardcoded from linux/can.h because CPython's socket module exposes neither; a getattr() fallback
+    # to 0 would silently emit flagless frames, which is what this assertion guards against.
+    assert module._CANFD_FDF == 0x04
+    assert module._CANFD_BRS == 0x01
+    for encoded in (encoded_fd, encoded_fd_short):
+        _, _, flags, _, _, _ = module._CANFD_FRAME_STRUCT.unpack(encoded)
+        assert flags & module._CANFD_FDF
+        assert flags & module._CANFD_BRS
+
     assert module.SocketCANInterface._decode(b"\x00") is None
 
     non_extended = module._CAN_FRAME_STRUCT.pack(0x123, 1, b"x".ljust(8, b"\x00"))

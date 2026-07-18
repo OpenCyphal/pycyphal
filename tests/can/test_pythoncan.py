@@ -1186,8 +1186,9 @@ async def test_unit_mixed_fd_and_classic_payloads() -> None:
 
 
 async def test_unit_fd_flags_follow_interface_mode() -> None:
-    """Every frame on an FD interface carries is_fd regardless of payload length, and BRS is never set;
-    a Classic interface never sets is_fd. Matches the reference cy_can_socketcan framing."""
+    """Every frame on an FD interface carries is_fd AND bitrate_switch regardless of payload length;
+    a Classic interface sets neither. See the REFERENCE PARITY note in socketcan._encode: BRS is always
+    set on FD, which is a deliberate divergence from the reference."""
     a, b = _virtual_pair(fd=True)
     sent: list[_can.Message] = []
     orig_send = a._bus.send
@@ -1204,7 +1205,7 @@ async def test_unit_fd_flags_follow_interface_mode() -> None:
             await asyncio.wait_for(b.receive(), timeout=2.0)
         assert len(sent) == 2
         assert all(m.is_fd for m in sent)
-        assert not any(m.bitrate_switch for m in sent)
+        assert all(m.bitrate_switch for m in sent)  # Including the 4-byte payload.
     finally:
         _close_all(a, b)
 
