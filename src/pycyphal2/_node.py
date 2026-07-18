@@ -122,17 +122,23 @@ def _name_is_homeful(name: str) -> bool:
     return name == "~" or name.startswith("~/")
 
 
+def _name_has_pattern_tokens(name: str) -> bool:
+    """A name is a pattern iff some whole '/'-segment is a substitution token ('*' or '>'). Tokens embedded
+    within a longer segment (e.g. 'ab*cd') are literal characters, as in the reference classifier
+    (wkv_has_substitution_tokens), so such names are legal verbatim topics."""
+    return any(seg in ("*", ">") for seg in name.split("/"))
+
+
 def _is_valid_wire_name(name: str) -> bool:
     """True if `name` is a well-formed *resolved* wire topic name, as required of names received in gossip:
     nonempty, length-bounded, printable ASCII (33-126), already normalized (no leading/trailing/duplicate
-    '/'), verbatim (no '*'/'>' pattern tokens), not homeful ('~'/'~/...'), and pin-free (no '#<id>' suffix).
-    The last two are stripped/expanded by resolve_name before a name reaches the wire, so their presence
-    means the gossip is unresolved/non-canonical and must not create a local topic."""
+    '/'), verbatim (no whole-segment '*'/'>' pattern tokens), not homeful ('~'/'~/...'), and pin-free
+    (no '#<id>' suffix). The last two are stripped/expanded by resolve_name before a name reaches the wire,
+    so their presence means the gossip is unresolved/non-canonical and must not create a local topic."""
     return (
         bool(name)
         and len(name) <= TOPIC_NAME_MAX
-        and "*" not in name
-        and ">" not in name
+        and not _name_has_pattern_tokens(name)
         and not _name_is_homeful(name)
         and all(33 <= ord(ch) <= 126 for ch in name)
         and _name_consume_pin_suffix(name)[1] is None
@@ -184,7 +190,7 @@ def resolve_name(
         if o < 33 or o > 126:
             raise ValueError(f"Invalid character in name: {ch!r}")
 
-    verbatim = "*" not in resolved and ">" not in resolved
+    verbatim = not _name_has_pattern_tokens(resolved)
     if pin is not None and not verbatim:
         raise ValueError("Pattern names cannot be pinned")
     return resolved, pin, verbatim

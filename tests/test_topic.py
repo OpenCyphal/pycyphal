@@ -113,6 +113,22 @@ async def test_advertise_creates_topic():
     node.close()
 
 
+async def test_advertise_embedded_wildcard_char_is_verbatim():
+    """'sensor/temp*raw' has no whole-segment substitution token, so it is a legal verbatim topic
+    (reference parity with the wkv classifier) and can be advertised."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="n")
+
+    pub = node.advertise("/sensor/temp*raw")
+    topic = node.topics_by_name.get("sensor/temp*raw")
+    assert topic is not None
+    assert topic.pub_count == 1
+
+    pub.close()
+    node.close()
+
+
 async def test_advertise_assigns_subject_id():
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
