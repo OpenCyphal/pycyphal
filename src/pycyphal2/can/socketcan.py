@@ -151,8 +151,13 @@ class SocketCANInterface(Interface):
         else:
             fd = self._sock.fileno()
             if fd >= 0:
-                loop.remove_reader(fd)
-                loop.remove_writer(fd)
+                try:
+                    loop.remove_reader(fd)
+                    loop.remove_writer(fd)
+                except NotImplementedError:
+                    # Windows' ProactorEventLoop implements neither call. SocketCAN itself is Linux-only,
+                    # but the unit tests exercise close() against whatever loop the host provides.
+                    pass
         self._sock.close()
 
     def __repr__(self) -> str:

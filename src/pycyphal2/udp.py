@@ -862,8 +862,13 @@ class _UDPTransportImpl(UDPTransport):
         fd = sock.fileno()
         if fd < 0:
             return
-        self._loop.remove_reader(fd)
-        self._loop.remove_writer(fd)
+        try:
+            self._loop.remove_reader(fd)
+            self._loop.remove_writer(fd)
+        except NotImplementedError:
+            # Windows' ProactorEventLoop drives sockets through overlapped I/O instead of selector
+            # callbacks, so it implements neither call and there is no registration to clean up.
+            pass
 
     def remove_subject_writer(self, subject_id: int, writer: _UDPSubjectWriter) -> None:
         if self._subject_writers.get(subject_id) is writer:

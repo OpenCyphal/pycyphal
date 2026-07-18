@@ -364,6 +364,28 @@ async def test_close_deregisters_the_fd_before_closing_it(monkeypatch: pytest.Mo
     assert loop.deregistered, "deregistration must not be left to the deferred task cancellation"
 
 
+async def test_close_tolerates_a_loop_without_reader_registration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows' ProactorEventLoop drives sockets through overlapped I/O and raises NotImplementedError
+    from remove_reader/remove_writer. close() must treat that as "nothing to deregister" rather than
+    propagating it -- an unguarded call broke every Windows job while Linux and macOS stayed green."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+
+    class _ProactorishLoop(_FakeLoop):
+        def remove_reader(self, fd: int) -> bool:
+            raise NotImplementedError
+
+        def remove_writer(self, fd: int) -> bool:
+            raise NotImplementedError
+
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: _ProactorishLoop())
+
+    iface.close()  # Must not raise.
+    assert iface._closed
+    assert ("close",) in iface._sock.calls  # The socket was still closed.
+
+
 async def test_fail_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> None:
     """A non-transient TX failure (_fail -> close) must likewise unblock a parked reader."""
     fake_socket, _ = _make_socket_module()
