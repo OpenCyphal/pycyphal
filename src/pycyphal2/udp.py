@@ -52,7 +52,8 @@ IPv4_MCAST_PREFIX = 0xEF000000
 IPv4_SUBJECT_ID_MAX = 0x7FFFFF
 TRANSFER_ID_MASK = (1 << 48) - 1
 _MULTICAST_TTL = 16
-_IP_MULTICAST_ALL_LINUX = 49  # Linux uapi in.h; not exposed by CPython's socket module.
+# Linux uapi in.h value; older CPython does not expose it in the socket module, so fall back to the literal.
+_IP_MULTICAST_ALL_LINUX = getattr(socket, "IP_MULTICAST_ALL", 49)
 _SIOCGIFMTU = 0x8921
 _CYPHAL_OVERHEAD_MAX = 100
 _CYPHAL_MTU_LINK_MIN = 576
@@ -477,15 +478,16 @@ class _UDPSubjectWriter(SubjectWriter):
         # Snapshot (iface, sock, lock) elements before the first await so a concurrent close() clearing
         # the socket lists cannot desync indices; a send racing close simply hits a closed socket and
         # aggregates as a per-interface error rather than raising IndexError.
-        targets = list(zip(self._transport.interfaces, self._transport.tx_socks, self._transport.tx_locks))
+        targets = list(zip(self._transport.interfaces, self._transport.tx_socks, self._transport.tx_locks, strict=True))
         coros = []
         for iface, sock, lock in targets:
             frames = _segment_transfer(priority, transfer_id, self._transport.uid, message, iface.mtu_cyphal)
             coros.append(self._transport.send_on_iface(sock, lock, frames, addr, deadline))
         # Send to all interfaces concurrently so a congested interface cannot starve a healthy one of the
         # shared deadline (each interface's frames still go out in order under its own socket lock).
-        results = await asyncio.gather(*coros)
-        errors = [r for r in results if r is not None]
+        # return_exceptions=True lets every interface settle before we aggregate, so none is left running.
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        errors = [r for r in results if isinstance(r, Exception)]
         success_count = len(results) - len(errors)
 
         if errors and success_count == 0:
@@ -737,15 +739,25 @@ class _UDPTransportImpl(UDPTransport):
     ) -> Exception | None:
         """Send every frame of one transfer on one interface, serialized on that socket's lock. Returns
         the failure (never raised) so the caller can aggregate per-interface results, or None on success."""
-        async with lock:
+        # Bound the lock wait by the same absolute deadline, so a short-deadline sender queued behind a
+        # long-deadline holder fails on its own budget rather than waiting out the holder's.
+        remaining_ns = deadline.ns - Instant.now().ns
+        if remaining_ns <= 0:
+            return SendError("Deadline exceeded")
+        try:
+            await asyncio.wait_for(lock.acquire(), timeout=remaining_ns * 1e-9)
+        except asyncio.TimeoutError:
+            return SendError("Deadline exceeded waiting for socket lock")
+        try:
             if self._closed:
                 return ClosedError("Transport closed")
-            try:
-                for frame in frames:
-                    await self.async_sendto(sock, frame, addr, deadline)
-                return None
-            except (OSError, SendError) as e:
-                return e
+            for frame in frames:
+                await self.async_sendto(sock, frame, addr, deadline)
+            return None
+        except (OSError, SendError) as e:
+            return e
+        finally:
+            lock.release()
 
     def __repr__(self) -> str:
         addrs = ", ".join(str(i.address) for i in self._interfaces)
@@ -817,7 +829,7 @@ class _UDPTransportImpl(UDPTransport):
         # Snapshot targets (only interfaces with a known endpoint) before the first await, then send
         # concurrently, as with the subject writer.
         coros = []
-        for i, (iface, sock, lock) in enumerate(zip(self._interfaces, self._tx_socks, self._tx_locks)):
+        for i, (iface, sock, lock) in enumerate(zip(self._interfaces, self._tx_socks, self._tx_locks, strict=True)):
             ep = self._remote_endpoints.get((remote_id, i))
             if ep is None:
                 _logger.debug("Unicast tx skip rid=%016x iface=%d reason=no-endpoint", remote_id, i)
@@ -829,8 +841,8 @@ class _UDPTransportImpl(UDPTransport):
             _logger.warning("No endpoint known for remote_id=0x%016x", remote_id)
             raise SendError("No endpoint known for remote_id")
 
-        results = await asyncio.gather(*coros)
-        errors = [r for r in results if r is not None]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        errors = [r for r in results if isinstance(r, Exception)]
         success_count = len(results) - len(errors)
 
         if success_count == 0:

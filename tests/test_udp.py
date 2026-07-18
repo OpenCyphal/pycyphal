@@ -1252,6 +1252,32 @@ async def test_concurrent_sends_on_shared_socket_are_serialized() -> None:
 
 
 @pytest.mark.asyncio
+async def test_short_deadline_send_fails_on_own_budget_behind_long_holder() -> None:
+    """A short-deadline sender queued behind a long-deadline holder of the same socket lock must fail on
+    its own deadline rather than waiting out the holder (the lock acquisition is deadline-bounded)."""
+    iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
+    pub = UDPTransport.new(interfaces=[iface])
+    assert isinstance(pub, _UDPTransportImpl)
+    holder_entered = asyncio.Event()
+    holder_release = asyncio.Event()
+
+    async def slow_sendto(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
+        holder_entered.set()
+        await holder_release.wait()
+
+    with patch.object(pub, "async_sendto", slow_sendto):
+        holder = pub.subject_advertise(10)
+        waiter = pub.subject_advertise(11)  # Same interface -> same socket lock.
+        holder_task = asyncio.create_task(holder(Instant.now() + 100.0, Priority.NOMINAL, b"hold"))
+        await holder_entered.wait()  # The holder now owns the lock and is parked in the send.
+        with pytest.raises(SendError):
+            await waiter(Instant.now() + 0.15, Priority.NOMINAL, b"wait")
+        holder_release.set()
+        await holder_task  # The holder still completes cleanly.
+    pub.close()
+
+
+@pytest.mark.asyncio
 async def test_close_during_send_raises_send_error_not_index_error() -> None:
     """A send suspended when close() empties the socket lists must surface a clean SendError, never an
     IndexError (finding #9). The snapshotted socket is closed by then, so the resumed send fails on the
