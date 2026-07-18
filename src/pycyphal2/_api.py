@@ -282,7 +282,7 @@ class Publisher(Closable, ABC):
         from any subscriber that chooses to answer.
 
         ``response_timeout`` is the maximum idle gap (liveness timeout) between accepted responses,
-        so it applies both to one-off RPC and to streaming. It must be non-negative; a non-finite value
+        so it applies both to one-off RPC and to streaming. It must be non-negative; positive infinity
         (``inf``) disables the liveness timeout, and ``NaN`` or a negative value raises :class:`ValueError`.
         """
         raise NotImplementedError

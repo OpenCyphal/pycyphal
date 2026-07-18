@@ -50,7 +50,9 @@ class Transport(Closable):
     @abstractmethod
     def subject_id_modulus(self) -> int:
         """
-        Constant, cannot be changed while the transport is in used because that would invalidate subject allocations.
+        Constant, cannot be changed while the transport is in use because that would invalidate subject allocations.
+        The value must satisfy the reference predicate — at least ``SUBJECT_ID_MODULUS_16bit`` (57203), prime, and
+        congruent to 3 modulo 4 — otherwise :meth:`pycyphal2.Node.new` rejects the transport with ``ValueError``.
         """
         raise NotImplementedError
 

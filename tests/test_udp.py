@@ -1304,6 +1304,10 @@ async def test_short_deadline_send_fails_on_own_budget_behind_long_holder() -> N
             await waiter(Instant.now() + 0.15, Priority.NOMINAL, b"wait")
         holder_release.set()
         await holder_task  # The holder still completes cleanly.
+
+    # The lock-acquisition timeout must not have leaked the socket lock: a later send succeeds.
+    assert not pub._tx_locks[0].locked()
+    await waiter(Instant.now() + 2.0, Priority.NOMINAL, b"after")
     pub.close()
 
 
@@ -1415,6 +1419,30 @@ async def test_housekeeping_loop_retires_stale_sessions(monkeypatch: pytest.Monk
         assert t._unicast_reassembler._sessions == {}
     finally:
         t.close()
+
+
+@pytest.mark.asyncio
+async def test_tx_socket_creation_failure_rolls_back_created_sockets() -> None:
+    """A TX-socket creation failure mid-construction must roll back the interface sockets created before
+    it, rather than leaking their file descriptors (finding #11 completeness)."""
+    iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
+    real_create = _UDPTransportImpl._create_tx_socket
+    created: list[socket.socket] = []
+    calls = {"n": 0}
+
+    def flaky_create(iface_arg):  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        if calls["n"] == 2:  # Fail the second interface, after the first socket exists.
+            raise OSError("tx socket bind failed")
+        sock = real_create(iface_arg)
+        created.append(sock)
+        return sock
+
+    with patch.object(_UDPTransportImpl, "_create_tx_socket", staticmethod(flaky_create)):
+        with pytest.raises(OSError):
+            UDPTransport.new(interfaces=[iface, iface])
+    assert len(created) == 1
+    assert created[0].fileno() == -1  # The first socket was closed by the rollback (no fd leak).
 
 
 def test_interface_rejects_subminimum_mtu() -> None:

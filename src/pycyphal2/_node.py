@@ -1025,8 +1025,8 @@ class NodeImpl(Node):
         await self.send_gossip(topic, broadcast=True)
 
     async def _gossip_event_periodic(self, topic: TopicImpl) -> None:
-        # Retry a previously-failed listener acquisition on the gossip cadence (cy.c:1819), so a verbatim
-        # subscription whose listener failed once eventually recovers.
+        # Retry a previously-failed listener acquisition on the gossip cadence (reference
+        # topic_sync_subject_reader), so a verbatim subscription whose listener failed once recovers.
         topic.sync_listener()
         self._reschedule_gossip_periodic(topic, suppressed=False)
         broadcast = (topic.gossip_counter < GOSSIP_BROADCAST_RATIO) or (

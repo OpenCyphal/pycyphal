@@ -664,11 +664,16 @@ class _UDPTransportImpl(UDPTransport):
         # serialized; without it a displaced sock_sendto can hang until its deadline.
         self._tx_locks: list[asyncio.Lock] = []
         self._self_endpoints: set[tuple[str, int]] = set()
-        for iface in self._interfaces:
-            sock = self._create_tx_socket(iface)
-            self._tx_socks.append(sock)
-            self._tx_locks.append(asyncio.Lock())
-            self._self_endpoints.add(sock.getsockname()[:2])
+        try:
+            for iface in self._interfaces:
+                sock = self._create_tx_socket(iface)
+                self._tx_socks.append(sock)
+                self._tx_locks.append(asyncio.Lock())
+                self._self_endpoints.add(sock.getsockname()[:2])
+        except BaseException:
+            for sock in self._tx_socks:  # Roll back sockets created before the failure.
+                sock.close()
+            raise
 
         self._subject_handlers: dict[int, Callable[[TransportArrival], None]] = {}
         self._subject_writers: dict[int, _UDPSubjectWriter] = {}
@@ -699,10 +704,14 @@ class _UDPTransportImpl(UDPTransport):
     @staticmethod
     def _create_tx_socket(iface: Interface) -> socket.socket:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setblocking(False)
-        sock.bind((str(iface.address), 0))
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, _MULTICAST_TTL)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(str(iface.address)))
+        try:
+            sock.setblocking(False)
+            sock.bind((str(iface.address), 0))
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, _MULTICAST_TTL)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(str(iface.address)))
+        except BaseException:
+            sock.close()  # Do not leak the fd if bind/setsockopt fails.
+            raise
         _logger.info("TX socket created on %s, bound to port %d", iface.address, sock.getsockname()[1])
         return sock
 
@@ -917,8 +926,9 @@ class _UDPTransportImpl(UDPTransport):
         self._subject_handlers.clear()
         self._subject_writers.clear()
         self._reassemblers.clear()
-        # Also release the state the finding flagged as surviving close(): the unicast reassembler's
-        # sessions, the learned reverse-route cache, and the unicast handler reference.
+        # Release all RX-side state so a closed transport retains no session memory, learned reverse
+        # routes, or handler references: the unicast reassembler's sessions, the endpoint cache, and the
+        # unicast handler.
         self._unicast_reassembler = _RxReassembler()
         self._remote_endpoints.clear()
         self._unicast_handler = None
