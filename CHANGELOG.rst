@@ -18,29 +18,6 @@ with v1 in the same Python environment.
 
 - Add Cyphal/CAN SLCAN media with a browser WebSerial backend.
 
-- Correctness and robustness fixes from a deep audit against the C reference:
-
-  - Malformed wire input can no longer raise on the receive path: a crafted gossip topic name is dropped
-    rather than crashing the pin-suffix parser, and the Cyphal/CAN reader loop survives a raising handler
-    instead of going permanently deaf.
-  - ``subject_id_modulus`` is validated (at least 57203, prime, ≡ 3 mod 4) at node construction, so a
-    degenerate value is rejected instead of hanging the event loop.
-  - Cyphal/UDP sends to redundant interfaces concurrently with per-socket serialization, so a congested
-    interface no longer starves a healthy one and closing mid-send raises a clean error.
-  - Wire-format parity fixes: subject-ID computation wraps mod 2^64, the fragment-tree neighbor lookup and
-    transfer-ID history seed match the reference, whole-segment wildcard classification (so names like
-    ``ab*cd`` are legal verbatim topics), CAN FD framing is fixed per interface with no bit-rate switching,
-    CAN unicast accepts node-ID 0, SLCAN drops standard-ID frames, and idle CAN RX sessions retire at the
-    transfer-ID timeout.
-  - On Linux, multicast RX sockets disable cross-interface delivery so reverse routes are not mislearned on
-    multi-homed hosts.
-  - Node and transport setup paths are transactional: a transport failure mid-setup rolls back rather than
-    leaving unrepairable half-state (subscribe follows the reference repair model and no longer raises on a
-    listener acquisition failure).
-  - Internal per-remote state (dedup, reordering, reassembly sessions, learned reverse routes) is bounded
-    under untrusted traffic and released on close.
-  - Node close and implicit-topic GC no longer orphan or hang an outstanding response stream.
-
 Changelog v1
 ============
 
