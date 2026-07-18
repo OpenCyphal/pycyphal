@@ -181,11 +181,10 @@ class SocketCANInterface(Interface):
         return ex.errno in _TRANSIENT_TX_ERRNO
 
     def _encode(self, identifier: int, data: bytes) -> bytes:
-        if len(data) > 8:
-            if not self._fd:
-                raise ValueError(
-                    f"SocketCAN interface {self._name} cannot send a {len(data)}-byte frame on Classic CAN"
-                )
+        # The frame format is a property of the interface, fixed at construction, not of the payload
+        # length: every frame on an FD interface is an FD frame (FDF set, BRS never), as in the
+        # reference (cy_can_socketcan selects the FD/Classic vtable once from the netdev MTU).
+        if self._fd:
             return _CANFD_FRAME_STRUCT.pack(
                 socket.CAN_EFF_FLAG | (identifier & socket.CAN_EFF_MASK),
                 len(data),
@@ -194,6 +193,8 @@ class SocketCANInterface(Interface):
                 0,
                 data.ljust(64, b"\x00"),
             )
+        if len(data) > 8:
+            raise ValueError(f"SocketCAN interface {self._name} cannot send a {len(data)}-byte frame on Classic CAN")
         return _CAN_FRAME_STRUCT.pack(
             socket.CAN_EFF_FLAG | (identifier & socket.CAN_EFF_MASK),
             len(data),

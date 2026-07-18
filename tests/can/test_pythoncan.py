@@ -1185,6 +1185,48 @@ async def test_unit_mixed_fd_and_classic_payloads() -> None:
         _close_all(a, b)
 
 
+async def test_unit_fd_flags_follow_interface_mode() -> None:
+    """Every frame on an FD interface carries is_fd regardless of payload length, and BRS is never set;
+    a Classic interface never sets is_fd. Matches the reference cy_can_socketcan framing."""
+    a, b = _virtual_pair(fd=True)
+    sent: list[_can.Message] = []
+    orig_send = a._bus.send
+
+    def recording_send(msg: _can.Message, timeout: float | None = None) -> None:
+        sent.append(msg)
+        orig_send(msg, timeout)
+
+    a._bus.send = recording_send  # type: ignore[method-assign]
+    try:
+        a.enqueue(0x00030000, [memoryview(b"tiny")], Instant.now() + 2.0)
+        a.enqueue(0x00030001, [memoryview(bytes(range(32)))], Instant.now() + 2.0)
+        for _ in range(2):
+            await asyncio.wait_for(b.receive(), timeout=2.0)
+        assert len(sent) == 2
+        assert all(m.is_fd for m in sent)
+        assert not any(m.bitrate_switch for m in sent)
+    finally:
+        _close_all(a, b)
+
+    c, d = _virtual_pair()
+    sent_classic: list[_can.Message] = []
+    orig_send_c = c._bus.send
+
+    def recording_send_c(msg: _can.Message, timeout: float | None = None) -> None:
+        sent_classic.append(msg)
+        orig_send_c(msg, timeout)
+
+    c._bus.send = recording_send_c  # type: ignore[method-assign]
+    try:
+        c.enqueue(0x00030002, [memoryview(b"tiny")], Instant.now() + 2.0)
+        await asyncio.wait_for(d.receive(), timeout=2.0)
+        assert len(sent_classic) == 1
+        assert not sent_classic[0].is_fd
+        assert not sent_classic[0].bitrate_switch
+    finally:
+        _close_all(c, d)
+
+
 async def test_unit_enqueue_same_id_preserves_order() -> None:
     a, b = _virtual_pair()
     try:

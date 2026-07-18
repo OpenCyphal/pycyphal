@@ -311,6 +311,11 @@ def test_encode_and_decode_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     encoded_fd = fd_iface._encode(456, b"012345678")
     assert len(encoded_fd) == module._FD_FRAME_SIZE
 
+    # The frame format follows the interface mode, not the payload length: a short payload on an FD
+    # interface is still emitted as an FD frame, as in the reference.
+    encoded_fd_short = fd_iface._encode(456, b"abc")
+    assert len(encoded_fd_short) == module._FD_FRAME_SIZE
+
     assert module.SocketCANInterface._decode(b"\x00") is None
 
     non_extended = module._CAN_FRAME_STRUCT.pack(0x123, 1, b"x".ljust(8, b"\x00"))
