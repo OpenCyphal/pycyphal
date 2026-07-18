@@ -28,7 +28,7 @@ from ._header import (
     ScoutHeader,
     deserialize_header,
 )
-from ._transport import SubjectWriter, Transport, TransportArrival
+from ._transport import SUBJECT_ID_MODULUS_16bit, SubjectWriter, Transport, TransportArrival
 from ._api import Topic, Node, Publisher, Subscriber, Breadcrumb, Closable, ClosedError, Instant, Priority, SendError
 from ._api import SUBJECT_ID_PINNED_MAX
 
@@ -223,6 +223,21 @@ def match_pattern(pattern: str, name: str) -> list[tuple[str, int]] | None:
     if len(p_parts) != len(n_parts):
         return None
     return subs
+
+
+def is_valid_subject_id_modulus(modulus: int) -> bool:
+    """The reference predicate (cy.c is_valid_subject_id_modulus): at least 57203, prime, and ≡ 3 (mod 4).
+    The quadratic probe (hash + evictions²) mod m covers the residue space only under these conditions;
+    a degenerate modulus would make the synchronous displacement loop in topic_allocate effectively
+    non-terminating, hard-blocking the event loop."""
+    if modulus < SUBJECT_ID_MODULUS_16bit or modulus % 4 != 3:
+        return False
+    d = 3
+    while d * d <= modulus:
+        if modulus % d == 0:
+            return False
+        d += 2
+    return True
 
 
 def compute_subject_id(topic_hash: int, evictions: int, modulus: int) -> int:
@@ -521,6 +536,11 @@ class NodeImpl(Node):
         self.respond_futures: dict[tuple[int, ...], RespondTracker] = {}
 
         modulus = transport.subject_id_modulus
+        if not is_valid_subject_id_modulus(modulus):
+            raise ValueError(
+                f"Invalid subject_id_modulus {modulus}: "
+                f"must be at least {SUBJECT_ID_MODULUS_16bit}, prime, and congruent to 3 modulo 4"
+            )
         sid_max = SUBJECT_ID_PINNED_MAX + modulus
         self.broadcast_subject_id = (1 << (int(math.log2(sid_max)) + 1)) - 1
         self.gossip_shard_count = self.broadcast_subject_id - (sid_max + 1)

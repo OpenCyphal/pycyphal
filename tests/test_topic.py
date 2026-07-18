@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from pycyphal2 import SUBJECT_ID_PINNED_MAX
 from pycyphal2._node import left_wins
 from pycyphal2._hash import rapidhash
@@ -9,6 +11,7 @@ from pycyphal2._node import (
     EVICTIONS_PINNED_MIN,
     GossipScope,
     compute_subject_id,
+    is_valid_subject_id_modulus,
     match_pattern,
     resolve_name,
 )
@@ -92,6 +95,31 @@ def test_compute_subject_id_just_below_pinned():
         )
     )
     assert sid == expected
+
+
+def test_is_valid_subject_id_modulus_predicate():
+    """Mirror of the reference predicate: >= 57203, prime, and ≡ 3 (mod 4)."""
+    for good in (57203, 122743, 8378431, 4294954663):
+        assert is_valid_subject_id_modulus(good)
+    assert not is_valid_subject_id_modulus(3)  # Prime and ≡3 mod 4, but below the minimum.
+    assert not is_valid_subject_id_modulus(57202)  # Below the minimum.
+    assert not is_valid_subject_id_modulus(57205)  # ≡ 1 mod 4.
+    assert not is_valid_subject_id_modulus(57207)  # ≡ 3 mod 4 but composite (3 × 19069).
+    assert not is_valid_subject_id_modulus(122744)  # Even.
+
+
+async def test_degenerate_subject_id_modulus_rejected():
+    """A modulus violating the reference predicate must be rejected at node construction: the quadratic
+    probe (hash + evictions²) mod m does not cover the residue space under a degenerate modulus, so the
+    synchronous displacement loop in topic_allocate would hard-block the event loop."""
+    for bad in (3, 57202, 57205, 57207, 122744):
+        tr = MockTransport(node_id=1, modulus=bad, network=MockNetwork())
+        with pytest.raises(ValueError, match="subject_id_modulus"):
+            new_node(tr, home="n")
+    for good in (57203, 122743, 8378431):
+        tr = MockTransport(node_id=1, modulus=good, network=MockNetwork())
+        node = new_node(tr, home="n")
+        node.close()
 
 
 async def test_advertise_creates_topic():
