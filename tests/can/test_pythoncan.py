@@ -1297,13 +1297,35 @@ async def test_unit_tx_bus_error_mock() -> None:
 
 
 async def test_unit_rx_bus_error_propagates() -> None:
+    """An RX failure is recorded at its source and surfaces to the reader with the cause attached."""
     mock_bus = MagicMock(spec=_can.BusABC)
-    mock_bus.recv.side_effect = OSError("hardware gone")
+    err = OSError("hardware gone")
+    mock_bus.recv.side_effect = err
     mock_bus.channel_info = "mock:err"
     itf = PythonCANInterface(mock_bus)
-    with pytest.raises(ClosedError, match="receive failed"):
+    with pytest.raises(ClosedError) as caught:
         await asyncio.wait_for(itf.receive(), timeout=2.0)
+    assert itf._failure is err  # Recorded by _fail() in the RX thread's handoff, not by receive().
+    assert caught.value.__cause__ is err  # The sentinel carries the underlying cause.
     itf.close()
+
+
+async def test_unit_clean_close_is_not_recorded_as_a_failure() -> None:
+    """close() must not be misrecorded as an interface failure. receive() used to feed EVERY sentinel --
+    including the plain ClosedError installed by an explicit close -- back through _fail(), so a clean
+    shutdown ended up reported as 'receive failed'. SocketCANInterface already got this right."""
+    mock_bus = MagicMock(spec=_can.BusABC)
+    mock_bus.recv.return_value = None  # Idle bus: the reader parks on the queue.
+    mock_bus.channel_info = "mock:cleanclose"
+    itf = PythonCANInterface(mock_bus)
+    receiver = asyncio.create_task(itf.receive())
+    await asyncio.sleep(0.05)
+    assert not receiver.done()  # Parked.
+
+    itf.close()
+    with pytest.raises(ClosedError):
+        await asyncio.wait_for(receiver, timeout=2.0)
+    assert itf._failure is None  # A clean close leaves no failure recorded.
 
 
 async def test_unit_multiple_close_with_failure() -> None:

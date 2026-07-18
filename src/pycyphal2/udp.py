@@ -703,11 +703,20 @@ class _UDPTransportImpl(UDPTransport):
         self._unicast_rx_tasks: list[asyncio.Task[None]] = []
         self._mcast_rx_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
 
-        for i, sock in enumerate(self._tx_socks):
-            task = self._loop.create_task(self._unicast_rx_loop(sock, i))
-            self._unicast_rx_tasks.append(task)
-
-        self._housekeeping_task = self._loop.create_task(self._housekeeping_loop())
+        # Task creation is the remaining fallible step; a failure here would otherwise leak every TX
+        # socket and orphan the RX tasks already spawned, since a half-built transport is never returned
+        # to the caller and so is never close()d.
+        try:
+            for i, sock in enumerate(self._tx_socks):
+                task = self._loop.create_task(self._unicast_rx_loop(sock, i))
+                self._unicast_rx_tasks.append(task)
+            self._housekeeping_task = self._loop.create_task(self._housekeeping_loop())
+        except BaseException:
+            for task in self._unicast_rx_tasks:
+                task.cancel()
+            for sock in self._tx_socks:
+                sock.close()
+            raise
 
         _logger.info(
             "UDPTransport initialized: uid=0x%016x, interfaces=%s, modulus=%d",
@@ -829,7 +838,22 @@ class _UDPTransportImpl(UDPTransport):
                 task.cancel()
             sock = self._mcast_socks.pop(key, None)
             if sock is not None:
+                self._deregister_socket(sock)  # Before close(); see the note in close().
                 sock.close()
+
+    def _deregister_socket(self, sock: socket.socket) -> None:
+        """
+        Drop any selector callbacks for this socket while its descriptor is still open.
+
+        Cancelling the task that owns a ``sock_recv``/``sock_sendto`` only schedules the teardown, so
+        without this the removal would run after the descriptor is closed -- and would hit an unrelated
+        socket if the number had been recycled by then. Both removals no-op when nothing is registered.
+        """
+        fd = sock.fileno()
+        if fd < 0:
+            return
+        self._loop.remove_reader(fd)
+        self._loop.remove_writer(fd)
 
     def remove_subject_writer(self, subject_id: int, writer: _UDPSubjectWriter) -> None:
         if self._subject_writers.get(subject_id) is writer:
@@ -931,6 +955,12 @@ class _UDPTransportImpl(UDPTransport):
         for task in self._mcast_rx_tasks.values():
             task.cancel()
         self._mcast_rx_tasks.clear()
+        # Deregister before closing: the cancellations above land on a later loop iteration while
+        # sock.close() takes effect now, so the selector callbacks would otherwise be torn down against
+        # a closed fd -- or against whatever socket has since inherited that fd number. A send already
+        # parked inside sock_sendto still unblocks on its own deadline, which is the caller's budget.
+        for sock in [*self._tx_socks, *self._mcast_socks.values()]:
+            self._deregister_socket(sock)
         for sock in self._tx_socks:
             sock.close()
         for sock in self._mcast_socks.values():

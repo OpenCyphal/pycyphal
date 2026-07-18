@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import os
 from pathlib import Path
 import sys
 import types
@@ -19,6 +20,9 @@ _SOURCE = Path(__file__).resolve().parents[2] / "src/pycyphal2/can/socketcan.py"
 class _FakeRawSocket:
     def __init__(self) -> None:
         self.calls: list[tuple[object, ...]] = []
+        # A real fd, so close() can deregister it from the selector exactly as it would a real CAN
+        # socket. Fabricating a number here would risk deregistering an unrelated fd in this process.
+        self._rfd, self._wfd = os.pipe()
 
     def setblocking(self, enabled: bool) -> None:
         self.calls.append(("setblocking", enabled))
@@ -29,8 +33,17 @@ class _FakeRawSocket:
     def bind(self, address: tuple[str]) -> None:
         self.calls.append(("bind", address))
 
+    def fileno(self) -> int:
+        return self._rfd
+
     def close(self) -> None:
         self.calls.append(("close",))
+        for fd in (self._rfd, self._wfd):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        self._rfd = self._wfd = -1
 
 
 class _TaskStub:
@@ -50,6 +63,17 @@ class _FakeLoop:
         self.send = list(send or [])
         self.sent_frames: list[bytes] = []
         self.created_tasks: list[object] = []
+        # close() deregisters the fd from the selector before closing it; record the order so a test can
+        # assert the deregistration precedes the close rather than racing a deferred task cancellation.
+        self.deregistered: list[tuple[str, int]] = []
+
+    def remove_reader(self, fd: int) -> bool:
+        self.deregistered.append(("reader", fd))
+        return False
+
+    def remove_writer(self, fd: int) -> bool:
+        self.deregistered.append(("writer", fd))
+        return False
 
     def create_task(self, coro: object) -> _TaskStub:
         if hasattr(coro, "close"):
@@ -316,6 +340,28 @@ async def test_close_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> N
         await asyncio.wait_for(recv_task, timeout=1.0)
     assert iface._rx_task is None
     assert iface._failure is None  # A clean close is not an interface failure.
+
+
+async def test_close_deregisters_the_fd_before_closing_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Task.cancel() is deferred to a later loop iteration but socket.close() takes effect immediately,
+    so relying on the cancelled reader to deregister itself tears down selector callbacks against an
+    already-closed fd -- and against a DIFFERENT socket if that fd number has been reused meanwhile.
+    close() must therefore deregister explicitly, before closing."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    loop = _FakeLoop()
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
+
+    sock = iface._sock
+    fd = sock.fileno()
+    assert fd >= 0
+    iface.close()
+
+    assert loop.deregistered == [("reader", fd), ("writer", fd)]
+    # Ordering is the whole point: the fd must still be open when it is deregistered.
+    assert ("close",) in sock.calls
+    assert loop.deregistered, "deregistration must not be left to the deferred task cancellation"
 
 
 async def test_fail_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> None:

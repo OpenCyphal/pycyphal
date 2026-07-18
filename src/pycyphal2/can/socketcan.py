@@ -138,6 +138,20 @@ class SocketCANInterface(Interface):
             self._tx_task.cancel()
             self._tx_task = None
         self._tx.abort_all(self._closed_error)
+        # Deregister explicitly BEFORE closing the fd. Task.cancel() above is deferred to a later loop
+        # iteration, whereas socket.close() takes effect now, so the selector callbacks installed by
+        # sock_recv/sock_sendto would otherwise be torn down against an already-closed fd -- and if that
+        # number were meanwhile reused by another socket, the deferred removal would deregister ITS
+        # callbacks instead. Both removals are no-ops when nothing is registered.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # Closed outside a running loop; nothing can be registered either.
+            pass
+        else:
+            fd = self._sock.fileno()
+            if fd >= 0:
+                loop.remove_reader(fd)
+                loop.remove_writer(fd)
         self._sock.close()
 
     def __repr__(self) -> str:
