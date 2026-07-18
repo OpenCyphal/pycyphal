@@ -250,7 +250,9 @@ class _CANTransportImpl(CANTransport):
     async def unicast(self, deadline: Instant, priority: Priority, remote_id: int, message: bytes | memoryview) -> None:
         if self._closed:
             raise ClosedError("CAN transport closed")
-        if not (1 <= remote_id <= NODE_ID_MAX):
+        # Node-ID 0 is a valid regular node in Cyphal/CAN v1 (only v0 treated it as anonymous), so it is
+        # a legal unicast destination; rejecting it would make the ACK path unable to answer a node-0 peer.
+        if not (0 <= remote_id <= NODE_ID_MAX):
             raise ValueError(f"Invalid remote node-ID: {remote_id}")
         transfer_id = self._unicast_tid[remote_id]
         self._unicast_tid[remote_id] = (transfer_id + 1) % TRANSFER_ID_MODULO
