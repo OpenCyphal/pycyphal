@@ -250,7 +250,9 @@ class _CANTransportImpl(CANTransport):
     async def unicast(self, deadline: Instant, priority: Priority, remote_id: int, message: bytes | memoryview) -> None:
         if self._closed:
             raise ClosedError("CAN transport closed")
-        if not (1 <= remote_id <= NODE_ID_MAX):
+        # Node-ID 0 is a regular node in Cyphal/CAN v1 (only v0 treated it as anonymous); rejecting it
+        # would leave the ACK path unable to answer a node-0 peer.
+        if not (0 <= remote_id <= NODE_ID_MAX):
             raise ValueError(f"Invalid remote node-ID: {remote_id}")
         transfer_id = self._unicast_tid[remote_id]
         self._unicast_tid[remote_id] = (transfer_id + 1) % TRANSFER_ID_MODULO
@@ -365,7 +367,11 @@ class _CANTransportImpl(CANTransport):
             iface_index = self._interface_index.get(id(itf))
             if iface_index is None:
                 return
-            self._ingest_frame(iface_index, frame)
+            try:
+                self._ingest_frame(iface_index, frame)
+            except Exception:
+                # A raising handler must not kill the reader loop; drop the frame and keep serving.
+                _logger.exception("Frame ingest raised iface=%s", itf.name)
 
     def _drop_interface(self, itf: Interface, ex: BaseException) -> None:
         if itf not in self._interfaces:
@@ -465,7 +471,11 @@ class _CANTransportImpl(CANTransport):
         try:
             while not self._closed:
                 await asyncio.sleep(1.0)
-                Reassembler.cleanup_sessions(self._endpoints.values(), Instant.now().ns)
+                try:
+                    Reassembler.cleanup_sessions(self._endpoints.values(), Instant.now().ns)
+                except Exception:
+                    # Retirement is not traffic-driven: a faulty sweep must not kill the loop and leak sessions.
+                    _logger.exception("Session cleanup failed; continuing")
         except asyncio.CancelledError:
             raise
 

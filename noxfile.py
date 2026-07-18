@@ -7,7 +7,7 @@ import nox
 
 nox.options.sessions = ["test", "mypy", "lint", "format"]
 
-PYTHONS = ["3.11", "3.12", "3.13"]
+PYTHONS = ["3.11", "3.12", "3.13", "3.14"]
 
 
 @nox.session(python=False, default=False)

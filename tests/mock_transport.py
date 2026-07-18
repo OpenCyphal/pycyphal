@@ -72,6 +72,10 @@ class MockTransport(Transport):
         self.unicast_log: list[tuple[int, bytes]] = []
         self.closed = False
         self.fail_unicast = False
+        # Setup-path failure injection for transactional-rollback tests: a subject-ID in either set makes
+        # that acquisition raise. Never auto-cleared, so a test controls exactly which retries fail.
+        self.fail_subject_listen: set[int] = set()
+        self.fail_subject_advertise: set[int] = set()
 
         if network is not None:
             network.add_transport(self)
@@ -86,6 +90,8 @@ class MockTransport(Transport):
     def subject_listen(self, subject_id: int, handler: Callable[[TransportArrival], None]) -> Closable:
         if subject_id in self.subject_handlers:
             raise ValueError(f"Subject {subject_id} already has an active listener")
+        if subject_id in self.fail_subject_listen:
+            raise RuntimeError(f"Simulated subject_listen failure for {subject_id}")
         self.subject_handlers[subject_id] = handler
         self.subject_listener_creations[subject_id] = self.subject_listener_creations.get(subject_id, 0) + 1
         return MockSubjectListener(self, subject_id, handler)
@@ -93,6 +99,8 @@ class MockTransport(Transport):
     def subject_advertise(self, subject_id: int) -> MockSubjectWriter:
         if subject_id in self.writers:
             raise ValueError(f"Subject {subject_id} already has an active writer")
+        if subject_id in self.fail_subject_advertise:
+            raise RuntimeError(f"Simulated subject_advertise failure for {subject_id}")
         writer = MockSubjectWriter(self, subject_id)
         self.writers[subject_id] = writer
         self.subject_writer_creations[subject_id] = self.subject_writer_creations.get(subject_id, 0) + 1

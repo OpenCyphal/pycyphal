@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python: ["3.11", "3.12", "3.13"]
+        python: ["3.11", "3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -60,6 +60,18 @@ jobs:
           python-version: ${{ env.PYTHON_OLDEST }}
       - run: pip install nox
       - run: nox -s mypy
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_OLDEST }}
+      - run: pip install nox
+      - run: nox -s lint
 
   format:
     runs-on: ubuntu-latest

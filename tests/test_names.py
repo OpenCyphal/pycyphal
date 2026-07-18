@@ -5,6 +5,7 @@ import pytest
 from pycyphal2 import SUBJECT_ID_PINNED_MAX
 from pycyphal2._node import (
     TOPIC_NAME_MAX,
+    _is_valid_wire_name,
     _name_consume_pin_suffix,
     _name_normalize,
     match_pattern,
@@ -76,6 +77,47 @@ def test_pin_trailing_hash_no_digits() -> None:
 
 def test_pin_non_digit_after_hash() -> None:
     assert _name_consume_pin_suffix("foo#abc") == ("foo#abc", None)
+
+
+def test_pin_unicode_digit_not_parsed() -> None:
+    # str.isdigit() is True for chars int() rejects, e.g. '²' (U+00B2) or '②' (U+2461); must not raise.
+    assert _name_consume_pin_suffix("foo#²") == ("foo#²", None)
+    assert _name_consume_pin_suffix("foo#1²") == ("foo#1²", None)
+    assert _name_consume_pin_suffix("foo#²1") == ("foo#²1", None)
+    assert _name_consume_pin_suffix("x#②") == ("x#②", None)
+
+
+def test_wire_name_unicode_digit_pin_rejected() -> None:
+    # A crafted gossip name like 'x#²' must be classified invalid without raising.
+    assert not _is_valid_wire_name("x#²")
+    assert not _is_valid_wire_name("x#②")
+
+
+def test_resolve_embedded_token_is_verbatim() -> None:
+    # Only a whole segment '*' or '>' is a substitution token (reference: wkv_has_substitution_tokens);
+    # embedded in a longer segment they are literal characters.
+    resolved, _, verbatim = resolve_name("/sensor/temp*raw", "home", "ns")
+    assert resolved == "sensor/temp*raw"
+    assert verbatim
+    resolved, _, verbatim = resolve_name("/ab>cd", "home", "ns")
+    assert resolved == "ab>cd"
+    assert verbatim
+
+
+def test_resolve_whole_segment_tokens_are_patterns() -> None:
+    assert resolve_name("/a/*/c", "home", "ns")[2] is False
+    assert resolve_name("/a/>", "home", "ns")[2] is False
+    assert resolve_name("/a/>/b", "home", "ns")[2] is False  # Classified a pattern even off-terminal.
+
+
+def test_wire_name_embedded_token_is_valid() -> None:
+    # A verbatim C topic like 'ab*cd' must be accepted from gossip for interop.
+    assert _is_valid_wire_name("ab*cd")
+    assert _is_valid_wire_name("x/y>z")
+    assert not _is_valid_wire_name("a/*/c")
+    assert not _is_valid_wire_name("a/>")
+    assert not _is_valid_wire_name("*")
+    assert not _is_valid_wire_name(">")
 
 
 def test_pin_hash_in_middle() -> None:

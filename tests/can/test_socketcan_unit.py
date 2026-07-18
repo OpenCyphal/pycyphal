@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import os
 from pathlib import Path
 import sys
 import types
@@ -19,6 +20,8 @@ _SOURCE = Path(__file__).resolve().parents[2] / "src/pycyphal2/can/socketcan.py"
 class _FakeRawSocket:
     def __init__(self) -> None:
         self.calls: list[tuple[object, ...]] = []
+        # A real fd: a fabricated number would risk deregistering an unrelated fd in this process.
+        self._rfd, self._wfd = os.pipe()
 
     def setblocking(self, enabled: bool) -> None:
         self.calls.append(("setblocking", enabled))
@@ -29,8 +32,17 @@ class _FakeRawSocket:
     def bind(self, address: tuple[str]) -> None:
         self.calls.append(("bind", address))
 
+    def fileno(self) -> int:
+        return self._rfd
+
     def close(self) -> None:
         self.calls.append(("close",))
+        for fd in (self._rfd, self._wfd):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        self._rfd = self._wfd = -1
 
 
 class _TaskStub:
@@ -50,6 +62,16 @@ class _FakeLoop:
         self.send = list(send or [])
         self.sent_frames: list[bytes] = []
         self.created_tasks: list[object] = []
+        # Records selector deregistration so a test can assert it happens before the fd is closed.
+        self.deregistered: list[tuple[str, int]] = []
+
+    def remove_reader(self, fd: int) -> bool:
+        self.deregistered.append(("reader", fd))
+        return False
+
+    def remove_writer(self, fd: int) -> bool:
+        self.deregistered.append(("writer", fd))
+        return False
 
     def create_task(self, coro: object) -> _TaskStub:
         if hasattr(coro, "close"):
@@ -169,6 +191,8 @@ def _make_iface(
     iface._failure = failure
     iface._tx = TxQueue()
     iface._tx_task = None
+    iface._rx_queue = asyncio.Queue()
+    iface._rx_task = None
     return iface
 
 
@@ -252,31 +276,126 @@ async def test_enqueue_purge_and_close_paths(monkeypatch: pytest.MonkeyPatch) ->
     closed.purge()
 
 
-async def test_receive_retries_after_decode_drop_and_raises_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_rx_loop_decodes_skips_and_drops_cleanly_on_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_socket, _ = _make_socket_module()
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
     iface = _make_iface(module)
     good = module._CAN_FRAME_STRUCT.pack(fake_socket.CAN_EFF_FLAG | 0x123, 2, b"ab".ljust(8, b"\x00"))
-    loop = _FakeLoop(recv=[b"\x00", good])
+    loop = _FakeLoop(recv=[b"\x00", good, asyncio.CancelledError()])  # Undecodable, good, then cancelled.
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
 
-    frame = await iface.receive()
+    with pytest.raises(asyncio.CancelledError):
+        await iface._rx_loop()
+    frame = iface._rx_queue.get_nowait()  # The undecodable frame was dropped, not queued.
+    assert isinstance(frame, TimestampedFrame)
     assert frame.id == 0x123
     assert frame.data == b"ab"
+    assert iface._rx_queue.empty()
 
-    failing = _make_iface(module)
-    failing_loop = _FakeLoop(recv=[OSError("rx failed")])
-    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: failing_loop)
-    with pytest.raises(ClosedError, match="receive failed"):
-        await failing.receive()
-    assert failing._closed is True
-    assert isinstance(failing._failure, OSError)
 
-    cancelled = _make_iface(module)
-    cancelled_loop = _FakeLoop(recv=[asyncio.CancelledError()])
-    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: cancelled_loop)
-    with pytest.raises(asyncio.CancelledError):
-        await cancelled.receive()
+async def test_rx_loop_failure_marks_interface_and_installs_sentinel(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    err = OSError("rx failed")
+    loop = _FakeLoop(recv=[err])
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
+
+    await iface._rx_loop()  # _fail()s the interface, then returns rather than raising.
+    assert iface._closed is True
+    assert iface._failure is err
+    sentinel = iface._rx_queue.get_nowait()
+    assert isinstance(sentinel, ClosedError)
+
+
+async def test_receive_raises_clean_close_without_recording_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit close reaches receive() as a plain ClosedError; only a receive-side error is recorded
+    as an interface failure."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    iface._rx_task = _TaskStub()  # Already spawned, so receive() only drains the queue.
+    iface._rx_queue.put_nowait(ClosedError("SocketCAN interface vcan0 closed"))
+    with pytest.raises(ClosedError):
+        await iface.receive()
+    assert iface._failure is None
+
+
+async def test_close_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """close() must wake a parked reader with a ClosedError sentinel; otherwise interface loss leaves the
+    transport's reader hung forever."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    iface._rx_task = asyncio.create_task(asyncio.sleep(100))  # Stand-in for the RX loop task.
+
+    recv_task = asyncio.create_task(iface.receive())
+    await asyncio.sleep(0)
+    assert not recv_task.done()  # Parked on the empty queue.
+
+    iface.close()
+    with pytest.raises(ClosedError):
+        await asyncio.wait_for(recv_task, timeout=1.0)
+    assert iface._rx_task is None
+    assert iface._failure is None  # A clean close is not an interface failure.
+
+
+async def test_close_deregisters_the_fd_before_closing_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Task.cancel() is deferred while socket.close() is immediate, so leaving deregistration to the
+    cancelled reader tears down callbacks against a closed -- possibly already reused -- fd. close() must
+    deregister explicitly, first."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    loop = _FakeLoop()
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
+
+    sock = iface._sock
+    fd = sock.fileno()
+    assert fd >= 0
+    iface.close()
+
+    assert loop.deregistered == [("reader", fd), ("writer", fd)]
+    # The fd must still have been open at deregistration time.
+    assert ("close",) in sock.calls
+    assert loop.deregistered, "deregistration must not be left to the deferred task cancellation"
+
+
+async def test_close_tolerates_a_loop_without_reader_registration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ProactorEventLoop raises NotImplementedError from remove_reader/writer; close() must treat that
+    as "nothing to deregister". An unguarded call broke every Windows job."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+
+    class _ProactorishLoop(_FakeLoop):
+        def remove_reader(self, fd: int) -> bool:
+            raise NotImplementedError
+
+        def remove_writer(self, fd: int) -> bool:
+            raise NotImplementedError
+
+    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: _ProactorishLoop())
+
+    iface.close()  # Must not raise.
+    assert iface._closed
+    assert ("close",) in iface._sock.calls  # The socket was still closed.
+
+
+async def test_fail_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-transient TX failure (_fail -> close) must likewise unblock a parked reader."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    iface._rx_task = asyncio.create_task(asyncio.sleep(100))
+
+    recv_task = asyncio.create_task(iface.receive())
+    await asyncio.sleep(0)
+
+    iface._fail(OSError("ENETDOWN"))
+    with pytest.raises(ClosedError):
+        await asyncio.wait_for(recv_task, timeout=1.0)
+    assert isinstance(iface._failure, OSError)
 
 
 def test_raise_if_closed_and_transient_error_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -310,6 +429,20 @@ def test_encode_and_decode_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     fd_iface = _make_iface(module, fd=True)
     encoded_fd = fd_iface._encode(456, b"012345678")
     assert len(encoded_fd) == module._FD_FRAME_SIZE
+
+    # Format follows the interface mode, not the payload length, as in the reference.
+    encoded_fd_short = fd_iface._encode(456, b"abc")
+    assert len(encoded_fd_short) == module._FD_FRAME_SIZE
+
+    # Every FD frame must carry FDF and BRS, short payloads included. The literals are hardcoded from
+    # linux/can.h (CPython's socket module exposes neither); a getattr() fallback to 0 would silently
+    # emit flagless frames.
+    assert module._CANFD_FDF == 0x04
+    assert module._CANFD_BRS == 0x01
+    for encoded in (encoded_fd, encoded_fd_short):
+        _, _, flags, _, _, _ = module._CANFD_FRAME_STRUCT.unpack(encoded)
+        assert flags & module._CANFD_FDF
+        assert flags & module._CANFD_BRS
 
     assert module.SocketCANInterface._decode(b"\x00") is None
 

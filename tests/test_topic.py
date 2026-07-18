@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from pycyphal2 import SUBJECT_ID_PINNED_MAX
 from pycyphal2._node import left_wins
 from pycyphal2._hash import rapidhash
@@ -9,6 +11,7 @@ from pycyphal2._node import (
     EVICTIONS_PINNED_MIN,
     GossipScope,
     compute_subject_id,
+    is_valid_subject_id_modulus,
     match_pattern,
     resolve_name,
 )
@@ -41,7 +44,8 @@ def test_compute_subject_id_non_pinned_zero_evictions():
 
 
 def test_compute_subject_id_non_pinned_with_evictions():
-    """Non-pinned formula: offset + ((hash % modulus) + ((evictions % modulus)^2 % modulus)) % modulus."""
+    """Non-pinned formula: offset + ((hash + evictions^2) mod 2^64) % modulus; the reduced form used for
+    the expectation below is equivalent absent 64-bit overflow."""
     topic_hash = rapidhash("some/topic")
     for ev in (1, 2, 5, 100):
         sid = compute_subject_id(topic_hash, ev, DEFAULT_MODULUS)
@@ -56,16 +60,17 @@ def test_compute_subject_id_non_pinned_with_evictions():
         assert sid == expected
 
 
-def test_compute_subject_id_non_pinned_does_not_wrap_uint64_sum():
+def test_compute_subject_id_wraps_uint64_sum():
+    """hash + evictions² must wrap mod 2^64 as the reference uint64 arithmetic does. Evictions is an
+    untrusted gossip field, so the overflow is remotely constructible; big-int arithmetic here would put
+    Python and C nodes on different subject-IDs."""
     topic_hash = (1 << 64) - 1
     evictions = EVICTIONS_PINNED_MIN - 1
     sid = compute_subject_id(topic_hash, evictions, DEFAULT_MODULUS)
     uint64_wrapping = (
         SUBJECT_ID_PINNED_MAX + 1 + (((topic_hash + (evictions * evictions)) & ((1 << 64) - 1)) % DEFAULT_MODULUS)
     )
-    assert sid == 49564
-    assert uint64_wrapping == 74897
-    assert sid != uint64_wrapping
+    assert sid == uint64_wrapping == 74897
 
 
 def test_compute_subject_id_evictions_changes_sid():
@@ -92,6 +97,33 @@ def test_compute_subject_id_just_below_pinned():
     assert sid == expected
 
 
+def test_is_valid_subject_id_modulus_predicate():
+    """Mirror of the reference predicate: >= 57203, prime, and ≡ 3 (mod 4)."""
+    for good in (57203, 122743, 8378431, 4294954663):
+        assert is_valid_subject_id_modulus(good)
+    assert not is_valid_subject_id_modulus(3)  # Prime and ≡3 mod 4, but below the minimum.
+    assert not is_valid_subject_id_modulus(57202)  # Below the minimum.
+    assert not is_valid_subject_id_modulus(57205)  # ≡ 1 mod 4.
+    assert not is_valid_subject_id_modulus(57207)  # ≡ 3 mod 4 but composite (3 × 19069).
+    assert not is_valid_subject_id_modulus(122744)  # Even.
+    # Above uint32 is rejected without running a slow primality test on a huge untrusted value.
+    assert not is_valid_subject_id_modulus((1 << 32) + 3)
+
+
+async def test_degenerate_subject_id_modulus_rejected():
+    """A degenerate modulus must be rejected at node construction: the quadratic probe (hash + evictions²)
+    mod m would not cover the residue space, so topic_allocate's synchronous displacement loop would
+    hard-block the event loop."""
+    for bad in (3, 57202, 57205, 57207, 122744):
+        tr = MockTransport(node_id=1, modulus=bad, network=MockNetwork())
+        with pytest.raises(ValueError, match="subject_id_modulus"):
+            new_node(tr, home="n")
+    for good in (57203, 122743, 8378431):
+        tr = MockTransport(node_id=1, modulus=good, network=MockNetwork())
+        node = new_node(tr, home="n")
+        node.close()
+
+
 async def test_advertise_creates_topic():
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
@@ -106,6 +138,22 @@ async def test_advertise_creates_topic():
     assert topic.name == resolved
     assert topic.pub_count == 1
     assert not topic.is_implicit
+
+    pub.close()
+    node.close()
+
+
+async def test_advertise_embedded_wildcard_char_is_verbatim():
+    """'sensor/temp*raw' has no whole-segment substitution token, so it is a legal verbatim topic
+    (parity with the wkv classifier)."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="n")
+
+    pub = node.advertise("/sensor/temp*raw")
+    topic = node.topics_by_name.get("sensor/temp*raw")
+    assert topic is not None
+    assert topic.pub_count == 1
 
     pub.close()
     node.close()

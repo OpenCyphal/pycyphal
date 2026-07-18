@@ -52,10 +52,20 @@ IPv4_MCAST_PREFIX = 0xEF000000
 IPv4_SUBJECT_ID_MAX = 0x7FFFFF
 TRANSFER_ID_MASK = (1 << 48) - 1
 _MULTICAST_TTL = 16
+# Linux uapi in.h value; older CPython does not expose it in the socket module, so fall back to the literal.
+_IP_MULTICAST_ALL_LINUX = getattr(socket, "IP_MULTICAST_ALL", 49)
 _SIOCGIFMTU = 0x8921
 _CYPHAL_OVERHEAD_MAX = 100
 _CYPHAL_MTU_LINK_MIN = 576
 _RX_SESSION_LIFETIME_NS = round(30.0 * 1e9)
+_HOUSEKEEPING_PERIOD = 1.0  # RX-session retirement cadence, independent of new traffic.
+# Bounds the learned reverse-route cache against untrusted traffic with spoofable source UIDs, evicting the
+# least-recently-seen entry. Deliberately not time-based: a route must not expire while its peer is briefly
+# silent; under flooding an evicted route merely makes respond() fail cleanly with SendError.
+_REMOTE_ENDPOINT_CAPACITY = 8192
+# Per-reassembler cap on concurrent sender sessions: TTL retirement bounds retention time but not
+# cardinality, so a burst of unique (spoofable) source UIDs would otherwise grow unboundedly.
+_RX_SESSION_CAPACITY = 4096
 _RX_SLOT_COUNT = 8
 _RX_TRANSFER_HISTORY_COUNT = 32
 _SUBJECT_ID_MODULUS_MAX = IPv4_SUBJECT_ID_MAX - SUBJECT_ID_PINNED_MAX
@@ -147,6 +157,16 @@ def _frame_is_valid(header: _FrameHeader, payload_chunk: bytes | memoryview) -> 
     return (header.frame_payload_offset + len(payload_chunk)) <= header.transfer_payload_size
 
 
+def _collect_send_errors(results: list[BaseException | None]) -> list[BaseException]:
+    """
+    Per-interface failures out of a ``gather(..., return_exceptions=True)`` over ``send_on_iface``.
+
+    Tests ``BaseException``, not ``Exception``: gather returns an individually cancelled child as a
+    ``CancelledError`` instance, which an ``Exception`` test would score as a successful delivery.
+    """
+    return [r for r in results if isinstance(r, BaseException)]
+
+
 @dataclass(frozen=True)
 class _Fragment:
     offset: int
@@ -236,7 +256,7 @@ class _TransferSlot:
     def _find_right_neighbor(self, right: int) -> _Fragment | None:
         candidate: _Fragment | None = None
         for frag in self.fragments:
-            if frag.offset < right:
+            if frag.offset <= right:  # Inclusive: a fragment starting exactly at `right` is adjacent.
                 candidate = frag
             else:
                 break
@@ -284,7 +304,10 @@ class _RxSession:
         return transfer_id in self.history
 
     def initialize_history(self, transfer_id: int) -> None:
-        value = (transfer_id - 1) & TRANSFER_ID_MASK
+        # Seed wraps mod 2**64, not 2**48, mirroring the reference uint64 arithmetic: a 48-bit-masked seed
+        # for a first-seen transfer-ID of 0 would be 0xFFFF_FFFF_FFFF and falsely reject a genuine transfer
+        # bearing that ID.
+        value = (transfer_id - 1) & 0xFFFF_FFFF_FFFF_FFFF
         self.history = [value] * _RX_TRANSFER_HISTORY_COUNT
         self.history_current = 0
         self.initialized = True
@@ -322,6 +345,9 @@ class _RxSession:
 
 class _RxReassembler:
     def __init__(self) -> None:
+        # LRU ordered most-recently-active FIRST, so the oldest is last: next(reversed(...)).
+        # This is the mirror image of _UDPTransportImpl._remote_endpoints (most-recent LAST); flipping
+        # either requires flipping every popitem()/reversed() that reads it.
         self._sessions: OrderedDict[int, _RxSession] = OrderedDict()
 
     def accept(
@@ -346,6 +372,9 @@ class _RxReassembler:
                 self._sessions[header.sender_uid] = session
             session.last_animated_ns = timestamp_ns
             self._sessions.move_to_end(header.sender_uid, last=False)
+            if len(self._sessions) > _RX_SESSION_CAPACITY:
+                evicted_uid, _ = self._sessions.popitem(last=True)
+                _logger.debug("UDP reasm session cache full, evicted uid=%016x", evicted_uid)
             if not session.initialized:
                 session.initialize_history(header.transfer_id)
             if session.is_transfer_ejected(header.transfer_id):
@@ -397,6 +426,17 @@ class _RxReassembler:
         if timestamp_ns >= (oldest.last_animated_ns + _RX_SESSION_LIFETIME_NS):
             self._sessions.pop(oldest_uid)
             _logger.debug("UDP reasm retire uid=%016x", oldest_uid)
+
+    def drop_stale_sessions(self, timestamp_ns: int) -> None:
+        """Retire stale sessions independent of traffic (the reference does this from a periodic poll).
+        Sessions are recency-ordered, so the scan stops at the first fresh one."""
+        while self._sessions:
+            oldest_uid = next(reversed(self._sessions))
+            if timestamp_ns >= (self._sessions[oldest_uid].last_animated_ns + _RX_SESSION_LIFETIME_NS):
+                self._sessions.pop(oldest_uid)
+                _logger.debug("UDP reasm retire uid=%016x", oldest_uid)
+            else:
+                break
 
 
 def _make_subject_endpoint(subject_id: int) -> tuple[str, int]:
@@ -469,21 +509,25 @@ class _UDPSubjectWriter(SubjectWriter):
         self._transfer_id += 1
         _logger.debug("Subject tx start sid=%d tid=%d bytes=%d", self._subject_id, transfer_id, len(message))
 
-        errors: list[Exception] = []
-        success_count = 0
-        for i, iface in enumerate(self._transport.interfaces):
-            mtu = iface.mtu_cyphal
-            frames = _segment_transfer(priority, transfer_id, self._transport.uid, message, mtu)
-            try:
-                for frame in frames:
-                    await self._transport.async_sendto(self._transport.tx_socks[i], frame, (mcast_ip, port), deadline)
-                success_count += 1
-            except (OSError, SendError) as e:
-                errors.append(e)
+        addr = (mcast_ip, port)
+        # Snapshot before the first await: a concurrent close() clearing the socket lists would otherwise
+        # desync the indices; a send racing close just hits a closed socket and aggregates as an error.
+        targets = list(zip(self._transport.interfaces, self._transport.tx_socks, self._transport.tx_locks, strict=True))
+        coros = []
+        for iface, sock, lock in targets:
+            frames = _segment_transfer(priority, transfer_id, self._transport.uid, message, iface.mtu_cyphal)
+            coros.append(self._transport.send_on_iface(sock, lock, frames, addr, deadline))
+        # Concurrent so a congested interface cannot starve a healthy one of the shared deadline; frames
+        # still go out in order per interface. return_exceptions lets every send settle before aggregating.
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        errors = _collect_send_errors(results)
+        success_count = len(results) - len(errors)
 
         if errors and success_count == 0:
             _logger.error("Send failed on all interfaces for subject %d", self._subject_id)
-            raise SendError("send failed on all interfaces") from ExceptionGroup(
+            # BaseExceptionGroup because `errors` may carry a CancelledError, which ExceptionGroup rejects;
+            # it degrades to an ExceptionGroup when every member is an Exception.
+            raise SendError("send failed on all interfaces") from BaseExceptionGroup(
                 "send failed on all interfaces", errors
             )
         if errors:
@@ -556,6 +600,10 @@ class UDPTransport(Transport, ABC):
         detected. You can also use ``UDPTransport.list_interfaces()`` for a semi-automatic approach.
 
         The UID is a globally unique 64-bit identifier of the local node. If not given, one will be generated randomly.
+
+        Overriding ``subject_id_modulus`` only makes sense for a deliberately reduced subject-ID space; the
+        value must be at least 57203, prime, and congruent to 3 modulo 4, else :meth:`pycyphal2.Node.new`
+        rejects it with ``ValueError``. This constructor only enforces the transport-level range.
         """
         if not interfaces:
             ifaces = UDPTransport.list_interfaces()
@@ -626,11 +674,20 @@ class _UDPTransportImpl(UDPTransport):
             raise ValueError("At least one network interface is required")
 
         self._tx_socks: list[socket.socket] = []
+        # asyncio's selector loop allows only one writer callback per fd, so concurrent senders on one
+        # socket must be serialized; otherwise a displaced sock_sendto hangs until its deadline.
+        self._tx_locks: list[asyncio.Lock] = []
         self._self_endpoints: set[tuple[str, int]] = set()
-        for iface in self._interfaces:
-            sock = self._create_tx_socket(iface)
-            self._tx_socks.append(sock)
-            self._self_endpoints.add(sock.getsockname()[:2])
+        try:
+            for iface in self._interfaces:
+                sock = self._create_tx_socket(iface)
+                self._tx_socks.append(sock)
+                self._tx_locks.append(asyncio.Lock())
+                self._self_endpoints.add(sock.getsockname()[:2])
+        except BaseException:
+            for sock in self._tx_socks:  # Roll back sockets created before the failure.
+                sock.close()
+            raise
 
         self._subject_handlers: dict[int, Callable[[TransportArrival], None]] = {}
         self._subject_writers: dict[int, _UDPSubjectWriter] = {}
@@ -639,15 +696,25 @@ class _UDPTransportImpl(UDPTransport):
 
         self._unicast_handler: Callable[[TransportArrival], None] | None = None
         self._unicast_reassembler = _RxReassembler()
-        self._remote_endpoints: dict[tuple[int, int], tuple[str, int]] = {}
+        self._remote_endpoints: OrderedDict[tuple[int, int], tuple[str, int]] = OrderedDict()
         self._next_unicast_transfer_id = int.from_bytes(os.urandom(6), "little")
 
         self._unicast_rx_tasks: list[asyncio.Task[None]] = []
         self._mcast_rx_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
 
-        for i, sock in enumerate(self._tx_socks):
-            task = self._loop.create_task(self._unicast_rx_loop(sock, i))
-            self._unicast_rx_tasks.append(task)
+        # A half-built transport is never returned to the caller and hence never close()d, so a failure
+        # here must not leak the TX sockets or orphan the RX tasks already spawned.
+        try:
+            for i, sock in enumerate(self._tx_socks):
+                task = self._loop.create_task(self._unicast_rx_loop(sock, i))
+                self._unicast_rx_tasks.append(task)
+            self._housekeeping_task = self._loop.create_task(self._housekeeping_loop())
+        except BaseException:
+            for task in self._unicast_rx_tasks:
+                task.cancel()
+            for sock in self._tx_socks:
+                sock.close()
+            raise
 
         _logger.info(
             "UDPTransport initialized: uid=0x%016x, interfaces=%s, modulus=%d",
@@ -659,10 +726,14 @@ class _UDPTransportImpl(UDPTransport):
     @staticmethod
     def _create_tx_socket(iface: Interface) -> socket.socket:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setblocking(False)
-        sock.bind((str(iface.address), 0))
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, _MULTICAST_TTL)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(str(iface.address)))
+        try:
+            sock.setblocking(False)
+            sock.bind((str(iface.address), 0))
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, _MULTICAST_TTL)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(str(iface.address)))
+        except BaseException:
+            sock.close()  # Do not leak the fd if bind/setsockopt fails.
+            raise
         _logger.info("TX socket created on %s, bound to port %d", iface.address, sock.getsockname()[1])
         return sock
 
@@ -670,17 +741,30 @@ class _UDPTransportImpl(UDPTransport):
     def _create_mcast_socket(subject_id: int, iface: Interface) -> socket.socket:
         mcast_ip, port = _make_subject_endpoint(subject_id)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setblocking(False)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, "SO_REUSEPORT"):
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        # Bind to multicast group address on Linux; INADDR_ANY on Windows
-        if sys.platform == "win32":
-            sock.bind(("", port))
-        else:
-            sock.bind((mcast_ip, port))
-        mreq = socket.inet_aton(mcast_ip) + socket.inet_aton(str(iface.address))
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        try:
+            sock.setblocking(False)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if hasattr(socket, "SO_REUSEPORT"):
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            # Bind to multicast group address on Linux; INADDR_ANY on Windows
+            if sys.platform == "win32":
+                sock.bind(("", port))
+            else:
+                sock.bind((mcast_ip, port))
+            mreq = socket.inet_aton(mcast_ip) + socket.inet_aton(str(iface.address))
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+            # REFERENCE PARITY: the reference filters received datagrams by ingress interface index via
+            # recvmsg+IP_PKTINFO (udp_wrapper.c). asyncio has no sock_recvmsg, so on Linux the same delivery
+            # set comes from IP_MULTICAST_ALL=0, which restricts this socket to its own (group, interface)
+            # membership instead of the default any-interface delivery that would mislearn reverse routes on
+            # multi-homed hosts. macOS/BSD scope delivery per membership natively; on Windows the socket binds
+            # INADDR_ANY and Winsock may deliver cross-interface traffic, so multi-homed Windows hosts should
+            # configure at most one transport interface per multicast-reachable network.
+            if sys.platform == "linux":
+                sock.setsockopt(socket.IPPROTO_IP, _IP_MULTICAST_ALL_LINUX, 0)
+        except BaseException:
+            sock.close()  # Do not leak the fd if bind/join fails.
+            raise
         _logger.info("Multicast socket for subject %d on %s (%s:%d)", subject_id, iface.address, mcast_ip, port)
         return sock
 
@@ -701,6 +785,40 @@ class _UDPTransportImpl(UDPTransport):
     def tx_socks(self) -> list[socket.socket]:
         return self._tx_socks
 
+    @property
+    def tx_locks(self) -> list[asyncio.Lock]:
+        return self._tx_locks
+
+    async def send_on_iface(
+        self,
+        sock: socket.socket,
+        lock: asyncio.Lock,
+        frames: list[bytes],
+        addr: tuple[str, int],
+        deadline: Instant,
+    ) -> Exception | None:
+        """Send one transfer's frames on one interface under that socket's lock; returns the failure
+        instead of raising, so the caller can aggregate per-interface results."""
+        # Bound the lock wait by the same absolute deadline, so a short-deadline sender queued behind a
+        # long-deadline holder fails on its own budget rather than waiting out the holder's.
+        remaining_ns = deadline.ns - Instant.now().ns
+        if remaining_ns <= 0:
+            return SendError("Deadline exceeded")
+        try:
+            await asyncio.wait_for(lock.acquire(), timeout=remaining_ns * 1e-9)
+        except asyncio.TimeoutError:
+            return SendError("Deadline exceeded waiting for socket lock")
+        try:
+            if self._closed:
+                return ClosedError("Transport closed")
+            for frame in frames:
+                await self.async_sendto(sock, frame, addr, deadline)
+            return None
+        except (OSError, SendError) as e:
+            return e
+        finally:
+            lock.release()
+
     def __repr__(self) -> str:
         addrs = ", ".join(str(i.address) for i in self._interfaces)
         return f"UDPTransport(uid=0x{self._uid:016x}, interfaces=[{addrs}], modulus={self._subject_id_modulus_val})"
@@ -717,7 +835,25 @@ class _UDPTransportImpl(UDPTransport):
                 task.cancel()
             sock = self._mcast_socks.pop(key, None)
             if sock is not None:
+                self._deregister_socket(sock)  # Before close(); see the note in close().
                 sock.close()
+
+    def _deregister_socket(self, sock: socket.socket) -> None:
+        """
+        Drop any selector callbacks for this socket while its descriptor is still open.
+
+        Cancelling the owning task only schedules the teardown, so otherwise the removal lands after the
+        fd is closed -- possibly hitting an unrelated socket that has recycled the number.
+        """
+        fd = sock.fileno()
+        if fd < 0:
+            return
+        try:
+            self._loop.remove_reader(fd)
+            self._loop.remove_writer(fd)
+        except NotImplementedError:
+            # ProactorEventLoop uses overlapped I/O, not selector callbacks: nothing to deregister.
+            pass
 
     def remove_subject_writer(self, subject_id: int, writer: _UDPSubjectWriter) -> None:
         if self._subject_writers.get(subject_id) is writer:
@@ -741,12 +877,18 @@ class _UDPTransportImpl(UDPTransport):
             raise ValueError(f"Subject {subject_id} already has an active listener")
         _logger.info("Subscribing to subject %d", subject_id)
         self._subject_handlers[subject_id] = handler
-        for i, iface in enumerate(self._interfaces):
-            key = (subject_id, i)
-            sock = self._create_mcast_socket(subject_id, iface)
-            self._mcast_socks[key] = sock
-            task = self._loop.create_task(self._mcast_rx_loop(sock, subject_id, i))
-            self._mcast_rx_tasks[key] = task
+        try:
+            for i, iface in enumerate(self._interfaces):
+                key = (subject_id, i)
+                sock = self._create_mcast_socket(subject_id, iface)
+                self._mcast_socks[key] = sock
+                task = self._loop.create_task(self._mcast_rx_loop(sock, subject_id, i))
+                self._mcast_rx_tasks[key] = task
+        except BaseException:
+            # Roll back so a later subject_listen for this subject is not blocked by the duplicate-handler
+            # check above.
+            self.remove_subject_listener(subject_id, handler)
+            raise
         return _UDPSubjectListener(self, subject_id, handler)
 
     def subject_advertise(self, subject_id: int) -> SubjectWriter:
@@ -768,26 +910,27 @@ class _UDPTransportImpl(UDPTransport):
         self._next_unicast_transfer_id += 1
         _logger.debug("Unicast tx start rid=%016x tid=%d bytes=%d", remote_id, transfer_id, len(message))
 
-        errors: list[Exception] = []
-        success_count = 0
-        for i, iface in enumerate(self._interfaces):
+        # Snapshot targets (only interfaces with a known endpoint) before the first await, as in the
+        # subject writer.
+        coros = []
+        for i, (iface, sock, lock) in enumerate(zip(self._interfaces, self._tx_socks, self._tx_locks, strict=True)):
             ep = self._remote_endpoints.get((remote_id, i))
             if ep is None:
                 _logger.debug("Unicast tx skip rid=%016x iface=%d reason=no-endpoint", remote_id, i)
                 continue
             frames = _segment_transfer(priority, transfer_id, self._uid, message, iface.mtu_cyphal)
-            try:
-                for frame in frames:
-                    await self.async_sendto(self._tx_socks[i], frame, ep, deadline)
-                success_count += 1
-            except (OSError, SendError) as e:
-                errors.append(e)
+            coros.append(self.send_on_iface(sock, lock, frames, ep, deadline))
 
-        if success_count == 0:
-            if errors:
-                raise SendError("Unicast failed on all interfaces") from errors[0]
+        if not coros:
             _logger.warning("No endpoint known for remote_id=0x%016x", remote_id)
             raise SendError("No endpoint known for remote_id")
+
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        errors = _collect_send_errors(results)
+        success_count = len(results) - len(errors)
+
+        if success_count == 0:
+            raise SendError("Unicast failed on all interfaces") from errors[0]
         if errors:
             # Redundant transport: delivery via at least one interface is a success. Warn but do not
             # raise, otherwise a delivered transfer would be reported as failed and retried (mirrors
@@ -805,21 +948,32 @@ class _UDPTransportImpl(UDPTransport):
             return
         self._closed = True
         _logger.info("Closing UDPTransport uid=0x%016x", self._uid)
+        self._housekeeping_task.cancel()
         for task in self._unicast_rx_tasks:
             task.cancel()
         self._unicast_rx_tasks.clear()
         for task in self._mcast_rx_tasks.values():
             task.cancel()
         self._mcast_rx_tasks.clear()
+        # Deregister before closing: the cancellations above land on a later loop iteration while close()
+        # takes effect now, so the callbacks would otherwise be torn down against a closed -- possibly
+        # recycled -- fd. A send already parked in sock_sendto still unblocks on its own deadline.
+        for sock in [*self._tx_socks, *self._mcast_socks.values()]:
+            self._deregister_socket(sock)
         for sock in self._tx_socks:
             sock.close()
         for sock in self._mcast_socks.values():
             sock.close()
         self._mcast_socks.clear()
         self._tx_socks.clear()
+        self._tx_locks.clear()
         self._subject_handlers.clear()
         self._subject_writers.clear()
         self._reassemblers.clear()
+        # Release RX-side state so a closed transport retains no sessions, learned routes, or handler refs.
+        self._unicast_reassembler = _RxReassembler()
+        self._remote_endpoints.clear()
+        self._unicast_handler = None
 
     async def _mcast_rx_loop(self, sock: socket.socket, subject_id: int, iface_idx: int) -> None:
         try:
@@ -856,9 +1010,33 @@ class _UDPTransportImpl(UDPTransport):
         except asyncio.CancelledError:
             _logger.debug("Unicast rx cancelled iface=%d", iface_idx)
 
+    async def _housekeeping_loop(self) -> None:
+        """Retire stale reassembly sessions periodically (the reference does this from its poll), so a
+        silent remote's session is reclaimed instead of lingering long past its last frame."""
+        try:
+            while not self._closed:
+                await asyncio.sleep(_HOUSEKEEPING_PERIOD)
+                try:
+                    now_ns = Instant.now().ns
+                    self._unicast_reassembler.drop_stale_sessions(now_ns)
+                    for reassembler in list(self._reassemblers.values()):
+                        reassembler.drop_stale_sessions(now_ns)
+                except Exception:
+                    # Retirement is not traffic-driven: a faulty sweep must not kill the loop.
+                    _logger.exception("Stale session sweep failed; continuing")
+        except asyncio.CancelledError:
+            pass
+
     def _learn_remote_endpoint(self, remote_id: int, iface_idx: int, src_ip: str, src_port: int) -> None:
-        existing = self._remote_endpoints.get((remote_id, iface_idx))
-        self._remote_endpoints[(remote_id, iface_idx)] = (src_ip, src_port)
+        key = (remote_id, iface_idx)
+        existing = self._remote_endpoints.get(key)
+        self._remote_endpoints[key] = (src_ip, src_port)
+        # Ordered most-recently-seen LAST, so eviction pops the FRONT. This is the mirror image of
+        # _RxReassembler._sessions -- see the note there before changing either.
+        self._remote_endpoints.move_to_end(key)
+        if len(self._remote_endpoints) > _REMOTE_ENDPOINT_CAPACITY:
+            evicted, _ = self._remote_endpoints.popitem(last=False)
+            _logger.debug("Remote endpoint cache full, evicted rid=%016x iface=%d", evicted[0], evicted[1])
         if existing != (src_ip, src_port):
             _logger.info("Remote endpoint rid=%016x iface=%d ep=%s:%d", remote_id, iface_idx, src_ip, src_port)
 

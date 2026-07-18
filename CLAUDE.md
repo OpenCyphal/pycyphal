@@ -20,7 +20,7 @@ Source is in `src/pycyphal2/`, tests in `tests/`. The package is extremely compa
 
 Concrete transports are in top-level submodules:
 - `pycyphal2.udp` — Cyphal/UDP transport implementation.
-- `pycyphal2.can` (coming soon, not yet in the codebase) — Cyphal/CAN transport implementation.
+- `pycyphal2.can` — Cyphal/CAN transport implementation.
 
 The core must be dependency-free.
 Transports may introduce (optional) dependencies that MUST be kept to the bare minimum.

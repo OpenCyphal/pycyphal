@@ -112,12 +112,12 @@ class PythonCANInterface(Interface):
 
     async def receive(self) -> TimestampedFrame:
         self._raise_if_closed()
-        while True:
-            item = await self._rx_queue.get()
-            if isinstance(item, BaseException):
-                self._fail(item)
-                raise ClosedError(f"PythonCAN interface {self._name} receive failed") from item
-            return item
+        item = await self._rx_queue.get()
+        if isinstance(item, BaseException):
+            # The failure was already recorded by _fail() and folded into this sentinel; feeding it back
+            # through _fail() here would misrecord a clean close as an interface failure. As in SocketCAN.
+            raise item
+        return item
 
     def close(self) -> None:
         with self._admin_lock:
@@ -129,9 +129,12 @@ class PythonCANInterface(Interface):
                 self._tx_task.cancel()
                 self._tx_task = None
             try:
-                self._rx_queue.put_nowait(ClosedError(f"PythonCAN interface {self._name} closed"))
+                # Carries self._failure as the cause when close() came via _fail(), so a parked reader
+                # learns why the interface died rather than just that it closed.
+                self._rx_queue.put_nowait(self._closed_error())
             except Exception:
-                pass
+                # Never silent: without the sentinel a parked reader hangs forever.
+                _logger.exception("PythonCAN could not install the terminal RX sentinel on %s", self._name)
             try:
                 self._bus.shutdown()
             except Exception as ex:
@@ -159,12 +162,14 @@ class PythonCANInterface(Interface):
                 _logger.debug("PythonCAN tx drop expired iface=%s id=%08x", self._name, entry.id)
                 job.abort(SendError(f"PythonCAN interface {self._name} tx deadline expired"))
                 continue
+            # The FD flag follows the interface mode, not the payload length; see the REFERENCE PARITY
+            # note in socketcan._encode on why BRS is always set on an FD interface.
             msg = can.Message(
                 arbitration_id=entry.id,
                 is_extended_id=True,
                 data=entry.payload,
-                is_fd=self._fd and len(entry.payload) > 8,
-                bitrate_switch=self._fd and len(entry.payload) > 8,
+                is_fd=self._fd,
+                bitrate_switch=self._fd,
             )
             try:
                 await asyncio.wait_for(loop.run_in_executor(None, self._bus.send, msg, timeout), timeout=timeout)
@@ -195,7 +200,9 @@ class PythonCANInterface(Interface):
                 except Exception as ex:
                     if not self._closed:
                         try:
-                            self._loop.call_soon_threadsafe(self._rx_queue.put_nowait, ex)
+                            # _fail() stores the cause and closes, installing the terminal sentinel; this
+                            # also propagates the failure when nobody is parked in receive().
+                            self._loop.call_soon_threadsafe(self._fail, ex)
                         except RuntimeError:
                             pass
                     return

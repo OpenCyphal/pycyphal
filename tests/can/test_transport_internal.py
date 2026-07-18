@@ -10,7 +10,7 @@ from pycyphal2 import ClosedError, Instant, Priority, SendError
 from pycyphal2._transport import SUBJECT_ID_MODULUS_16bit, TransportArrival
 from pycyphal2.can import CANTransport, TimestampedFrame
 from pycyphal2.can._transport import _CANTransportImpl, _PinnedSubjectState
-from pycyphal2.can._wire import NODE_ID_ANONYMOUS, TransferKind
+from pycyphal2.can._wire import NODE_ID_ANONYMOUS, TransferKind, parse_frame, serialize_transfer
 from tests.can._support import MockCANBus, MockCANInterface, wait_for
 
 
@@ -99,9 +99,17 @@ async def test_writer_unicast_and_send_transfer_error_paths() -> None:
     with pytest.raises(ClosedError, match="CAN transport closed"):
         await writer2(Instant.now() + 1.0, Priority.NOMINAL, b"x")
 
-    live = CANTransport.new(MockCANInterface(bus, "if1"))
-    with pytest.raises(ValueError, match="Invalid remote node-ID"):
-        await live.unicast(Instant.now() + 1.0, Priority.NOMINAL, 0, b"x")
+    live_if = MockCANInterface(bus, "if1")
+    live = CANTransport.new(live_if)
+    # Node-ID 0 is a legal unicast destination; the wire encoding must carry destination 0.
+    await live.unicast(Instant.now() + 1.0, Priority.NOMINAL, 0, b"x")
+    uni_id, uni_frames, _ = live_if.enqueue_history[-1]
+    parsed = parse_frame(uni_id, uni_frames[0])
+    assert parsed is not None
+    assert parsed.destination_id == 0
+    for bad_remote in (-1, 128):
+        with pytest.raises(ValueError, match="Invalid remote node-ID"):
+            await live.unicast(Instant.now() + 1.0, Priority.NOMINAL, bad_remote, b"x")
 
     live_impl = cast(_CANTransportImpl, live)
     with pytest.raises(SendError, match="Deadline exceeded"):
@@ -218,6 +226,35 @@ async def test_reader_loop_exit_paths() -> None:
     await transport._reader_loop(unknown)  # type: ignore[attr-defined]
     unknown.close()
     delayed.close()
+
+
+async def test_reader_loop_survives_raising_handler() -> None:
+    """A raising RX handler must not kill the interface's reader loop; the frame is dropped and reception continues."""
+    bus = MockCANBus()
+    pub_if = MockCANInterface(bus, "pub")
+    sub_if = MockCANInterface(bus, "sub")
+    sub = CANTransport.new(sub_if)
+    calls: list[bytes] = []
+
+    def raising_handler(arrival: TransportArrival) -> None:
+        calls.append(bytes(arrival.message))
+        raise ValueError("simulated handler fault (e.g. malformed gossip name)")
+
+    sub.subject_listen(7, raising_handler)
+    for tid in (3, 4):
+        frame_id, frames = serialize_transfer(
+            kind=TransferKind.MESSAGE_16,
+            priority=0,
+            port_id=7,
+            source_id=55,
+            payload=b"payload",
+            transfer_id=tid,
+            fd=False,
+        )
+        pub_if.enqueue(frame_id, [memoryview(frames[0])], Instant.now() + 1.0)
+    await wait_for(lambda: len(calls) == 2)
+    assert sub.interfaces == [sub_if]  # The interface must not be dropped by the handler fault.
+    sub.close()
 
 
 async def test_drop_interface_and_node_id_occupancy_edges(caplog: pytest.LogCaptureFixture) -> None:

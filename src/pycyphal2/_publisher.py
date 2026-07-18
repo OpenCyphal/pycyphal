@@ -112,6 +112,10 @@ class PublisherImpl(Publisher):
         if self.closed:
             raise SendError("Publisher closed")
 
+        response_timeout = float(response_timeout)
+        if math.isnan(response_timeout) or response_timeout < 0.0:
+            raise ValueError("response_timeout must be non-negative (or +inf to disable liveness)")
+
         tag = self._topic.next_tag()
         payload = bytes(message)
 
@@ -124,17 +128,18 @@ class PublisherImpl(Publisher):
         )
         self._topic.request_futures[tag] = stream
 
-        tracker = self._prepare_reliable_publish_tracker(tag)
+        # Any failure past registration must close() the stream, not just pop the tag; otherwise a
+        # concurrently closing publisher could leave the topic permanently explicit.
+        tracker: PublishTracker | None = None
         try:
+            tracker = self._prepare_reliable_publish_tracker(tag)
             initial_window = await self._reliable_publish_start(delivery_deadline, tag, payload, tracker)
-        except asyncio.CancelledError:
-            tracker.compromised = True
-            self._topic.request_futures.pop(tag, None)
-            self._release_reliable_publish_tracker(tag, tracker)
-            raise
-        except BaseException:
-            self._topic.request_futures.pop(tag, None)
-            self._release_reliable_publish_tracker(tag, tracker)
+        except BaseException as ex:
+            if tracker is not None:
+                if isinstance(ex, asyncio.CancelledError):
+                    tracker.compromised = True  # publish_tracker_release reads this, so set it before release.
+                self._release_reliable_publish_tracker(tag, tracker)
+            stream.close()
             raise
 
         task = self._node.loop.create_task(
@@ -192,6 +197,9 @@ class PublisherImpl(Publisher):
     def _release_reliable_publish_tracker(self, tag: int, tracker: PublishTracker) -> None:
         self._topic.publish_futures.pop(tag, None)
         self._node.publish_tracker_release(self._topic, tracker)
+        # A topic held explicit only by this publish can now become implicit and be GC'd; without this
+        # it would gossip forever.
+        self._topic.sync_implicit()
 
     async def _send_reliable_publish(
         self,
@@ -311,6 +319,9 @@ class ResponseStreamImpl(ResponseStream):
         self._response_timeout = response_timeout
         self.queue: asyncio.Queue[Response | BaseException] = asyncio.Queue()
         self.closed = False
+        # Never pruned during the stream's life, matching the reference request_future_t.remote_by_id
+        # ("States are never removed assuming that futures are short-lived and/or the responder set is
+        # mostly constant", cy.c). close() retains it to re-ack late duplicates via the zombie timer.
         self._reliable_remote_by_id: dict[int, ResponseRemoteState] = {}
         self._publish_task: asyncio.Task[None] | None = None
         self._cleanup_handle: asyncio.TimerHandle | None = None
@@ -321,8 +332,10 @@ class ResponseStreamImpl(ResponseStream):
     async def __anext__(self) -> Response:
         if self.closed:
             raise StopAsyncIteration
+        # inf disables liveness (waits forever), mirroring Subscriber.timeout.
+        timeout = self._response_timeout if self._response_timeout != float("inf") else None
         try:
-            item = await asyncio.wait_for(self.queue.get(), timeout=self._response_timeout)
+            item = await asyncio.wait_for(self.queue.get(), timeout=timeout)
         except asyncio.TimeoutError:
             raise LivenessError("Response timeout")
         if isinstance(item, StopAsyncIteration):
@@ -404,4 +417,20 @@ class ResponseStreamImpl(ResponseStream):
         else:
             self._remove_from_topic()
         self.queue.put_nowait(StopAsyncIteration())
+        # The stream no longer keeps the topic explicit, so it can now be GC'd instead of gossiping
+        # forever. Safe during node teardown -- notify_implicit_gc() is a no-op when the node is closed.
+        self._topic.sync_implicit()
         _logger.debug("Response stream closed for tag=%d", self._message_tag)
+
+    def dispose(self) -> None:
+        """Force-remove the stream during node/topic teardown. Unlike close(), retains no zombie and does
+        not re-sync implicitness, the topic being torn down anyway."""
+        was_open = not self.closed
+        self.closed = True
+        if self._publish_task is not None:
+            self._publish_task.cancel()
+            self._publish_task = None
+        self._remove_from_topic()
+        self._reliable_remote_by_id.clear()
+        if was_open:
+            self.queue.put_nowait(StopAsyncIteration())

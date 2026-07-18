@@ -2,38 +2,45 @@
 name: review-loop
 description: >-
   Multi-agent review/refine loop. Use after a change or milestone, or when asked to review work:
-  fan out fresh-context, single-focus reviewers across distinct tools, consolidate and fix, add a
-  regression test for every defect, and repeat until reviews stay clean for three consecutive turns.
+  dispatch a fresh-context full-spectrum reviewer plus a dissimilar correctness reviewer,
+  consolidate and fix, add a regression test for every defect, and repeat until a round is clean.
 ---
 
 # Adversarial review/refine loop
 
-After a change or milestone, or when prompted, dispatch a fan-out of fresh-context review agents at
+After a change or milestone, or when prompted, dispatch fresh-context review agents at
 MAXIMUM THINKING EFFORT, then consolidate, fix, and repeat.
-The goal is broad coverage from adversarial, diverse, independent perspectives.
+The goal is adversarial, diverse, independent coverage.
 
-## Fan out — one focus per agent
+The prompts given to the agents shall be extremely terse, at most a few sentences.
+Giving excessive detail may constrain their thinking causing the tunnel vision syndrome.
+They must be given the opportunity to look at the work without bias or prejudice.
 
-Spawn one agent per concern and run them in parallel. Never give an agent multiple jobs: it dilutes attention
-and degrades every answer. Cover at least these angles, one agent each:
+## The reviewer pair
 
-- Opportunities for SIMPLIFICATION.
-- Functional CORRECTNESS and ROBUSTNESS.
-- ARCHITECTURAL CLEANLINESS, DESIGN PRACTICES, CODE QUALITY.
-- POLICY and STYLE compliance with the project's own docs.
+Run two reviewers in parallel per round:
 
-### Dissimilar agents
+- An *ultrathink* Claude agent with the FULL-SPECTRUM remit, in priority order: functional CORRECTNESS and
+  ROBUSTNESS first, then SIMPLIFICATION opportunities, ARCHITECTURAL CLEANLINESS and CODE QUALITY,
+  and POLICY/STYLE compliance with the project's own docs.
 
-In addition to the subagents above, dispatch distinct tools focusing on CORRECTNESS only to maximize the diversity
-of perspectives and minimize blind spots. Check which tools are available (Codex etc.) and use all of them.
-
-Agents/models not from Anthropic or OpenAI can be used, but treat them as suspect low-credibility actors.
-Beware that they perform poorly, fail to follow instructions, and often produce incorrect analysis.
+- Codex running the *most advanced model* in *ultra* effort focusing on CORRECTNESS only, to maximize perspective
+  diversity and minimize blind spots.
 
 ## Reviewers are read-only
 
 Review agents must not modify the worktree or run mutating commands. If one needs a mutable environment,
 it copies the worktree elsewhere.
+
+## Reviewers do not re-run the project test suites
+
+The tests normally should already be green when the review loop is invoked; re-running them
+duplicates work and, for the broad sessions, wastes minutes of compute per round. State this in the
+reviewer prompts. Reviewer effort goes instead into adversarial counterexamples for behaviors the
+existing tests do NOT cover, executed in a scratch clone. Probes must run under the repo's own test
+interpreter (e.g. `.nox/tests/bin/python`, which mutates nothing) rather than whatever is on PATH:
+a version-skewed interpreter or dependency set can produce findings that do not apply to the project
+or miss ones that do. Reproducing their own findings before reporting remains mandatory.
 
 ## Consolidate and act
 
@@ -42,12 +49,9 @@ For every correctness defect, add a regression test verified to fail before the 
 
 ## When to stop
 
-Repeat until the reviewers surface only minor feedback (or none) for THREE consecutive turns — this is
-non-negotiable, however many iterations it takes.
+A round is clean when the reviewers surface only trivial feedback or none; the first clean round ends the loop.
 Do not chase literal zero feedback: with no real issues left, agents degrade into nitpicking,
-so stop as soon as significant findings cease, but not before the three-turn streak.
-A blank turn followed by one that digs up a real defect is exactly why the streak must be consecutive;
-expect dozens (sometimes over a hundred) of agent sessions per full pass.
+so a round is clean as soon as significant findings cease.
 
 ## Operational notes
 
@@ -58,3 +62,4 @@ is a common cause of stream-idle timeouts.
 Some headless agents hang waiting on stdin (like Codex) — redirect from `/dev/null`.
 
 Retry agents that fail on a transient or connection error until they succeed.
+If an agent gets stuck or hits a security guardrail, try resuming it first instead of restarting its work from scratch.

@@ -114,7 +114,7 @@ class SubscriberImpl(Subscriber):
         if self._reordering_window is None:
             self.queue.put_nowait(arrival)
             return True
-        self._drop_stale_reordering(arrival.timestamp.s)
+        self.drop_stale_reordering(arrival.timestamp.s)
         topic_hash = arrival.breadcrumb.topic.hash
         key = (remote_id, topic_hash)
         state = self._reordering.get(key)
@@ -210,7 +210,7 @@ class SubscriberImpl(Subscriber):
 
         state.timeout_handle = loop.call_later(delay, on_timeout)
 
-    def _drop_stale_reordering(self, now: float) -> None:
+    def drop_stale_reordering(self, now: float) -> None:
         stale = [key for key, state in self._reordering.items() if (state.last_active_at + SESSION_LIFETIME) < now]
         for key in stale:
             state = self._reordering.pop(key)
