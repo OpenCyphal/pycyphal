@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 
-from ._interface import CAN_EXT_ID_MASK, CAN_STD_ID_MASK, Frame
+from ._interface import CAN_EXT_ID_MASK, Frame
 from ._wire import DLC_TO_LENGTH, MTU_CAN_CLASSIC
 
 _logger = logging.getLogger(__name__)
@@ -126,12 +126,12 @@ def _parse_line(line: bytes) -> Frame | None:
     command = line[:1]
     if command in (b"T", b"x"):
         return _parse_data_frame(line, id_length=8, max_payload_length=MTU_CAN_CLASSIC)
-    if command == b"t":
-        return _parse_data_frame(line, id_length=3, max_payload_length=MTU_CAN_CLASSIC)
     if command == b"D":
         return _parse_data_frame(line, id_length=8, max_payload_length=64)
-    if command in (b"r", b"R"):
-        _logger.debug("SLCAN drop unsupported frame type cmd=%r", command)
+    if command in (b"t", b"r", b"R"):
+        # Standard-ID (11-bit) frames: the Interface contract is extended-only and Frame carries no IDE
+        # discriminator, so forwarding a 't' data frame would alias an extended frame with a small ID.
+        _logger.debug("SLCAN drop standard-id frame cmd=%r", command)
         return None
     _logger.debug("SLCAN drop unknown line=%r", line)
     return None
@@ -154,9 +154,6 @@ def _parse_data_frame(line: bytes, *, id_length: int, max_payload_length: int) -
     expected = header_length + payload_length * 2
     if len(line) < expected:
         _logger.debug("SLCAN drop data dlc mismatch len=%d expected=%d", len(line), expected)
-        return None
-    if id_length == 3 and identifier > CAN_STD_ID_MASK:
-        _logger.debug("SLCAN drop invalid standard id=%x", identifier)
         return None
     data = _parse_hex_bytes(line[header_length:expected])
     if data is None:
