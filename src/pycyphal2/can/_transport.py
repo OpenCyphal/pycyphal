@@ -471,7 +471,12 @@ class _CANTransportImpl(CANTransport):
         try:
             while not self._closed:
                 await asyncio.sleep(1.0)
-                Reassembler.cleanup_sessions(self._endpoints.values(), Instant.now().ns)
+                try:
+                    Reassembler.cleanup_sessions(self._endpoints.values(), Instant.now().ns)
+                except Exception:
+                    # Session retirement is not traffic-driven, so this loop must outlive a faulty sweep
+                    # rather than dying silently and leaking sessions for the transport's lifetime.
+                    _logger.exception("Session cleanup failed; continuing")
         except asyncio.CancelledError:
             raise
 

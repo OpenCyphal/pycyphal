@@ -1468,6 +1468,37 @@ async def test_housekeeping_loop_retires_stale_sessions(monkeypatch: pytest.Monk
         t.close()
 
 
+async def test_housekeeping_loop_survives_a_raising_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Session retirement here is not traffic-driven, so the loop must outlive a faulty sweep. Catching
+    only CancelledError let one stray exception kill the task silently, leaking sessions for the rest of
+    the transport's life."""
+    monkeypatch.setattr("pycyphal2.udp._HOUSEKEEPING_PERIOD", 0.02)
+    monkeypatch.setattr("pycyphal2.udp._RX_SESSION_LIFETIME_NS", 1)
+    t = UDPTransport.new_loopback()
+    assert isinstance(t, _UDPTransportImpl)
+    try:
+        calls = {"n": 0}
+        real_drop = _RxReassembler.drop_stale_sessions
+
+        def flaky_drop(self, now_ns):  # type: ignore[no-untyped-def]
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("simulated sweep fault")
+            real_drop(self, now_ns)
+
+        with patch.object(_RxReassembler, "drop_stale_sessions", flaky_drop):
+            t._unicast_reassembler._sessions[100] = _RxSession(last_animated_ns=0)
+            for _ in range(200):
+                if calls["n"] >= 2 and not t._unicast_reassembler._sessions:
+                    break
+                await asyncio.sleep(0.01)
+            assert calls["n"] >= 2, "the loop died on the first faulty sweep"
+            assert t._unicast_reassembler._sessions == {}
+            assert not t._housekeeping_task.done()
+    finally:
+        t.close()
+
+
 @pytest.mark.asyncio
 async def test_tx_socket_creation_failure_rolls_back_created_sockets() -> None:
     """A TX-socket creation failure mid-construction must roll back the interface sockets created before

@@ -1548,7 +1548,14 @@ class NodeImpl(Node):
                         continue
                     except asyncio.TimeoutError:
                         pass
-                self._retire_one_expired_implicit_topic(time.monotonic())
+                try:
+                    self._retire_one_expired_implicit_topic(time.monotonic())
+                except Exception:
+                    # Same reasoning as _housekeeping_loop: a faulty retirement must not permanently
+                    # disable implicit-topic GC. Back off before retrying -- an expired topic yields a
+                    # zero delay, so retrying immediately would spin at full speed on a persistent fault.
+                    _logger.exception("Implicit topic retirement failed; backing off")
+                    await asyncio.sleep(HOUSEKEEPING_PERIOD)
         except asyncio.CancelledError:
             pass
 
@@ -1558,7 +1565,13 @@ class NodeImpl(Node):
         try:
             while not self._closed:
                 await asyncio.sleep(HOUSEKEEPING_PERIOD)
-                self.sweep_stale_states(time.monotonic())
+                try:
+                    self.sweep_stale_states(time.monotonic())
+                except Exception:
+                    # This loop is the only bound on per-remote state growth, so it must outlive a faulty
+                    # sweep. Letting the exception escape would kill the task silently (nothing retrieves
+                    # its result) and leave the node unbounded for the rest of its life.
+                    _logger.exception("Stale-state sweep failed; continuing")
         except asyncio.CancelledError:
             pass
 

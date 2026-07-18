@@ -990,10 +990,15 @@ class _UDPTransportImpl(UDPTransport):
         try:
             while not self._closed:
                 await asyncio.sleep(_HOUSEKEEPING_PERIOD)
-                now_ns = Instant.now().ns
-                self._unicast_reassembler.drop_stale_sessions(now_ns)
-                for reassembler in list(self._reassemblers.values()):
-                    reassembler.drop_stale_sessions(now_ns)
+                try:
+                    now_ns = Instant.now().ns
+                    self._unicast_reassembler.drop_stale_sessions(now_ns)
+                    for reassembler in list(self._reassemblers.values()):
+                        reassembler.drop_stale_sessions(now_ns)
+                except Exception:
+                    # Traffic-driven retirement alone does not reclaim a silent remote's session, so this
+                    # loop must outlive a faulty sweep rather than dying with an unretrieved exception.
+                    _logger.exception("Stale session sweep failed; continuing")
         except asyncio.CancelledError:
             pass
 
