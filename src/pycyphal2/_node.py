@@ -258,9 +258,14 @@ class Association:
     """Tracks a known remote subscriber for reliable delivery ACK tracking."""
 
     remote_id: int
+    # Diagnostics only -- deliberately NOT an eviction input, matching the reference association_t
+    # ("Not used for eviction, only for diagnostics and possibly API exposure", cy.c). Eviction is
+    # driven solely by `slack`; do not "fix" this field into a timeout.
     last_seen: float
     slack: int = 0
     seqno_witness: int = 0
+    # An association cannot be dropped while a publish tracker still references it (reference parity:
+    # "The association cannot be removed unless zero to avoid dangly pointers", cy.c).
     pending_count: int = 0
 
 
@@ -409,6 +414,11 @@ class TopicImpl(Topic):
         self.sub_listener: Closable | None = None
         self.couplings: list[Coupling] = []
         self.is_implicit = True
+        # Unbounded by design, matching the reference, which carries an explicit TODO for the same gap
+        # ("there should be a limit on the number of associations to prevent DoS ... ~500 might be a
+        # reasonable default", cy.c). Entries are created only by POSITIVE acks and retired via `slack`.
+        # Bounding this ahead of the reference would diverge on reliable-delivery accounting, so the fix
+        # belongs upstream first.
         self.associations: dict[int, Association] = {}
         self.dedup: dict[int, DedupState] = {}
         self.publish_futures: dict[int, PublishTracker] = {}
@@ -817,6 +827,12 @@ class NodeImpl(Node):
                 del self.topics_by_subject_id[new_sid]
                 self.topics_by_subject_id[new_sid] = t
                 if collider.pub_writer is not None:
+                    # Winner acquires BEFORE the loser releases below, so the shared handle survives the
+                    # handover on its refcount -- the reference does the same thing by moving the writer
+                    # pointer outright ("the winner acquires first, then the loser releases"). Since the
+                    # collider still holds the writer for new_sid, this hits the existing registry entry
+                    # and is a pure refcount bump: no transport call, so the cascade cannot fail midway
+                    # and leave a displaced topic unreachable from topics_by_subject_id.
                     t.pub_writer = self.acquire_subject_writer(t, new_sid)
                 t.sync_listener()
                 self.schedule_gossip_urgent(t)

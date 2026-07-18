@@ -320,6 +320,10 @@ class ResponseStreamImpl(ResponseStream):
         self._response_timeout = response_timeout
         self.queue: asyncio.Queue[Response | BaseException] = asyncio.Queue()
         self.closed = False
+        # Never pruned during the stream's life, matching the reference request_future_t.remote_by_id
+        # ("States are never removed assuming that futures are short-lived and/or the responder set is
+        # mostly constant", cy.c). The bound is the stream's own lifetime. close() deliberately retains
+        # it to re-ack late duplicates via the zombie timer; dispose() drops it with the rest of teardown.
         self._reliable_remote_by_id: dict[int, ResponseRemoteState] = {}
         self._publish_task: asyncio.Task[None] | None = None
         self._cleanup_handle: asyncio.TimerHandle | None = None
@@ -431,5 +435,6 @@ class ResponseStreamImpl(ResponseStream):
             self._publish_task.cancel()
             self._publish_task = None
         self._remove_from_topic()  # Cancels the cleanup timer and drops from request_futures.
+        self._reliable_remote_by_id.clear()  # No zombie is retained here, so the per-remote state goes too.
         if was_open:
             self.queue.put_nowait(StopAsyncIteration())
