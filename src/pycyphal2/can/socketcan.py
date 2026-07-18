@@ -47,6 +47,11 @@ class SocketCANInterface(Interface):
         self._failure: BaseException | None = None
         self._tx = TxQueue()
         self._tx_task: asyncio.Task[None] | None = None
+        # RX runs in its own task feeding a queue, so close()/fail() can wake a parked reader with a
+        # sentinel instead of leaving it hung in sock_recv (which the selector loop never wakes on a
+        # bare socket.close()). This mirrors the python-can and webserial backends.
+        self._rx_queue: asyncio.Queue[TimestampedFrame | BaseException] = asyncio.Queue()
+        self._rx_task: asyncio.Task[None] | None = None
 
     @property
     def name(self) -> str:
@@ -88,24 +93,41 @@ class SocketCANInterface(Interface):
 
     async def receive(self) -> TimestampedFrame:
         self._raise_if_closed()
+        if self._rx_task is None:
+            self._rx_task = asyncio.get_running_loop().create_task(self._rx_loop())
+            self._rx_task.add_done_callback(self._on_task_done)
+        item = await self._rx_queue.get()
+        if isinstance(item, BaseException):
+            self._fail(item)
+            raise ClosedError(f"SocketCAN interface {self._name} receive failed") from item
+        return item
+
+    async def _rx_loop(self) -> None:
         loop = asyncio.get_running_loop()
         recv_size = _FD_FRAME_SIZE if self._fd else _CLASSIC_FRAME_SIZE
-        while True:
+        while not self._closed:
             try:
                 raw = await loop.sock_recv(self._sock, recv_size)
             except asyncio.CancelledError:
                 raise
             except OSError as ex:
-                self._fail(ex)
-                raise ClosedError(f"SocketCAN interface {self._name} receive failed") from ex
+                if not self._closed:
+                    self._rx_queue.put_nowait(ex)
+                return
             frame = self._decode(raw)
             if frame is not None:
-                return frame
+                self._rx_queue.put_nowait(frame)
 
     def close(self) -> None:
         if self._closed:
             return
         self._closed = True
+        if self._rx_task is not None and self._rx_task is not asyncio.current_task():
+            self._rx_task.cancel()
+        self._rx_task = None
+        # Wake a reader parked on the queue; the socket is closed last so the cancelled reader task
+        # deregisters cleanly before the fd goes away.
+        self._rx_queue.put_nowait(self._closed_error())
         if self._tx_task is not None:
             self._tx_task.cancel()
             self._tx_task = None

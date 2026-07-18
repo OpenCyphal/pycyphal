@@ -169,6 +169,8 @@ def _make_iface(
     iface._failure = failure
     iface._tx = TxQueue()
     iface._tx_task = None
+    iface._rx_queue = asyncio.Queue()
+    iface._rx_task = None
     return iface
 
 
@@ -252,31 +254,71 @@ async def test_enqueue_purge_and_close_paths(monkeypatch: pytest.MonkeyPatch) ->
     closed.purge()
 
 
-async def test_receive_retries_after_decode_drop_and_raises_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_rx_loop_decodes_skips_and_queues_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_socket, _ = _make_socket_module()
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
     iface = _make_iface(module)
     good = module._CAN_FRAME_STRUCT.pack(fake_socket.CAN_EFF_FLAG | 0x123, 2, b"ab".ljust(8, b"\x00"))
-    loop = _FakeLoop(recv=[b"\x00", good])
+    err = OSError("rx failed")
+    loop = _FakeLoop(recv=[b"\x00", good, err])  # Undecodable, then good, then a socket error.
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
 
-    frame = await iface.receive()
+    await iface._rx_loop()  # Returns when sock_recv raises, having queued the good frame then the error.
+    frame = iface._rx_queue.get_nowait()
+    assert isinstance(frame, TimestampedFrame)
     assert frame.id == 0x123
     assert frame.data == b"ab"
+    assert iface._rx_queue.get_nowait() is err
 
+    # receive() surfaces a queued error as a ClosedError and marks the interface failed.
     failing = _make_iface(module)
-    failing_loop = _FakeLoop(recv=[OSError("rx failed")])
-    monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: failing_loop)
+    failing._rx_task = _TaskStub()  # Already spawned, so receive() only drains the queue.
+    failing._rx_queue.put_nowait(OSError("rx failed"))
     with pytest.raises(ClosedError, match="receive failed"):
         await failing.receive()
     assert failing._closed is True
     assert isinstance(failing._failure, OSError)
 
+    # A cancellation while parked in sock_recv propagates out of the RX loop.
     cancelled = _make_iface(module)
     cancelled_loop = _FakeLoop(recv=[asyncio.CancelledError()])
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: cancelled_loop)
     with pytest.raises(asyncio.CancelledError):
-        await cancelled.receive()
+        await cancelled._rx_loop()
+
+
+async def test_close_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """close() must wake a reader parked on the RX queue with a ClosedError sentinel, so interface loss
+    propagates instead of leaving the transport's reader hung (review finding #10)."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    iface._rx_task = asyncio.create_task(asyncio.sleep(100))  # Stand-in for the RX loop task.
+
+    recv_task = asyncio.create_task(iface.receive())
+    await asyncio.sleep(0)
+    assert not recv_task.done()  # Parked on the empty queue.
+
+    iface.close()
+    with pytest.raises(ClosedError):
+        await asyncio.wait_for(recv_task, timeout=1.0)
+    assert iface._rx_task is None
+
+
+async def test_fail_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-transient TX failure (_fail -> close) must likewise unblock a parked reader."""
+    fake_socket, _ = _make_socket_module()
+    module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
+    iface = _make_iface(module)
+    iface._rx_task = asyncio.create_task(asyncio.sleep(100))
+
+    recv_task = asyncio.create_task(iface.receive())
+    await asyncio.sleep(0)
+
+    iface._fail(OSError("ENETDOWN"))
+    with pytest.raises(ClosedError):
+        await asyncio.wait_for(recv_task, timeout=1.0)
+    assert isinstance(iface._failure, OSError)
 
 
 def test_raise_if_closed_and_transient_error_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
