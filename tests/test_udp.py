@@ -929,6 +929,26 @@ class TestIntegrationRXParity:
             t.close()
 
     @pytest.mark.asyncio
+    async def test_raising_subject_handler_does_not_escape(self):
+        """A raising subject handler is contained by the per-datagram fault boundary; reception continues."""
+        t = UDPTransport.new_loopback()
+        assert isinstance(t, _UDPTransportImpl)
+        try:
+            calls: list[int] = []
+
+            def handler(arrival: TransportArrival) -> None:
+                calls.append(arrival.remote_id)
+                raise ValueError("simulated handler fault (e.g. malformed gossip name)")
+
+            t._subject_handlers[55] = handler
+            for tid in (1, 2):
+                frame = _segment_transfer(4, tid, 0xAA, b"hello", mtu=1400)[0]
+                t._process_subject_datagram(frame, "10.0.0.1", 9000, 55, 0, Instant(ns=tid))  # Must not raise.
+            assert calls == [0xAA, 0xAA]
+        finally:
+            t.close()
+
+    @pytest.mark.asyncio
     async def test_transfer_failure_still_learns_endpoint(self):
         t = UDPTransport.new_loopback()
         assert isinstance(t, _UDPTransportImpl)

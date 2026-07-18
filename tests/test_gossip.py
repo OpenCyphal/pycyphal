@@ -119,6 +119,54 @@ async def test_send_gossip_unicast():
     node.close()
 
 
+async def test_gossip_crafted_unicode_pin_name_does_not_raise():
+    """A crafted gossip name like 'x#²' must be silently dropped, never raise, on the RX path."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="n1")
+    sub = node.subscribe("/sensor/>")
+    from pycyphal2._hash import rapidhash
+
+    crafted = "x#²"  # '²' passes str.isdigit() but is rejected by int()
+    name_bytes = crafted.encode("utf-8")
+    gossip_hdr = GossipHeader(
+        topic_log_age=5,
+        topic_hash=rapidhash(name_bytes),
+        topic_evictions=0,
+        name_len=len(name_bytes),
+    )
+    arrival = TransportArrival(
+        timestamp=pycyphal2.Instant.now(),
+        priority=pycyphal2.Priority.NOMINAL,
+        remote_id=99,
+        message=gossip_hdr.serialize() + name_bytes,
+    )
+    node.on_subject_arrival(node.broadcast_subject_id, arrival)  # Must not raise.
+    assert crafted not in node.topics_by_name
+
+    # The node must remain fully operational: a subsequent valid gossip is processed normally.
+    topic_name = "sensor/temp"
+    valid_hdr = GossipHeader(
+        topic_log_age=5,
+        topic_hash=rapidhash(topic_name),
+        topic_evictions=0,
+        name_len=len(topic_name),
+    )
+    node.on_subject_arrival(
+        node.broadcast_subject_id,
+        TransportArrival(
+            timestamp=pycyphal2.Instant.now(),
+            priority=pycyphal2.Priority.NOMINAL,
+            remote_id=99,
+            message=valid_hdr.serialize() + topic_name.encode("utf-8"),
+        ),
+    )
+    assert topic_name in node.topics_by_name
+
+    sub.close()
+    node.close()
+
+
 async def test_gossip_implicit_topic_creation():
     """A gossip whose name matches a pattern subscriber creates an implicit topic."""
     net = MockNetwork()

@@ -5,6 +5,7 @@ import pytest
 from pycyphal2 import SUBJECT_ID_PINNED_MAX
 from pycyphal2._node import (
     TOPIC_NAME_MAX,
+    _is_valid_wire_name,
     _name_consume_pin_suffix,
     _name_normalize,
     match_pattern,
@@ -76,6 +77,21 @@ def test_pin_trailing_hash_no_digits() -> None:
 
 def test_pin_non_digit_after_hash() -> None:
     assert _name_consume_pin_suffix("foo#abc") == ("foo#abc", None)
+
+
+def test_pin_unicode_digit_not_parsed() -> None:
+    # str.isdigit() is True for characters that int() rejects, e.g. '²' (U+00B2) or '②' (U+2461);
+    # the parser must treat them as non-digits and never raise.
+    assert _name_consume_pin_suffix("foo#²") == ("foo#²", None)
+    assert _name_consume_pin_suffix("foo#1²") == ("foo#1²", None)
+    assert _name_consume_pin_suffix("foo#²1") == ("foo#²1", None)
+    assert _name_consume_pin_suffix("x#②") == ("x#②", None)
+
+
+def test_wire_name_unicode_digit_pin_rejected() -> None:
+    # A crafted gossip name like 'x#²' must be classified invalid without raising.
+    assert not _is_valid_wire_name("x#²")
+    assert not _is_valid_wire_name("x#②")
 
 
 def test_pin_hash_in_middle() -> None:

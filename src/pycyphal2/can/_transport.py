@@ -365,7 +365,11 @@ class _CANTransportImpl(CANTransport):
             iface_index = self._interface_index.get(id(itf))
             if iface_index is None:
                 return
-            self._ingest_frame(iface_index, frame)
+            try:
+                self._ingest_frame(iface_index, frame)
+            except Exception:
+                # A raising handler must not kill the reader loop; drop the frame and keep serving.
+                _logger.exception("Frame ingest raised iface=%s", itf.name)
 
     def _drop_interface(self, itf: Interface, ex: BaseException) -> None:
         if itf not in self._interfaces:

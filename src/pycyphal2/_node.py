@@ -95,7 +95,7 @@ def _name_consume_pin_suffix(name: str) -> tuple[str, int | None]:
         if ch == "#":
             hash_pos = i
             break
-        if not ch.isdigit():
+        if not "0" <= ch <= "9":  # ASCII only: str.isdigit() accepts chars that int() rejects, e.g. '²'
             return (name, None)
     if hash_pos < 0:
         return (name, None)
@@ -134,8 +134,8 @@ def _is_valid_wire_name(name: str) -> bool:
         and "*" not in name
         and ">" not in name
         and not _name_is_homeful(name)
-        and _name_consume_pin_suffix(name)[1] is None
         and all(33 <= ord(ch) <= 126 for ch in name)
+        and _name_consume_pin_suffix(name)[1] is None
         and _name_normalize(name) == name
     )
 
