@@ -553,6 +553,10 @@ class Node(Closable, ABC):
 
         If the namespace is not set, it is read from the CYPHAL_NAMESPACE environment variable,
         which is the main intended use case. Direct assignment might be considered an anti-pattern in most cases.
+
+        Raises :class:`ValueError` if ``transport.subject_id_modulus`` does not satisfy the reference
+        predicate (at least 57203, prime, and congruent to 3 modulo 4). The stock transports always do;
+        this only concerns custom ones. See :meth:`Transport.subject_id_modulus`.
         """
         from ._node import NodeImpl
 

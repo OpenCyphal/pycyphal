@@ -349,6 +349,11 @@ class _RxSession:
 
 class _RxReassembler:
     def __init__(self) -> None:
+        # LRU ordered MOST-recently-active FIRST, so the oldest session is the LAST item and is reached
+        # with next(reversed(...)). Note this is the mirror image of _UDPTransportImpl._remote_endpoints,
+        # which orders most-recent LAST; the difference is deliberate -- the stale-retirement scans here
+        # want the oldest, so keeping it at a fixed end avoids re-sorting. Flip one and you must flip
+        # every popitem()/reversed() that reads it.
         self._sessions: OrderedDict[int, _RxSession] = OrderedDict()
 
     def accept(
@@ -604,6 +609,11 @@ class UDPTransport(Transport, ABC):
         detected. You can also use ``UDPTransport.list_interfaces()`` for a semi-automatic approach.
 
         The UID is a globally unique 64-bit identifier of the local node. If not given, one will be generated randomly.
+
+        The default ``subject_id_modulus`` is always valid. Overriding it only makes sense for a
+        deliberately reduced subject-ID space, and the value must satisfy the reference predicate --
+        at least 57203, prime, and congruent to 3 modulo 4 -- because :meth:`pycyphal2.Node.new` rejects
+        anything else with ``ValueError``. This constructor only enforces the transport-level range.
         """
         if not interfaces:
             ifaces = UDPTransport.list_interfaces()
@@ -1036,7 +1046,9 @@ class _UDPTransportImpl(UDPTransport):
         key = (remote_id, iface_idx)
         existing = self._remote_endpoints.get(key)
         self._remote_endpoints[key] = (src_ip, src_port)
-        self._remote_endpoints.move_to_end(key)  # Mark most-recently-seen for LRU eviction.
+        # Ordered most-recently-seen LAST, so eviction pops the FRONT. This is the mirror image of
+        # _RxReassembler._sessions -- see the note there before changing either.
+        self._remote_endpoints.move_to_end(key)
         if len(self._remote_endpoints) > _REMOTE_ENDPOINT_CAPACITY:
             evicted, _ = self._remote_endpoints.popitem(last=False)
             _logger.debug("Remote endpoint cache full, evicted rid=%016x iface=%d", evicted[0], evicted[1])

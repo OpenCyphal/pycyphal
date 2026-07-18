@@ -129,8 +129,9 @@ class SocketCANInterface(Interface):
         if self._rx_task is not None and self._rx_task is not asyncio.current_task():
             self._rx_task.cancel()
         self._rx_task = None
-        # Drop any already-queued frames and install a single terminal sentinel, so a reader parked on
-        # the queue wakes promptly; the socket is closed last so the cancelled reader deregisters cleanly.
+        # Drop any already-queued frames and install a single terminal sentinel so a reader parked on the
+        # queue wakes promptly. A frame decoded before the cancellation lands may still be appended behind
+        # the sentinel; that is harmless because _raise_if_closed() short-circuits every later receive().
         while not self._rx_queue.empty():
             self._rx_queue.get_nowait()
         self._rx_queue.put_nowait(self._closed_error())

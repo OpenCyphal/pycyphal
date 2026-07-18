@@ -129,9 +129,10 @@ def _parse_line(line: bytes) -> Frame | None:
     if command == b"D":
         return _parse_data_frame(line, id_length=8, max_payload_length=64)
     if command in (b"t", b"r", b"R"):
-        # Standard-ID (11-bit) frames: the Interface contract is extended-only and Frame carries no IDE
-        # discriminator, so forwarding a 't' data frame would alias an extended frame with a small ID.
-        _logger.debug("SLCAN drop standard-id frame cmd=%r", command)
+        # 't'/'r' are standard-ID (11-bit) frames, 'R' is an extended-ID RTR frame; none are usable here.
+        # The Interface contract is extended-data-only and Frame carries no IDE or RTR discriminator, so
+        # forwarding a 't' would alias an extended frame with a small ID, and RTR has no Cyphal meaning.
+        _logger.debug("SLCAN drop unusable frame type cmd=%r", command)
         return None
     _logger.debug("SLCAN drop unknown line=%r", line)
     return None

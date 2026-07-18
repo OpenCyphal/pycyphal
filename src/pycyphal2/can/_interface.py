@@ -9,7 +9,6 @@ import itertools
 from .. import Closable, ClosedError, Instant
 
 CAN_EXT_ID_MASK = (1 << 29) - 1
-CAN_STD_ID_MASK = (1 << 11) - 1
 
 
 def closed_error(interface: str, failure: BaseException | None) -> ClosedError:

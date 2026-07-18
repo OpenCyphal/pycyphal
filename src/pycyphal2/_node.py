@@ -1654,8 +1654,10 @@ class NodeImpl(Node):
         self.shared_subject_listeners.clear()
         for w in self.gossip_shard_writers.values():
             w.close()
+        self.gossip_shard_writers.clear()
         for gossip_listener in self.gossip_shard_listeners.values():
             gossip_listener.close()
+        self.gossip_shard_listeners.clear()
         self._monitor_callbacks.clear()
         self._implicit_topics.clear()
         self.transport.close()
