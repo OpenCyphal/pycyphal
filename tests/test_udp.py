@@ -466,6 +466,30 @@ class TestTransferSlot:
         assert slot._accept_fragment(2, b"XXXXXX")
         assert [(frag.offset, frag.data) for frag in slot.fragments] == [(0, b"AAAA"), (2, b"XXXXXX"), (6, b"CCCC")]
 
+    def test_conflicting_overlap_evicted_via_inclusive_right_neighbor(self):
+        """A fragment starting exactly at the new fragment's end is its right neighbor (the reference's
+        cavl2_predecessor is an inclusive floor), so a conflicting overlapped fragment between them is
+        evicted and the transfer is delivered. A strict '<' lookup would keep the stale fragment and
+        fail the transfer CRC. Only observable when overlapping fragments carry conflicting data."""
+        payload = b"ABCDEFGH"
+
+        def hdr(offset: int, crc: int = 0) -> _FrameHeader:
+            return _FrameHeader(
+                priority=4,
+                transfer_id=1,
+                sender_uid=1,
+                frame_payload_offset=offset,
+                transfer_payload_size=len(payload),
+                prefix_crc=crc,
+            )
+
+        slot = _TransferSlot.create(hdr(0), 0)
+        assert slot.update(0, hdr(2), b"XXXX") is None  # Conflicting (corrupt/injected) overlap.
+        assert slot.update(1, hdr(3, crc32c_full(payload)), b"DEFGH") is None
+        result = slot.update(2, hdr(0), b"ABC")
+        assert [(frag.offset, bytes(frag.data)) for frag in slot.fragments] == [(0, b"ABC"), (3, b"DEFGH")]
+        assert result == payload
+
     def test_furthest_reaching_crc_is_used(self):
         payload = b"abcdef"
         slot = _TransferSlot.create(

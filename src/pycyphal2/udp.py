@@ -236,7 +236,7 @@ class _TransferSlot:
     def _find_right_neighbor(self, right: int) -> _Fragment | None:
         candidate: _Fragment | None = None
         for frag in self.fragments:
-            if frag.offset < right:
+            if frag.offset <= right:  # Inclusive: a fragment starting exactly at `right` is a neighbor candidate.
                 candidate = frag
             else:
                 break
