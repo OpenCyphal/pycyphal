@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import socket
 import struct
+import sys
 from ipaddress import IPv4Address
 from unittest.mock import patch
 
@@ -31,6 +33,7 @@ from pycyphal2.udp import (
     Interface,
     UDPTransport,
     _FrameHeader,
+    _IP_MULTICAST_ALL_LINUX,
     _RxReassembler,
     _SUBJECT_ID_MODULUS_MAX,
     _TransferSlot,
@@ -938,6 +941,17 @@ class TestIntegrationTransportClose:
         t.close()
         with pytest.raises(SendError):
             await writer(Instant.now() + 1.0, Priority.NOMINAL, b"should fail")
+
+    @pytest.mark.skipif(sys.platform != "linux", reason="IP_MULTICAST_ALL is a Linux-only socket option")
+    def test_mcast_socket_disables_cross_interface_delivery(self, loopback_iface):
+        """On Linux the multicast RX socket must set IP_MULTICAST_ALL=0 so it only receives datagrams
+        matching its own (group, interface) membership - the kernel-level equivalent of the reference's
+        recvmsg+IP_PKTINFO ingress-interface filter (udp_wrapper.c)."""
+        sock = _UDPTransportImpl._create_mcast_socket(5, loopback_iface)
+        try:
+            assert sock.getsockopt(socket.IPPROTO_IP, _IP_MULTICAST_ALL_LINUX) == 0
+        finally:
+            sock.close()
 
     @pytest.mark.asyncio
     async def test_subject_id_modulus(self, loopback_iface):

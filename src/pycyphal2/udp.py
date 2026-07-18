@@ -52,6 +52,7 @@ IPv4_MCAST_PREFIX = 0xEF000000
 IPv4_SUBJECT_ID_MAX = 0x7FFFFF
 TRANSFER_ID_MASK = (1 << 48) - 1
 _MULTICAST_TTL = 16
+_IP_MULTICAST_ALL_LINUX = 49  # Linux uapi in.h; not exposed by CPython's socket module.
 _SIOCGIFMTU = 0x8921
 _CYPHAL_OVERHEAD_MAX = 100
 _CYPHAL_MTU_LINK_MIN = 576
@@ -684,6 +685,16 @@ class _UDPTransportImpl(UDPTransport):
             sock.bind((mcast_ip, port))
         mreq = socket.inet_aton(mcast_ip) + socket.inet_aton(str(iface.address))
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        # REFERENCE PARITY: the reference filters every received datagram by its ingress interface index
+        # via recvmsg+IP_PKTINFO (udp_wrapper.c). asyncio offers no sock_recvmsg, so on Linux the same
+        # delivery set is obtained at the kernel level with IP_MULTICAST_ALL=0: with it, this socket only
+        # receives datagrams matching its own (group, interface) membership above, instead of the default
+        # any-interface delivery that would mislearn reverse routes on multi-homed hosts. macOS/BSD scope
+        # multicast delivery per membership natively. On Windows the socket binds INADDR_ANY and Winsock
+        # may deliver cross-interface traffic; multi-homed Windows hosts should configure at most one
+        # transport interface per multicast-reachable network.
+        if sys.platform == "linux":
+            sock.setsockopt(socket.IPPROTO_IP, _IP_MULTICAST_ALL_LINUX, 0)
         _logger.info("Multicast socket for subject %d on %s (%s:%d)", subject_id, iface.address, mcast_ip, port)
         return sock
 
