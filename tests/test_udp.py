@@ -1305,9 +1305,14 @@ async def test_short_deadline_send_fails_on_own_budget_behind_long_holder() -> N
         holder_release.set()
         await holder_task  # The holder still completes cleanly.
 
-    # The lock-acquisition timeout must not have leaked the socket lock: a later send succeeds.
+    # The lock-acquisition timeout must not have leaked the socket lock: it is free and re-acquirable.
     assert not pub._tx_locks[0].locked()
-    await waiter(Instant.now() + 2.0, Priority.NOMINAL, b"after")
+
+    async def ok_sendto(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
+        pass  # Avoid a real multicast send (unroutable on Windows loopback); still re-acquires the lock.
+
+    with patch.object(pub, "async_sendto", ok_sendto):
+        await waiter(Instant.now() + 2.0, Priority.NOMINAL, b"after")  # Succeeds via send_on_iface.
     pub.close()
 
 
