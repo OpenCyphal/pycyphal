@@ -265,6 +265,18 @@ class TestRXReassembly:
         result2 = reasm.accept(frame_pairs[0][0], frame_pairs[0][1])
         assert result2 is None  # Dedup
 
+    def test_history_seed_sentinel_not_matchable_by_wire_id(self):
+        """A first-seen transfer-ID of 0 seeds the dedup history with (0 - 1) wrapped to 2^64-1, which no
+        48-bit wire transfer-ID can equal (the reference keeps the unmasked uint64). A 48-bit-masked seed
+        would equal 0xFFFF_FFFF_FFFF — a valid wire value — falsely rejecting a genuine such transfer."""
+        reasm = _RxReassembler()
+        first = self._make_frames(b"first", mtu=1400, transfer_id=0)
+        assert reasm.accept(first[0][0], first[0][1]) is not None
+        genuine = self._make_frames(b"genuine", mtu=1400, transfer_id=TRANSFER_ID_MASK)
+        result = reasm.accept(genuine[0][0], genuine[0][1])
+        assert result is not None
+        assert result.payload == b"genuine"
+
     def test_crc_mismatch_first_frame(self):
         payload = b"corrupt me"
         reasm = _RxReassembler()

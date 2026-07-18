@@ -284,7 +284,10 @@ class _RxSession:
         return transfer_id in self.history
 
     def initialize_history(self, transfer_id: int) -> None:
-        value = (transfer_id - 1) & TRANSFER_ID_MASK
+        # The seed wraps mod 2**64, not 2**48: for a first-seen transfer-ID of 0 it becomes 2**64-1,
+        # which no 48-bit wire transfer-ID can match (a 48-bit-masked seed would falsely reject a
+        # genuine transfer with ID 0xFFFF_FFFF_FFFF). Mirrors the reference uint64 arithmetic.
+        value = (transfer_id - 1) & 0xFFFF_FFFF_FFFF_FFFF
         self.history = [value] * _RX_TRANSFER_HISTORY_COUNT
         self.history_current = 0
         self.initialized = True
