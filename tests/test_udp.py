@@ -42,6 +42,7 @@ from pycyphal2.udp import (
     _RxSession,
     _SUBJECT_ID_MODULUS_MAX,
     _TransferSlot,
+    _collect_send_errors,
     _header_deserialize,
     _header_serialize,
     _make_subject_endpoint,
@@ -1222,6 +1223,47 @@ async def test_subject_send_succeeds_when_one_redundant_interface_fails() -> Non
             writer_all = pub.subject_advertise(11)
             with pytest.raises(SendError):
                 await writer_all(Instant.now() + 2.0, Priority.NOMINAL, b"nope")
+    finally:
+        pub.close()
+
+
+def test_collect_send_errors_counts_cancellation_as_a_failure() -> None:
+    """asyncio.gather(..., return_exceptions=True) reports an individually cancelled child as a
+    CancelledError INSTANCE, which derives from BaseException, not Exception. The old
+    isinstance(r, Exception) predicate therefore scored a cancelled interface as a delivery."""
+    oserr = OSError("down")
+    assert _collect_send_errors([None, None]) == []
+    assert _collect_send_errors([None, oserr]) == [oserr]
+    cancelled = asyncio.CancelledError()
+    assert _collect_send_errors([None, cancelled]) == [cancelled]
+    assert len(_collect_send_errors([cancelled, asyncio.CancelledError()])) == 2
+
+
+async def test_send_cancelled_on_every_interface_is_not_reported_as_success() -> None:
+    """With every interface cancelled the send used to return normally, reporting a fully successful
+    transfer that never put a byte on the wire."""
+    iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
+    pub = UDPTransport.new(interfaces=[iface, iface])
+    assert isinstance(pub, _UDPTransportImpl)
+    try:
+
+        async def cancelled_send(sock, lock, frames, addr, deadline):  # type: ignore[no-untyped-def]
+            raise asyncio.CancelledError
+
+        with patch.object(pub, "send_on_iface", cancelled_send):
+            writer = pub.subject_advertise(10)
+            with pytest.raises(SendError):
+                await writer(Instant.now() + 2.0, Priority.NOMINAL, b"nope")
+
+        # Redundancy still holds: one cancelled interface alongside one delivery is a success.
+        async def cancel_first(sock, lock, frames, addr, deadline):  # type: ignore[no-untyped-def]
+            if sock is pub.tx_socks[0]:
+                raise asyncio.CancelledError
+            return None
+
+        with patch.object(pub, "send_on_iface", cancel_first):
+            writer_partial = pub.subject_advertise(11)
+            await writer_partial(Instant.now() + 2.0, Priority.NOMINAL, b"ok")
     finally:
         pub.close()
 

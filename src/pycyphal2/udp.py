@@ -159,6 +159,18 @@ def _frame_is_valid(header: _FrameHeader, payload_chunk: bytes | memoryview) -> 
     return (header.frame_payload_offset + len(payload_chunk)) <= header.transfer_payload_size
 
 
+def _collect_send_errors(results: list[BaseException | None]) -> list[BaseException]:
+    """
+    Per-interface failures out of a ``gather(..., return_exceptions=True)`` over ``send_on_iface``.
+
+    The predicate is ``BaseException``, not ``Exception``: gather reports an individually cancelled child
+    as a ``CancelledError`` *instance*, which derives from ``BaseException``, so an ``Exception`` test
+    would score a cancelled interface as a delivery -- and if every interface were cancelled the caller
+    would report a fully successful send that never put a byte on the wire.
+    """
+    return [r for r in results if isinstance(r, BaseException)]
+
+
 @dataclass(frozen=True)
 class _Fragment:
     offset: int
@@ -511,12 +523,15 @@ class _UDPSubjectWriter(SubjectWriter):
         # shared deadline (each interface's frames still go out in order under its own socket lock).
         # return_exceptions=True lets every interface settle before we aggregate, so none is left running.
         results = await asyncio.gather(*coros, return_exceptions=True)
-        errors = [r for r in results if isinstance(r, Exception)]
+        errors = _collect_send_errors(results)
         success_count = len(results) - len(errors)
 
         if errors and success_count == 0:
             _logger.error("Send failed on all interfaces for subject %d", self._subject_id)
-            raise SendError("send failed on all interfaces") from ExceptionGroup(
+            # BaseExceptionGroup, not ExceptionGroup: the latter refuses to nest a BaseException, and
+            # `errors` may carry a CancelledError. It downgrades itself to an ExceptionGroup when every
+            # member is an Exception, so the common case is unchanged.
+            raise SendError("send failed on all interfaces") from BaseExceptionGroup(
                 "send failed on all interfaces", errors
             )
         if errors:
@@ -887,7 +902,7 @@ class _UDPTransportImpl(UDPTransport):
             raise SendError("No endpoint known for remote_id")
 
         results = await asyncio.gather(*coros, return_exceptions=True)
-        errors = [r for r in results if isinstance(r, Exception)]
+        errors = _collect_send_errors(results)
         success_count = len(results) - len(errors)
 
         if success_count == 0:
