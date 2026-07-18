@@ -230,7 +230,10 @@ def is_valid_subject_id_modulus(modulus: int) -> bool:
     The quadratic probe (hash + evictions²) mod m covers the residue space only under these conditions;
     a degenerate modulus would make the synchronous displacement loop in topic_allocate effectively
     non-terminating, hard-blocking the event loop."""
-    if modulus < SUBJECT_ID_MODULUS_16bit or modulus % 4 != 3:
+    # The reference modulus is a uint32, so anything above that is invalid by definition; the bound also
+    # keeps the trial division below ~65536 iterations, so an untrusted custom-transport value cannot make
+    # the primality test hang.
+    if modulus < SUBJECT_ID_MODULUS_16bit or modulus > 0xFFFFFFFF or modulus % 4 != 3:
         return False
     d = 3
     while d * d <= modulus:

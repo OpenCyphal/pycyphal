@@ -106,6 +106,8 @@ def test_is_valid_subject_id_modulus_predicate():
     assert not is_valid_subject_id_modulus(57205)  # ≡ 1 mod 4.
     assert not is_valid_subject_id_modulus(57207)  # ≡ 3 mod 4 but composite (3 × 19069).
     assert not is_valid_subject_id_modulus(122744)  # Even.
+    # Above uint32 is rejected without running a slow primality test on a huge untrusted value.
+    assert not is_valid_subject_id_modulus((1 << 32) + 3)
 
 
 async def test_degenerate_subject_id_modulus_rejected():
