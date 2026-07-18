@@ -154,3 +154,29 @@ async def test_pending_reliable_publish_keeps_topic_explicit() -> None:
     assert topic.is_implicit is True
 
     node.close()
+
+
+async def test_close_does_not_resurrect_topic_via_disposed_stream_tail() -> None:
+    """close() disposes response streams, which cancels each publish task; that task's finally clause runs
+    on a LATER loop iteration -- after the transport is closed and the gossip tasks are cancelled -- and
+    re-syncs topic implicitness. sync_topic_lifecycle must refuse to act on a closed node, otherwise it
+    spawns an uncancellable gossip task on a dead node and calls subject_listen on a closed transport."""
+    net = MockNetwork()
+    tr = MockTransport(node_id=1, network=net)
+    node = new_node(tr, home="n1")
+    pub = node.advertise("/rpc")  # Left OPEN, so pub_count keeps the topic explicit across close().
+    pub.ack_timeout = 0.05
+    topic = node.topics_by_name["rpc"]
+    topic.associations[42] = Association(remote_id=42, last_seen=0.0)
+
+    stream = await request_stream(pub, pycyphal2.Instant.now() + 5.0, float("inf"), b"request")
+    assert stream._publish_task is not None
+    listener_creations = dict(tr.subject_listener_creations)
+
+    node.close()
+    for _ in range(5):  # Let the cancelled publish task's finally clause run to completion.
+        await asyncio.sleep(0)
+
+    assert topic.gossip_task is None  # No gossip task resurrected on a dead node.
+    assert tr.subject_listener_creations == listener_creations  # No subject_listen on a closed transport.
+    assert not node._implicit_topics  # close() cleared it and the tail did not re-populate it.

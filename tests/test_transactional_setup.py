@@ -31,6 +31,23 @@ async def test_node_init_rolls_back_broadcast_writer_on_listen_failure() -> None
     assert tr.subject_handlers == {}
 
 
+async def test_node_init_rolls_back_broadcast_handles_on_unicast_listen_failure() -> None:
+    """unicast_listen is the LAST fallible acquisition in the constructor. Both built-in transports
+    implement it as a plain assignment, but a third-party one may not -- and nobody closes the transport
+    when the constructor raises, so an unguarded failure here strands the broadcast writer and listener
+    acquired just above it."""
+    tr = MockTransport(node_id=1, network=MockNetwork())
+
+    def failing_unicast_listen(_handler):  # type: ignore[no-untyped-def]
+        raise RuntimeError("Simulated unicast_listen failure")
+
+    tr.unicast_listen = failing_unicast_listen  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="Simulated unicast_listen"):
+        new_node(tr, home="n")
+    assert tr.writers == {}  # Broadcast writer rolled back...
+    assert tr.subject_handlers == {}  # ...and so was the broadcast listener.
+
+
 async def test_advertise_rolls_back_pub_count_on_writer_failure() -> None:
     # Learn the topic's subject-ID from a healthy node (it depends only on name + modulus).
     healthy_tr = MockTransport(node_id=1, network=MockNetwork())

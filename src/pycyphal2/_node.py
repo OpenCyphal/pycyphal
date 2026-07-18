@@ -587,7 +587,16 @@ class NodeImpl(Node):
         self.shared_subject_writers: dict[int, SharedSubjectWriter] = {}
         self.shared_subject_listeners: dict[int, SharedSubjectListener] = {}
 
-        transport.unicast_listen(self.on_unicast_arrival)
+        # The last fallible acquisition in the constructor. Both built-in transports implement this as a
+        # plain assignment that cannot raise, but a third-party one may not, and an unguarded failure here
+        # would strand the broadcast writer and listener acquired above -- nobody closes the transport on
+        # constructor failure, so those handles would leak.
+        try:
+            transport.unicast_listen(self.on_unicast_arrival)
+        except BaseException:
+            self.broadcast_listener.close()
+            self.broadcast_writer.close()
+            raise
 
         self._implicit_topics: OrderedDict[TopicImpl, None] = OrderedDict()
         self._implicit_gc_wakeup = asyncio.Event()
@@ -817,6 +826,12 @@ class NodeImpl(Node):
                 work.append((t, ev + 1))
 
     def sync_topic_lifecycle(self, topic: TopicImpl) -> None:
+        # Reachable after close(): disposing a response stream cancels its publish task, whose finally
+        # clause releases the tracker and re-syncs implicitness on a later loop iteration -- by then the
+        # transport is closed and the gossip tasks are cancelled. Without this guard that tail would
+        # spawn an uncancellable gossip task on a dead node and call subject_listen on a closed transport.
+        if self._closed:
+            return
         implicit = topic.compute_is_implicit()
         if implicit != topic.is_implicit:
             topic.is_implicit = implicit
