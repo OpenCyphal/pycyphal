@@ -501,7 +501,13 @@ class TopicImpl(Topic):
 
     def compute_is_implicit(self) -> bool:
         has_verbatim_sub = any(not c.root.is_pattern for c in self.couplings)
-        return self.pub_count == 0 and not has_verbatim_sub
+        # An open response stream or an in-flight reliable publish keeps the topic explicit, so implicit
+        # GC cannot destroy a topic that still has outstanding request/publish state (closed "zombie"
+        # streams awaiting their dedup-cleanup timer do not count). Python must gate on these because,
+        # unlike the C API, it allows a stream/publish to outlive the publisher that issued it.
+        has_open_stream = any(not s.closed for s in self.request_futures.values())
+        has_pending_publish = bool(self.publish_futures)
+        return self.pub_count == 0 and not has_verbatim_sub and not has_open_stream and not has_pending_publish
 
     def sync_implicit(self) -> None:
         """Sync implicitness and transport state with the reference state machine."""
@@ -1512,6 +1518,11 @@ class NodeImpl(Node):
         topic = self.topics_by_name.get(name)
         if topic is None:
             return
+        # Dispose any outstanding response streams first (before discard_implicit_topic): a stream's
+        # forced teardown cancels its zombie-cleanup timer and stops its iteration, and doing it here
+        # avoids a re-touch of the implicit list that could otherwise resurrect the topic mid-destroy.
+        for stream in list(topic.request_futures.values()):
+            stream.dispose()
         if topic.gossip_task is not None:
             self._cancel_gossip(topic)
         self.discard_implicit_topic(topic)
@@ -1526,6 +1537,7 @@ class NodeImpl(Node):
         topic.associations.clear()
         topic.dedup.clear()
         topic.publish_futures.clear()
+        topic.request_futures.clear()
         self.notify_implicit_gc()
         _logger.info("Topic destroyed '%s'", name)
 
@@ -1535,11 +1547,16 @@ class NodeImpl(Node):
         self._closed = True
         _logger.info("Node closing home='%s'", self._home)
         # Unblock anything awaiting on a subscriber (`async for`): closing each enqueues StopAsyncIteration,
-        # otherwise a default (no-liveness-timeout) subscriber would wait on its queue forever. (Reliable
-        # publishes / response streams are deadline-bounded and resolve on their own.)
+        # otherwise a default (no-liveness-timeout) subscriber would wait on its queue forever.
         for root in list(self.sub_roots_verbatim.values()) + list(self.sub_roots_pattern.values()):
             for sub in list(root.subscribers):
                 sub.close()
+        # Dispose outstanding response streams: cancel each library-owned request-publish task and stop
+        # pending iteration, otherwise a stream with a far-off (or infinite) response timeout would keep
+        # its retry task and payload graph alive against the closed transport until that timeout.
+        for topic in list(self.topics_by_name.values()):
+            for stream in list(topic.request_futures.values()):
+                stream.dispose()
         self._gc_task.cancel()
         for root in list(self.sub_roots_pattern.values()):
             if root.scout_task is not None:

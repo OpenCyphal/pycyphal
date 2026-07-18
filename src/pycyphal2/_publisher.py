@@ -112,6 +112,10 @@ class PublisherImpl(Publisher):
         if self.closed:
             raise SendError("Publisher closed")
 
+        response_timeout = float(response_timeout)
+        if math.isnan(response_timeout) or response_timeout < 0.0:
+            raise ValueError("response_timeout must be non-negative (or +inf to disable liveness)")
+
         tag = self._topic.next_tag()
         payload = bytes(message)
 
@@ -124,17 +128,23 @@ class PublisherImpl(Publisher):
         )
         self._topic.request_futures[tag] = stream
 
-        tracker = self._prepare_reliable_publish_tracker(tag)
+        # Any failure after the stream is registered must close it (drop it from request_futures and
+        # re-sync implicitness), not just pop the tag -- otherwise a publisher closing concurrently could
+        # leave the topic permanently explicit. The tracker prep is inside the guard for the same reason.
+        tracker: PublishTracker | None = None
         try:
+            tracker = self._prepare_reliable_publish_tracker(tag)
             initial_window = await self._reliable_publish_start(delivery_deadline, tag, payload, tracker)
         except asyncio.CancelledError:
-            tracker.compromised = True
-            self._topic.request_futures.pop(tag, None)
-            self._release_reliable_publish_tracker(tag, tracker)
+            if tracker is not None:
+                tracker.compromised = True
+                self._release_reliable_publish_tracker(tag, tracker)
+            stream.close()
             raise
         except BaseException:
-            self._topic.request_futures.pop(tag, None)
-            self._release_reliable_publish_tracker(tag, tracker)
+            if tracker is not None:
+                self._release_reliable_publish_tracker(tag, tracker)
+            stream.close()
             raise
 
         task = self._node.loop.create_task(
@@ -192,6 +202,9 @@ class PublisherImpl(Publisher):
     def _release_reliable_publish_tracker(self, tag: int, tracker: PublishTracker) -> None:
         self._topic.publish_futures.pop(tag, None)
         self._node.publish_tracker_release(self._topic, tracker)
+        # Re-evaluate implicitness: once the last pending reliable publish is released, a topic held
+        # explicit only by it can become implicit and be GC'd (otherwise it would gossip forever).
+        self._topic.sync_implicit()
 
     async def _send_reliable_publish(
         self,
@@ -321,8 +334,10 @@ class ResponseStreamImpl(ResponseStream):
     async def __anext__(self) -> Response:
         if self.closed:
             raise StopAsyncIteration
+        # A non-finite response timeout disables liveness (waits forever), mirroring Subscriber.timeout.
+        timeout = self._response_timeout if self._response_timeout != float("inf") else None
         try:
-            item = await asyncio.wait_for(self.queue.get(), timeout=self._response_timeout)
+            item = await asyncio.wait_for(self.queue.get(), timeout=timeout)
         except asyncio.TimeoutError:
             raise LivenessError("Response timeout")
         if isinstance(item, StopAsyncIteration):
@@ -404,4 +419,21 @@ class ResponseStreamImpl(ResponseStream):
         else:
             self._remove_from_topic()
         self.queue.put_nowait(StopAsyncIteration())
+        # Re-evaluate topic implicitness: this stream no longer keeps the topic explicit, so once the
+        # publisher is also gone the topic can become implicit and be GC'd (otherwise it would gossip
+        # forever). Safe during node teardown -- notify_implicit_gc() is a no-op when the node is closed.
+        self._topic.sync_implicit()
         _logger.debug("Response stream closed for tag=%d", self._message_tag)
+
+    def dispose(self) -> None:
+        """Force-remove the stream during node/topic teardown: cancel its publish task and any pending
+        zombie-cleanup timer, drop it from the topic, and stop pending iteration. Unlike close(), this
+        never retains a zombie and does not re-sync implicitness (the topic is being torn down)."""
+        was_open = not self.closed
+        self.closed = True
+        if self._publish_task is not None:
+            self._publish_task.cancel()
+            self._publish_task = None
+        self._remove_from_topic()  # Cancels the cleanup timer and drops from request_futures.
+        if was_open:
+            self.queue.put_nowait(StopAsyncIteration())
