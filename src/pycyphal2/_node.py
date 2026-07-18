@@ -592,6 +592,7 @@ class NodeImpl(Node):
         self._implicit_topics: OrderedDict[TopicImpl, None] = OrderedDict()
         self._implicit_gc_wakeup = asyncio.Event()
         self._gc_task = self.loop.create_task(self.implicit_gc_loop())
+        self._housekeeping_task = self.loop.create_task(self._housekeeping_loop())
 
         _logger.info(
             "Node init home='%s' ns='%s' broadcast_sid=%d shards=%d",
@@ -1488,12 +1489,11 @@ class NodeImpl(Node):
         if not self._closed:
             self._implicit_gc_wakeup.set()
 
-    def _next_implicit_gc_delay(self, now: float | None = None) -> float | None:
-        now = time.monotonic() if now is None else now
+    def _next_implicit_gc_delay(self) -> float | None:
         if not self._implicit_topics:
             return None
         oldest = next(reversed(self._implicit_topics))
-        return max(0.0, (oldest.ts_animated + IMPLICIT_TOPIC_TIMEOUT) - now)
+        return max(0.0, (oldest.ts_animated + IMPLICIT_TOPIC_TIMEOUT) - time.monotonic())
 
     def _retire_one_expired_implicit_topic(self, now: float) -> bool:
         if not self._implicit_topics:
@@ -1520,26 +1520,30 @@ class NodeImpl(Node):
                         sub.drop_stale_reordering(now)
 
     async def implicit_gc_loop(self) -> None:
-        # The stale-state sweep runs on an ABSOLUTE schedule so steady implicit-topic traffic (which wakes
-        # this loop via notify_implicit_gc) cannot postpone it indefinitely.
-        next_sweep = time.monotonic() + HOUSEKEEPING_PERIOD
         try:
             while not self._closed:
                 self._implicit_gc_wakeup.clear()
-                now = time.monotonic()
-                gc_delay = self._next_implicit_gc_delay(now)
-                sweep_delay = max(0.0, next_sweep - now)
-                timeout = sweep_delay if gc_delay is None else min(gc_delay, sweep_delay)
-                if timeout > 0:
+                delay = self._next_implicit_gc_delay()
+                if delay is None:
+                    await self._implicit_gc_wakeup.wait()
+                    continue
+                if delay > 0:
                     try:
-                        await asyncio.wait_for(self._implicit_gc_wakeup.wait(), timeout=timeout)
+                        await asyncio.wait_for(self._implicit_gc_wakeup.wait(), timeout=delay)
+                        continue
                     except asyncio.TimeoutError:
                         pass
-                now = time.monotonic()
-                self._retire_one_expired_implicit_topic(now)  # No-op when nothing is expired.
-                if now >= next_sweep:
-                    self.sweep_stale_states(now)
-                    next_sweep = now + HOUSEKEEPING_PERIOD
+                self._retire_one_expired_implicit_topic(time.monotonic())
+        except asyncio.CancelledError:
+            pass
+
+    async def _housekeeping_loop(self) -> None:
+        # A dedicated periodic task: nothing can postpone asyncio.sleep in its own task, so the stale-state
+        # sweep runs on a steady cadence regardless of implicit-GC activity (matches the UDP/CAN transports).
+        try:
+            while not self._closed:
+                await asyncio.sleep(HOUSEKEEPING_PERIOD)
+                self.sweep_stale_states(time.monotonic())
         except asyncio.CancelledError:
             pass
 
@@ -1587,6 +1591,7 @@ class NodeImpl(Node):
             for stream in list(topic.request_futures.values()):
                 stream.dispose()
         self._gc_task.cancel()
+        self._housekeeping_task.cancel()
         for root in list(self.sub_roots_pattern.values()):
             if root.scout_task is not None:
                 root.scout_task.cancel()

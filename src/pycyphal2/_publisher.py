@@ -135,14 +135,10 @@ class PublisherImpl(Publisher):
         try:
             tracker = self._prepare_reliable_publish_tracker(tag)
             initial_window = await self._reliable_publish_start(delivery_deadline, tag, payload, tracker)
-        except asyncio.CancelledError:
+        except BaseException as ex:
             if tracker is not None:
-                tracker.compromised = True
-                self._release_reliable_publish_tracker(tag, tracker)
-            stream.close()
-            raise
-        except BaseException:
-            if tracker is not None:
+                if isinstance(ex, asyncio.CancelledError):
+                    tracker.compromised = True  # publish_tracker_release reads this, so set it before release.
                 self._release_reliable_publish_tracker(tag, tracker)
             stream.close()
             raise
