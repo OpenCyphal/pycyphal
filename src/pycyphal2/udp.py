@@ -58,6 +58,16 @@ _SIOCGIFMTU = 0x8921
 _CYPHAL_OVERHEAD_MAX = 100
 _CYPHAL_MTU_LINK_MIN = 576
 _RX_SESSION_LIFETIME_NS = round(30.0 * 1e9)
+_HOUSEKEEPING_PERIOD = 1.0  # Periodic RX-session retirement cadence, independent of new traffic.
+# Capacity bound on the learned reverse-route cache. Legitimate deployments use a handful of remotes; the
+# cap bounds memory under untrusted traffic with spoofable source UIDs, evicting the least-recently-seen
+# entry. Not time-based: a retained breadcrumb's route survives until evicted under sustained flooding
+# (then respond() fails cleanly with SendError), rather than expiring while the peer is briefly silent.
+_REMOTE_ENDPOINT_CAPACITY = 8192
+# Per-reassembler cap on concurrent sender sessions. TTL retirement alone bounds retention time but not
+# cardinality: a burst of many unique (spoofable) source UIDs within the lifetime window would otherwise
+# grow unboundedly. The least-recently-active session is evicted past the cap.
+_RX_SESSION_CAPACITY = 4096
 _RX_SLOT_COUNT = 8
 _RX_TRANSFER_HISTORY_COUNT = 32
 _SUBJECT_ID_MODULUS_MAX = IPv4_SUBJECT_ID_MAX - SUBJECT_ID_PINNED_MAX
@@ -351,6 +361,9 @@ class _RxReassembler:
                 self._sessions[header.sender_uid] = session
             session.last_animated_ns = timestamp_ns
             self._sessions.move_to_end(header.sender_uid, last=False)
+            if len(self._sessions) > _RX_SESSION_CAPACITY:  # Evict the least-recently-active session.
+                evicted_uid, _ = self._sessions.popitem(last=True)
+                _logger.debug("UDP reasm session cache full, evicted uid=%016x", evicted_uid)
             if not session.initialized:
                 session.initialize_history(header.transfer_id)
             if session.is_transfer_ejected(header.transfer_id):
@@ -402,6 +415,17 @@ class _RxReassembler:
         if timestamp_ns >= (oldest.last_animated_ns + _RX_SESSION_LIFETIME_NS):
             self._sessions.pop(oldest_uid)
             _logger.debug("UDP reasm retire uid=%016x", oldest_uid)
+
+    def drop_stale_sessions(self, timestamp_ns: int) -> None:
+        """Retire every stale session, independent of new traffic (the reference does this from a periodic
+        poll). Sessions are recency-ordered, so once the oldest is fresh none remain stale."""
+        while self._sessions:
+            oldest_uid = next(reversed(self._sessions))
+            if timestamp_ns >= (self._sessions[oldest_uid].last_animated_ns + _RX_SESSION_LIFETIME_NS):
+                self._sessions.pop(oldest_uid)
+                _logger.debug("UDP reasm retire uid=%016x", oldest_uid)
+            else:
+                break
 
 
 def _make_subject_endpoint(subject_id: int) -> tuple[str, int]:
@@ -653,7 +677,7 @@ class _UDPTransportImpl(UDPTransport):
 
         self._unicast_handler: Callable[[TransportArrival], None] | None = None
         self._unicast_reassembler = _RxReassembler()
-        self._remote_endpoints: dict[tuple[int, int], tuple[str, int]] = {}
+        self._remote_endpoints: OrderedDict[tuple[int, int], tuple[str, int]] = OrderedDict()
         self._next_unicast_transfer_id = int.from_bytes(os.urandom(6), "little")
 
         self._unicast_rx_tasks: list[asyncio.Task[None]] = []
@@ -662,6 +686,8 @@ class _UDPTransportImpl(UDPTransport):
         for i, sock in enumerate(self._tx_socks):
             task = self._loop.create_task(self._unicast_rx_loop(sock, i))
             self._unicast_rx_tasks.append(task)
+
+        self._housekeeping_task = self._loop.create_task(self._housekeeping_loop())
 
         _logger.info(
             "UDPTransport initialized: uid=0x%016x, interfaces=%s, modulus=%d",
@@ -874,6 +900,7 @@ class _UDPTransportImpl(UDPTransport):
             return
         self._closed = True
         _logger.info("Closing UDPTransport uid=0x%016x", self._uid)
+        self._housekeeping_task.cancel()
         for task in self._unicast_rx_tasks:
             task.cancel()
         self._unicast_rx_tasks.clear()
@@ -890,6 +917,11 @@ class _UDPTransportImpl(UDPTransport):
         self._subject_handlers.clear()
         self._subject_writers.clear()
         self._reassemblers.clear()
+        # Also release the state the finding flagged as surviving close(): the unicast reassembler's
+        # sessions, the learned reverse-route cache, and the unicast handler reference.
+        self._unicast_reassembler = _RxReassembler()
+        self._remote_endpoints.clear()
+        self._unicast_handler = None
 
     async def _mcast_rx_loop(self, sock: socket.socket, subject_id: int, iface_idx: int) -> None:
         try:
@@ -926,9 +958,28 @@ class _UDPTransportImpl(UDPTransport):
         except asyncio.CancelledError:
             _logger.debug("Unicast rx cancelled iface=%d", iface_idx)
 
+    async def _housekeeping_loop(self) -> None:
+        """Retire stale reassembly sessions periodically, independent of new traffic (the reference does
+        this from its poll), so a silent remote's session is reclaimed instead of lingering the full
+        session lifetime past the last frame."""
+        try:
+            while not self._closed:
+                await asyncio.sleep(_HOUSEKEEPING_PERIOD)
+                now_ns = Instant.now().ns
+                self._unicast_reassembler.drop_stale_sessions(now_ns)
+                for reassembler in list(self._reassemblers.values()):
+                    reassembler.drop_stale_sessions(now_ns)
+        except asyncio.CancelledError:
+            pass
+
     def _learn_remote_endpoint(self, remote_id: int, iface_idx: int, src_ip: str, src_port: int) -> None:
-        existing = self._remote_endpoints.get((remote_id, iface_idx))
-        self._remote_endpoints[(remote_id, iface_idx)] = (src_ip, src_port)
+        key = (remote_id, iface_idx)
+        existing = self._remote_endpoints.get(key)
+        self._remote_endpoints[key] = (src_ip, src_port)
+        self._remote_endpoints.move_to_end(key)  # Mark most-recently-seen for LRU eviction.
+        if len(self._remote_endpoints) > _REMOTE_ENDPOINT_CAPACITY:
+            evicted, _ = self._remote_endpoints.popitem(last=False)
+            _logger.debug("Remote endpoint cache full, evicted rid=%016x iface=%d", evicted[0], evicted[1])
         if existing != (src_ip, src_port):
             _logger.info("Remote endpoint rid=%016x iface=%d ep=%s:%d", remote_id, iface_idx, src_ip, src_port)
 

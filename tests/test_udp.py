@@ -35,7 +35,11 @@ from pycyphal2.udp import (
     UDPTransport,
     _FrameHeader,
     _IP_MULTICAST_ALL_LINUX,
+    _REMOTE_ENDPOINT_CAPACITY,
+    _RX_SESSION_CAPACITY,
+    _RX_SESSION_LIFETIME_NS,
     _RxReassembler,
+    _RxSession,
     _SUBJECT_ID_MODULUS_MAX,
     _TransferSlot,
     _header_deserialize,
@@ -428,6 +432,32 @@ class TestRXReassembly:
         session = reasm._sessions[1000]
         slot_transfer_ids = {slot.transfer_id for slot in session.slots if slot is not None}
         assert slot_transfer_ids == set(range(2, 10))
+
+    def test_drop_stale_sessions_retires_idle_without_new_traffic(self):
+        """drop_stale_sessions retires every session past its lifetime, independent of new frames, so a
+        silent remote's session is reclaimed on the periodic tick (finding #3)."""
+        reasm = _RxReassembler()
+        old = self._make_frames(b"old", mtu=1400, sender_uid=100, transfer_id=1)
+        reasm.accept(old[0][0], old[0][1], timestamp_ns=0)
+        recent = self._make_frames(b"recent", mtu=1400, sender_uid=200, transfer_id=1)
+        # A timestamp within the lifetime so the built-in per-accept retire does not fire yet.
+        reasm.accept(recent[0][0], recent[0][1], timestamp_ns=1000)
+        assert set(reasm._sessions) == {100, 200}
+
+        reasm.drop_stale_sessions(_RX_SESSION_LIFETIME_NS + 1)
+        assert 100 not in reasm._sessions  # Idle past its lifetime -> retired.
+        assert 200 in reasm._sessions  # Still within its lifetime -> retained.
+
+    def test_sessions_bounded_by_lru_capacity(self):
+        """Session count is capacity-bounded, so a burst of unique source UIDs within the lifetime window
+        cannot grow the map without bound (finding #3)."""
+        reasm = _RxReassembler()
+        for uid in range(_RX_SESSION_CAPACITY + 20):
+            frames = self._make_frames(b"x", mtu=1400, sender_uid=uid, transfer_id=1)
+            reasm.accept(frames[0][0], frames[0][1], timestamp_ns=uid)  # Distinct, monotonically-advancing ts.
+        assert len(reasm._sessions) == _RX_SESSION_CAPACITY
+        assert 0 not in reasm._sessions  # Least-recently-active evicted.
+        assert (_RX_SESSION_CAPACITY + 19) in reasm._sessions  # Most recent retained.
 
     def test_duplicate_history_window_is_32(self):
         reasm = _RxReassembler()
@@ -1333,6 +1363,56 @@ async def test_subject_listen_rolls_back_partial_interface_setup() -> None:
 
         listener = t.subject_listen(42, lambda _a: None)  # Retry succeeds.
         listener.close()
+    finally:
+        t.close()
+
+
+@pytest.mark.asyncio
+async def test_remote_endpoints_bounded_by_lru_capacity() -> None:
+    """The learned reverse-route cache is capacity-bounded with LRU eviction, so it cannot grow without
+    bound under untrusted traffic with spoofable source UIDs (finding #3)."""
+    t = UDPTransport.new_loopback()
+    assert isinstance(t, _UDPTransportImpl)
+    try:
+        for uid in range(_REMOTE_ENDPOINT_CAPACITY + 50):
+            t._learn_remote_endpoint(uid, 0, "10.0.0.1", 9000)
+        assert len(t._remote_endpoints) == _REMOTE_ENDPOINT_CAPACITY
+        assert (0, 0) not in t._remote_endpoints  # Least-recently-seen evicted.
+        assert (_REMOTE_ENDPOINT_CAPACITY + 49, 0) in t._remote_endpoints  # Most recent retained.
+    finally:
+        t.close()
+
+
+@pytest.mark.asyncio
+async def test_close_releases_unicast_and_endpoint_state() -> None:
+    """close() must release the state the finding flagged as surviving it: the unicast reassembler's
+    sessions, the learned endpoint cache, and the unicast handler reference (finding #3)."""
+    t = UDPTransport.new_loopback()
+    assert isinstance(t, _UDPTransportImpl)
+    t.unicast_listen(lambda _a: None)
+    t._learn_remote_endpoint(5, 0, "10.0.0.1", 9000)
+    t._unicast_reassembler._sessions[100] = _RxSession(last_animated_ns=0)
+
+    t.close()
+    assert t._remote_endpoints == {}
+    assert t._unicast_handler is None
+    assert t._unicast_reassembler._sessions == {}
+
+
+@pytest.mark.asyncio
+async def test_housekeeping_loop_retires_stale_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The periodic housekeeping loop retires stale reassembly sessions with no further traffic."""
+    monkeypatch.setattr("pycyphal2.udp._HOUSEKEEPING_PERIOD", 0.02)
+    monkeypatch.setattr("pycyphal2.udp._RX_SESSION_LIFETIME_NS", 1)
+    t = UDPTransport.new_loopback()
+    assert isinstance(t, _UDPTransportImpl)
+    try:
+        t._unicast_reassembler._sessions[100] = _RxSession(last_animated_ns=0)
+        for _ in range(100):
+            if not t._unicast_reassembler._sessions:
+                break
+            await asyncio.sleep(0.01)
+        assert t._unicast_reassembler._sessions == {}
     finally:
         t.close()
 

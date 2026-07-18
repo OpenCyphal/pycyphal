@@ -48,6 +48,7 @@ ACK_BASELINE_DEFAULT_TIMEOUT = 0.016
 ACK_TX_TIMEOUT = 1.0
 SESSION_LIFETIME = 60.0
 IMPLICIT_TOPIC_TIMEOUT = 600.0
+HOUSEKEEPING_PERIOD = 1.0  # Aggregate stale-state sweep cadence (dedup/reordering), well inside SESSION_LIFETIME.
 REORDERING_CAPACITY = 16
 ASSOC_SLACK_LIMIT = 2
 DEDUP_HISTORY = 512
@@ -512,6 +513,14 @@ class TopicImpl(Topic):
     def sync_implicit(self) -> None:
         """Sync implicitness and transport state with the reference state machine."""
         self._node.sync_topic_lifecycle(self)
+
+    def drop_stale_dedup(self, now: float) -> None:
+        """Aggregate sweep of per-remote dedup state (mirrors the reference dedup_drop_stale). The
+        per-arrival prune only touches the arriving remote; this retires entries for departed remotes so
+        the map cannot grow without bound under untrusted traffic."""
+        stale = [rid for rid, st in self.dedup.items() if (st.last_active + SESSION_LIFETIME) < now]
+        for rid in stale:
+            del self.dedup[rid]
 
 
 def log_age(origin: float, now: float) -> int:
@@ -1496,21 +1505,41 @@ class NodeImpl(Node):
         _logger.info("GC removed implicit topic '%s'", oldest.name)
         return True
 
+    def sweep_stale_states(self, now: float) -> None:
+        """Aggregate, time-driven retirement of per-remote dedup and reordering state, so neither grows
+        without bound after the traffic that created it stops (mirrors the reference poll's round-robin
+        dedup_drop_stale / reordering_drop_stale, done sweep-all here)."""
+        from ._subscriber import SubscriberImpl
+
+        for topic in list(self.topics_by_name.values()):
+            topic.drop_stale_dedup(now)
+        for registry in (self.sub_roots_verbatim, self.sub_roots_pattern):
+            for root in list(registry.values()):
+                for sub in list(root.subscribers):
+                    if isinstance(sub, SubscriberImpl):
+                        sub.drop_stale_reordering(now)
+
     async def implicit_gc_loop(self) -> None:
+        # The stale-state sweep runs on an ABSOLUTE schedule so steady implicit-topic traffic (which wakes
+        # this loop via notify_implicit_gc) cannot postpone it indefinitely.
+        next_sweep = time.monotonic() + HOUSEKEEPING_PERIOD
         try:
             while not self._closed:
                 self._implicit_gc_wakeup.clear()
-                delay = self._next_implicit_gc_delay()
-                if delay is None:
-                    await self._implicit_gc_wakeup.wait()
-                    continue
-                if delay > 0:
+                now = time.monotonic()
+                gc_delay = self._next_implicit_gc_delay(now)
+                sweep_delay = max(0.0, next_sweep - now)
+                timeout = sweep_delay if gc_delay is None else min(gc_delay, sweep_delay)
+                if timeout > 0:
                     try:
-                        await asyncio.wait_for(self._implicit_gc_wakeup.wait(), timeout=delay)
-                        continue
+                        await asyncio.wait_for(self._implicit_gc_wakeup.wait(), timeout=timeout)
                     except asyncio.TimeoutError:
                         pass
-                self._retire_one_expired_implicit_topic(time.monotonic())
+                now = time.monotonic()
+                self._retire_one_expired_implicit_topic(now)  # No-op when nothing is expired.
+                if now >= next_sweep:
+                    self.sweep_stale_states(now)
+                    next_sweep = now + HOUSEKEEPING_PERIOD
         except asyncio.CancelledError:
             pass
 
