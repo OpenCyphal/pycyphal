@@ -22,10 +22,10 @@ _logger = logging.getLogger(__name__)
 
 _CAN_FILTER_CAPACITY = 64
 _CAN_INTERFACE_TYPE = 280
-# CAN FD flag bits from linux/can.h. CPython's socket module does not expose these on any supported
-# version, so they are hardcoded; a getattr() fallback would silently clear them.
+# CAN FD flag bits from linux/can.h, hardcoded because CPython's socket module does not expose them on
+# any supported version and a getattr() fallback would silently clear them.
 _CANFD_BRS = 0x01  # Bit-rate switch: the data phase runs at the higher FD bit rate.
-_CANFD_FDF = 0x04  # Marks the frame as CAN FD for the dual-use struct canfd_frame.
+_CANFD_FDF = 0x04  # Marks the frame as CAN FD in the dual-use struct canfd_frame.
 _CAN_FRAME_STRUCT = struct.Struct("=IB3x8s")
 _CANFD_FRAME_STRUCT = struct.Struct("=IBBBB64s")
 _CAN_FILTER_STRUCT = struct.Struct("=II")
@@ -50,9 +50,9 @@ class SocketCANInterface(Interface):
         self._failure: BaseException | None = None
         self._tx = TxQueue()
         self._tx_task: asyncio.Task[None] | None = None
-        # RX runs in its own task feeding a queue, so close()/fail() can wake a parked reader with a
-        # sentinel instead of leaving it hung in sock_recv (which the selector loop never wakes on a
-        # bare socket.close()). This mirrors the python-can and webserial backends.
+        # RX runs in its own task feeding a queue so close()/fail() can wake a parked reader with a
+        # sentinel; the selector loop never wakes a pending sock_recv on a bare socket.close().
+        # Mirrors the python-can and webserial backends.
         self._rx_queue: asyncio.Queue[TimestampedFrame | BaseException] = asyncio.Queue()
         self._rx_task: asyncio.Task[None] | None = None
 
@@ -101,8 +101,8 @@ class SocketCANInterface(Interface):
             self._rx_task.add_done_callback(self._on_task_done)
         item = await self._rx_queue.get()
         if isinstance(item, BaseException):
-            # Terminal sentinel: a receive-side failure already recorded itself via _fail(); an explicit
-            # close installs a plain ClosedError. Raise it directly so a clean close is not misrecorded.
+            # The sentinel is either the failure recorded by _fail() or a plain ClosedError from an
+            # explicit close; raise it as is so a clean close is not misrecorded as a failure.
             raise item
         return item
 
@@ -118,7 +118,7 @@ class SocketCANInterface(Interface):
                 if not self._closed:
                     self._fail(ex)  # Records the failure, closes, and installs the terminal sentinel.
                 return
-            frame = self._decode(raw)  # Malformed frames decode to None and are dropped.
+            frame = self._decode(raw)
             if frame is not None:
                 self._rx_queue.put_nowait(frame)
 
@@ -129,9 +129,8 @@ class SocketCANInterface(Interface):
         if self._rx_task is not None and self._rx_task is not asyncio.current_task():
             self._rx_task.cancel()
         self._rx_task = None
-        # Drop any already-queued frames and install a single terminal sentinel so a reader parked on the
-        # queue wakes promptly. A frame decoded before the cancellation lands may still be appended behind
-        # the sentinel; that is harmless because _raise_if_closed() short-circuits every later receive().
+        # Install a terminal sentinel so a parked reader wakes promptly. A frame decoded before the
+        # cancellation lands may still queue behind it; harmless, as _raise_if_closed() gates later reads.
         while not self._rx_queue.empty():
             self._rx_queue.get_nowait()
         self._rx_queue.put_nowait(self._closed_error())
@@ -139,11 +138,8 @@ class SocketCANInterface(Interface):
             self._tx_task.cancel()
             self._tx_task = None
         self._tx.abort_all(self._closed_error)
-        # Deregister explicitly BEFORE closing the fd. Task.cancel() above is deferred to a later loop
-        # iteration, whereas socket.close() takes effect now, so the selector callbacks installed by
-        # sock_recv/sock_sendto would otherwise be torn down against an already-closed fd -- and if that
-        # number were meanwhile reused by another socket, the deferred removal would deregister ITS
-        # callbacks instead. Both removals are no-ops when nothing is registered.
+        # Deregister before closing: cancel() is deferred but close() is immediate, so the callbacks would
+        # otherwise be torn down against a closed -- possibly recycled -- fd.
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:  # Closed outside a running loop; nothing can be registered either.
@@ -155,8 +151,7 @@ class SocketCANInterface(Interface):
                     loop.remove_reader(fd)
                     loop.remove_writer(fd)
                 except NotImplementedError:
-                    # Windows' ProactorEventLoop implements neither call. SocketCAN itself is Linux-only,
-                    # but the unit tests exercise close() against whatever loop the host provides.
+                    # ProactorEventLoop implements neither; SocketCAN is Linux-only but tests run on any loop.
                     pass
         self._sock.close()
 
@@ -229,14 +224,12 @@ class SocketCANInterface(Interface):
         return ex.errno in _TRANSIENT_TX_ERRNO
 
     def _encode(self, identifier: int, data: bytes) -> bytes:
-        # The frame format is a property of the interface, fixed at construction, not of the payload
-        # length: every frame on an FD interface is an FD frame, as in the reference
-        # (cy_can_socketcan selects the FD/Classic vtable once from the netdev MTU).
+        # The frame format follows the interface, not the payload length: every frame on an FD interface is
+        # an FD frame, as in the reference (cy_can_socketcan picks the FD/Classic vtable from the netdev MTU).
         #
-        # REFERENCE PARITY: BRS is set on every FD frame, whereas the reference emits
-        # `.flags = CANFD_FDF` alone (cy_can_socketcan.c). Sending FD without BRS runs the data phase
-        # at the arbitration bit rate, forfeiting the throughput that is the point of FD, so this
-        # library always switches. BRS does not apply to Classic CAN.
+        # REFERENCE PARITY: BRS is set on every FD frame, whereas the reference emits `.flags = CANFD_FDF`
+        # alone (cy_can_socketcan.c). Without BRS the data phase runs at the arbitration bit rate,
+        # forfeiting the throughput that is the point of FD. BRS does not apply to Classic CAN.
         if self._fd:
             return _CANFD_FRAME_STRUCT.pack(
                 socket.CAN_EFF_FLAG | (identifier & socket.CAN_EFF_MASK),

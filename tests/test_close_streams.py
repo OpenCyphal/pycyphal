@@ -51,14 +51,14 @@ async def test_open_stream_keeps_topic_explicit_until_closed() -> None:
 
     stream = await request_stream(pub, pycyphal2.Instant.now() + 1.0, 1.0, b"request")
     pub.close()
-    assert topic.is_implicit is False  # The open stream keeps it explicit.
+    assert topic.is_implicit is False
 
-    stream.close()  # Cancels the publish task; its release re-syncs implicitness on the next loop turn.
+    stream.close()  # Its release re-syncs implicitness only on the next loop turn, hence the poll below.
     for _ in range(50):
         if topic.is_implicit:
             break
         await asyncio.sleep(0.001)
-    assert topic.is_implicit is True  # Now it may be GC'd.
+    assert topic.is_implicit is True
 
     node.close()
 
@@ -86,7 +86,7 @@ async def test_implicit_gc_does_not_destroy_topic_with_open_stream(monkeypatch: 
         if "rpc" not in node.topics_by_name:
             break
         await asyncio.sleep(0.01)
-    assert "rpc" not in node.topics_by_name  # Reaped once the stream closed.
+    assert "rpc" not in node.topics_by_name
 
     node.close()
 
@@ -107,7 +107,7 @@ async def test_zombie_stream_does_not_block_gc() -> None:
     from pycyphal2._publisher import ResponseRemoteState
 
     stream._reliable_remote_by_id[7] = ResponseRemoteState(seqno_top=0)
-    stream.close()  # Cancels the publish task; its release runs on the next loop turn.
+    stream.close()
     assert topic.request_futures  # The zombie is retained pending its cleanup timer...
     pub.close()
     for _ in range(50):
@@ -117,7 +117,7 @@ async def test_zombie_stream_does_not_block_gc() -> None:
     assert topic.is_implicit is True  # ...but a closed stream does not keep the topic explicit.
 
     node.destroy_topic("rpc")
-    assert topic.request_futures == {}  # destroy_topic clears it.
+    assert topic.request_futures == {}
     node.close()
 
 
@@ -136,7 +136,7 @@ async def test_request_rejects_nan_response_timeout() -> None:
 
 async def test_pending_reliable_publish_keeps_topic_explicit() -> None:
     """An in-flight reliable publish (tracked in publish_futures) keeps the topic explicit even with no
-    publisher, so implicit GC cannot destroy it mid-delivery (Codex D6 addition to finding #22)."""
+    publisher, so implicit GC cannot destroy it mid-delivery (finding #22)."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")
@@ -147,7 +147,7 @@ async def test_pending_reliable_publish_keeps_topic_explicit() -> None:
 
     topic.publish_futures[99] = PublishTracker(tag=99, ack_event=asyncio.Event())
     pub.close()
-    assert topic.is_implicit is False  # The pending publish keeps it explicit.
+    assert topic.is_implicit is False
 
     topic.publish_futures.clear()
     topic.sync_implicit()
@@ -157,10 +157,9 @@ async def test_pending_reliable_publish_keeps_topic_explicit() -> None:
 
 
 async def test_close_does_not_resurrect_topic_via_disposed_stream_tail() -> None:
-    """close() disposes response streams, which cancels each publish task; that task's finally clause runs
-    on a LATER loop iteration -- after the transport is closed and the gossip tasks are cancelled -- and
-    re-syncs topic implicitness. sync_topic_lifecycle must refuse to act on a closed node, otherwise it
-    spawns an uncancellable gossip task on a dead node and calls subject_listen on a closed transport."""
+    """A cancelled publish task's finally clause runs a loop iteration AFTER close() tore down the transport
+    and the gossip tasks, and it re-syncs topic implicitness; sync_topic_lifecycle must refuse to act on a
+    closed node, else it spawns an uncancellable gossip task and calls subject_listen on a dead transport."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n1")

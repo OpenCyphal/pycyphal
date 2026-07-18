@@ -114,9 +114,8 @@ class PythonCANInterface(Interface):
         self._raise_if_closed()
         item = await self._rx_queue.get()
         if isinstance(item, BaseException):
-            # Terminal sentinel: a receive-side failure already recorded itself via _fail(), which
-            # folds the cause into the sentinel. Raise it directly -- feeding it back through _fail()
-            # here would misrecord a clean close as an interface failure. Mirrors SocketCANInterface.
+            # The failure was already recorded by _fail() and folded into this sentinel; feeding it back
+            # through _fail() here would misrecord a clean close as an interface failure. As in SocketCAN.
             raise item
         return item
 
@@ -130,8 +129,8 @@ class PythonCANInterface(Interface):
                 self._tx_task.cancel()
                 self._tx_task = None
             try:
-                # Carries self._failure as the cause when close() was reached via _fail(), so a parked
-                # reader learns why the interface died rather than just that it closed.
+                # Carries self._failure as the cause when close() came via _fail(), so a parked reader
+                # learns why the interface died rather than just that it closed.
                 self._rx_queue.put_nowait(self._closed_error())
             except Exception:
                 # Never silent: without the sentinel a parked reader hangs forever.
@@ -201,9 +200,8 @@ class PythonCANInterface(Interface):
                 except Exception as ex:
                     if not self._closed:
                         try:
-                            # Record the failure at its source rather than at the reader: _fail() stores
-                            # it and closes, which installs the terminal sentinel carrying it as cause.
-                            # This also propagates the failure when nobody is parked in receive().
+                            # _fail() stores the cause and closes, installing the terminal sentinel; this
+                            # also propagates the failure when nobody is parked in receive().
                             self._loop.call_soon_threadsafe(self._fail, ex)
                         except RuntimeError:
                             pass

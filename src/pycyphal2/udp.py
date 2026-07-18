@@ -58,15 +58,13 @@ _SIOCGIFMTU = 0x8921
 _CYPHAL_OVERHEAD_MAX = 100
 _CYPHAL_MTU_LINK_MIN = 576
 _RX_SESSION_LIFETIME_NS = round(30.0 * 1e9)
-_HOUSEKEEPING_PERIOD = 1.0  # Periodic RX-session retirement cadence, independent of new traffic.
-# Capacity bound on the learned reverse-route cache. Legitimate deployments use a handful of remotes; the
-# cap bounds memory under untrusted traffic with spoofable source UIDs, evicting the least-recently-seen
-# entry. Not time-based: a retained breadcrumb's route survives until evicted under sustained flooding
-# (then respond() fails cleanly with SendError), rather than expiring while the peer is briefly silent.
+_HOUSEKEEPING_PERIOD = 1.0  # RX-session retirement cadence, independent of new traffic.
+# Bounds the learned reverse-route cache against untrusted traffic with spoofable source UIDs, evicting the
+# least-recently-seen entry. Deliberately not time-based: a route must not expire while its peer is briefly
+# silent; under flooding an evicted route merely makes respond() fail cleanly with SendError.
 _REMOTE_ENDPOINT_CAPACITY = 8192
-# Per-reassembler cap on concurrent sender sessions. TTL retirement alone bounds retention time but not
-# cardinality: a burst of many unique (spoofable) source UIDs within the lifetime window would otherwise
-# grow unboundedly. The least-recently-active session is evicted past the cap.
+# Per-reassembler cap on concurrent sender sessions: TTL retirement bounds retention time but not
+# cardinality, so a burst of unique (spoofable) source UIDs would otherwise grow unboundedly.
 _RX_SESSION_CAPACITY = 4096
 _RX_SLOT_COUNT = 8
 _RX_TRANSFER_HISTORY_COUNT = 32
@@ -163,10 +161,8 @@ def _collect_send_errors(results: list[BaseException | None]) -> list[BaseExcept
     """
     Per-interface failures out of a ``gather(..., return_exceptions=True)`` over ``send_on_iface``.
 
-    The predicate is ``BaseException``, not ``Exception``: gather reports an individually cancelled child
-    as a ``CancelledError`` *instance*, which derives from ``BaseException``, so an ``Exception`` test
-    would score a cancelled interface as a delivery -- and if every interface were cancelled the caller
-    would report a fully successful send that never put a byte on the wire.
+    Tests ``BaseException``, not ``Exception``: gather returns an individually cancelled child as a
+    ``CancelledError`` instance, which an ``Exception`` test would score as a successful delivery.
     """
     return [r for r in results if isinstance(r, BaseException)]
 
@@ -260,7 +256,7 @@ class _TransferSlot:
     def _find_right_neighbor(self, right: int) -> _Fragment | None:
         candidate: _Fragment | None = None
         for frag in self.fragments:
-            if frag.offset <= right:  # Inclusive: a fragment starting exactly at `right` is a neighbor candidate.
+            if frag.offset <= right:  # Inclusive: a fragment starting exactly at `right` is adjacent.
                 candidate = frag
             else:
                 break
@@ -308,9 +304,9 @@ class _RxSession:
         return transfer_id in self.history
 
     def initialize_history(self, transfer_id: int) -> None:
-        # The seed wraps mod 2**64, not 2**48: for a first-seen transfer-ID of 0 it becomes 2**64-1,
-        # which no 48-bit wire transfer-ID can match (a 48-bit-masked seed would falsely reject a
-        # genuine transfer with ID 0xFFFF_FFFF_FFFF). Mirrors the reference uint64 arithmetic.
+        # Seed wraps mod 2**64, not 2**48, mirroring the reference uint64 arithmetic: a 48-bit-masked seed
+        # for a first-seen transfer-ID of 0 would be 0xFFFF_FFFF_FFFF and falsely reject a genuine transfer
+        # bearing that ID.
         value = (transfer_id - 1) & 0xFFFF_FFFF_FFFF_FFFF
         self.history = [value] * _RX_TRANSFER_HISTORY_COUNT
         self.history_current = 0
@@ -349,11 +345,9 @@ class _RxSession:
 
 class _RxReassembler:
     def __init__(self) -> None:
-        # LRU ordered MOST-recently-active FIRST, so the oldest session is the LAST item and is reached
-        # with next(reversed(...)). Note this is the mirror image of _UDPTransportImpl._remote_endpoints,
-        # which orders most-recent LAST; the difference is deliberate -- the stale-retirement scans here
-        # want the oldest, so keeping it at a fixed end avoids re-sorting. Flip one and you must flip
-        # every popitem()/reversed() that reads it.
+        # LRU ordered most-recently-active FIRST, so the oldest is last: next(reversed(...)).
+        # This is the mirror image of _UDPTransportImpl._remote_endpoints (most-recent LAST); flipping
+        # either requires flipping every popitem()/reversed() that reads it.
         self._sessions: OrderedDict[int, _RxSession] = OrderedDict()
 
     def accept(
@@ -378,7 +372,7 @@ class _RxReassembler:
                 self._sessions[header.sender_uid] = session
             session.last_animated_ns = timestamp_ns
             self._sessions.move_to_end(header.sender_uid, last=False)
-            if len(self._sessions) > _RX_SESSION_CAPACITY:  # Evict the least-recently-active session.
+            if len(self._sessions) > _RX_SESSION_CAPACITY:
                 evicted_uid, _ = self._sessions.popitem(last=True)
                 _logger.debug("UDP reasm session cache full, evicted uid=%016x", evicted_uid)
             if not session.initialized:
@@ -434,8 +428,8 @@ class _RxReassembler:
             _logger.debug("UDP reasm retire uid=%016x", oldest_uid)
 
     def drop_stale_sessions(self, timestamp_ns: int) -> None:
-        """Retire every stale session, independent of new traffic (the reference does this from a periodic
-        poll). Sessions are recency-ordered, so once the oldest is fresh none remain stale."""
+        """Retire stale sessions independent of traffic (the reference does this from a periodic poll).
+        Sessions are recency-ordered, so the scan stops at the first fresh one."""
         while self._sessions:
             oldest_uid = next(reversed(self._sessions))
             if timestamp_ns >= (self._sessions[oldest_uid].last_animated_ns + _RX_SESSION_LIFETIME_NS):
@@ -516,26 +510,23 @@ class _UDPSubjectWriter(SubjectWriter):
         _logger.debug("Subject tx start sid=%d tid=%d bytes=%d", self._subject_id, transfer_id, len(message))
 
         addr = (mcast_ip, port)
-        # Snapshot (iface, sock, lock) elements before the first await so a concurrent close() clearing
-        # the socket lists cannot desync indices; a send racing close simply hits a closed socket and
-        # aggregates as a per-interface error rather than raising IndexError.
+        # Snapshot before the first await: a concurrent close() clearing the socket lists would otherwise
+        # desync the indices; a send racing close just hits a closed socket and aggregates as an error.
         targets = list(zip(self._transport.interfaces, self._transport.tx_socks, self._transport.tx_locks, strict=True))
         coros = []
         for iface, sock, lock in targets:
             frames = _segment_transfer(priority, transfer_id, self._transport.uid, message, iface.mtu_cyphal)
             coros.append(self._transport.send_on_iface(sock, lock, frames, addr, deadline))
-        # Send to all interfaces concurrently so a congested interface cannot starve a healthy one of the
-        # shared deadline (each interface's frames still go out in order under its own socket lock).
-        # return_exceptions=True lets every interface settle before we aggregate, so none is left running.
+        # Concurrent so a congested interface cannot starve a healthy one of the shared deadline; frames
+        # still go out in order per interface. return_exceptions lets every send settle before aggregating.
         results = await asyncio.gather(*coros, return_exceptions=True)
         errors = _collect_send_errors(results)
         success_count = len(results) - len(errors)
 
         if errors and success_count == 0:
             _logger.error("Send failed on all interfaces for subject %d", self._subject_id)
-            # BaseExceptionGroup, not ExceptionGroup: the latter refuses to nest a BaseException, and
-            # `errors` may carry a CancelledError. It downgrades itself to an ExceptionGroup when every
-            # member is an Exception, so the common case is unchanged.
+            # BaseExceptionGroup because `errors` may carry a CancelledError, which ExceptionGroup rejects;
+            # it degrades to an ExceptionGroup when every member is an Exception.
             raise SendError("send failed on all interfaces") from BaseExceptionGroup(
                 "send failed on all interfaces", errors
             )
@@ -610,10 +601,9 @@ class UDPTransport(Transport, ABC):
 
         The UID is a globally unique 64-bit identifier of the local node. If not given, one will be generated randomly.
 
-        The default ``subject_id_modulus`` is always valid. Overriding it only makes sense for a
-        deliberately reduced subject-ID space, and the value must satisfy the reference predicate --
-        at least 57203, prime, and congruent to 3 modulo 4 -- because :meth:`pycyphal2.Node.new` rejects
-        anything else with ``ValueError``. This constructor only enforces the transport-level range.
+        Overriding ``subject_id_modulus`` only makes sense for a deliberately reduced subject-ID space; the
+        value must be at least 57203, prime, and congruent to 3 modulo 4, else :meth:`pycyphal2.Node.new`
+        rejects it with ``ValueError``. This constructor only enforces the transport-level range.
         """
         if not interfaces:
             ifaces = UDPTransport.list_interfaces()
@@ -684,9 +674,8 @@ class _UDPTransportImpl(UDPTransport):
             raise ValueError("At least one network interface is required")
 
         self._tx_socks: list[socket.socket] = []
-        # One lock per TX socket. asyncio's selector loop allows only one writer callback per fd, so
-        # concurrent senders on the same socket (subject writers, unicast, detached ACK sends) must be
-        # serialized; without it a displaced sock_sendto can hang until its deadline.
+        # asyncio's selector loop allows only one writer callback per fd, so concurrent senders on one
+        # socket must be serialized; otherwise a displaced sock_sendto hangs until its deadline.
         self._tx_locks: list[asyncio.Lock] = []
         self._self_endpoints: set[tuple[str, int]] = set()
         try:
@@ -713,9 +702,8 @@ class _UDPTransportImpl(UDPTransport):
         self._unicast_rx_tasks: list[asyncio.Task[None]] = []
         self._mcast_rx_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
 
-        # Task creation is the remaining fallible step; a failure here would otherwise leak every TX
-        # socket and orphan the RX tasks already spawned, since a half-built transport is never returned
-        # to the caller and so is never close()d.
+        # A half-built transport is never returned to the caller and hence never close()d, so a failure
+        # here must not leak the TX sockets or orphan the RX tasks already spawned.
         try:
             for i, sock in enumerate(self._tx_socks):
                 task = self._loop.create_task(self._unicast_rx_loop(sock, i))
@@ -765,14 +753,13 @@ class _UDPTransportImpl(UDPTransport):
                 sock.bind((mcast_ip, port))
             mreq = socket.inet_aton(mcast_ip) + socket.inet_aton(str(iface.address))
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-            # REFERENCE PARITY: the reference filters every received datagram by its ingress interface index
-            # via recvmsg+IP_PKTINFO (udp_wrapper.c). asyncio offers no sock_recvmsg, so on Linux the same
-            # delivery set is obtained at the kernel level with IP_MULTICAST_ALL=0: with it, this socket only
-            # receives datagrams matching its own (group, interface) membership above, instead of the default
-            # any-interface delivery that would mislearn reverse routes on multi-homed hosts. macOS/BSD scope
-            # multicast delivery per membership natively. On Windows the socket binds INADDR_ANY and Winsock
-            # may deliver cross-interface traffic; multi-homed Windows hosts should configure at most one
-            # transport interface per multicast-reachable network.
+            # REFERENCE PARITY: the reference filters received datagrams by ingress interface index via
+            # recvmsg+IP_PKTINFO (udp_wrapper.c). asyncio has no sock_recvmsg, so on Linux the same delivery
+            # set comes from IP_MULTICAST_ALL=0, which restricts this socket to its own (group, interface)
+            # membership instead of the default any-interface delivery that would mislearn reverse routes on
+            # multi-homed hosts. macOS/BSD scope delivery per membership natively; on Windows the socket binds
+            # INADDR_ANY and Winsock may deliver cross-interface traffic, so multi-homed Windows hosts should
+            # configure at most one transport interface per multicast-reachable network.
             if sys.platform == "linux":
                 sock.setsockopt(socket.IPPROTO_IP, _IP_MULTICAST_ALL_LINUX, 0)
         except BaseException:
@@ -810,8 +797,8 @@ class _UDPTransportImpl(UDPTransport):
         addr: tuple[str, int],
         deadline: Instant,
     ) -> Exception | None:
-        """Send every frame of one transfer on one interface, serialized on that socket's lock. Returns
-        the failure (never raised) so the caller can aggregate per-interface results, or None on success."""
+        """Send one transfer's frames on one interface under that socket's lock; returns the failure
+        instead of raising, so the caller can aggregate per-interface results."""
         # Bound the lock wait by the same absolute deadline, so a short-deadline sender queued behind a
         # long-deadline holder fails on its own budget rather than waiting out the holder's.
         remaining_ns = deadline.ns - Instant.now().ns
@@ -855,9 +842,8 @@ class _UDPTransportImpl(UDPTransport):
         """
         Drop any selector callbacks for this socket while its descriptor is still open.
 
-        Cancelling the task that owns a ``sock_recv``/``sock_sendto`` only schedules the teardown, so
-        without this the removal would run after the descriptor is closed -- and would hit an unrelated
-        socket if the number had been recycled by then. Both removals no-op when nothing is registered.
+        Cancelling the owning task only schedules the teardown, so otherwise the removal lands after the
+        fd is closed -- possibly hitting an unrelated socket that has recycled the number.
         """
         fd = sock.fileno()
         if fd < 0:
@@ -866,8 +852,7 @@ class _UDPTransportImpl(UDPTransport):
             self._loop.remove_reader(fd)
             self._loop.remove_writer(fd)
         except NotImplementedError:
-            # Windows' ProactorEventLoop drives sockets through overlapped I/O instead of selector
-            # callbacks, so it implements neither call and there is no registration to clean up.
+            # ProactorEventLoop uses overlapped I/O, not selector callbacks: nothing to deregister.
             pass
 
     def remove_subject_writer(self, subject_id: int, writer: _UDPSubjectWriter) -> None:
@@ -900,8 +885,8 @@ class _UDPTransportImpl(UDPTransport):
                 task = self._loop.create_task(self._mcast_rx_loop(sock, subject_id, i))
                 self._mcast_rx_tasks[key] = task
         except BaseException:
-            # Roll back the handler and every per-interface socket/task created so far, so a later
-            # subject_listen for this subject is not blocked by the duplicate-handler check above.
+            # Roll back so a later subject_listen for this subject is not blocked by the duplicate-handler
+            # check above.
             self.remove_subject_listener(subject_id, handler)
             raise
         return _UDPSubjectListener(self, subject_id, handler)
@@ -925,8 +910,8 @@ class _UDPTransportImpl(UDPTransport):
         self._next_unicast_transfer_id += 1
         _logger.debug("Unicast tx start rid=%016x tid=%d bytes=%d", remote_id, transfer_id, len(message))
 
-        # Snapshot targets (only interfaces with a known endpoint) before the first await, then send
-        # concurrently, as with the subject writer.
+        # Snapshot targets (only interfaces with a known endpoint) before the first await, as in the
+        # subject writer.
         coros = []
         for i, (iface, sock, lock) in enumerate(zip(self._interfaces, self._tx_socks, self._tx_locks, strict=True)):
             ep = self._remote_endpoints.get((remote_id, i))
@@ -970,10 +955,9 @@ class _UDPTransportImpl(UDPTransport):
         for task in self._mcast_rx_tasks.values():
             task.cancel()
         self._mcast_rx_tasks.clear()
-        # Deregister before closing: the cancellations above land on a later loop iteration while
-        # sock.close() takes effect now, so the selector callbacks would otherwise be torn down against
-        # a closed fd -- or against whatever socket has since inherited that fd number. A send already
-        # parked inside sock_sendto still unblocks on its own deadline, which is the caller's budget.
+        # Deregister before closing: the cancellations above land on a later loop iteration while close()
+        # takes effect now, so the callbacks would otherwise be torn down against a closed -- possibly
+        # recycled -- fd. A send already parked in sock_sendto still unblocks on its own deadline.
         for sock in [*self._tx_socks, *self._mcast_socks.values()]:
             self._deregister_socket(sock)
         for sock in self._tx_socks:
@@ -986,9 +970,7 @@ class _UDPTransportImpl(UDPTransport):
         self._subject_handlers.clear()
         self._subject_writers.clear()
         self._reassemblers.clear()
-        # Release all RX-side state so a closed transport retains no session memory, learned reverse
-        # routes, or handler references: the unicast reassembler's sessions, the endpoint cache, and the
-        # unicast handler.
+        # Release RX-side state so a closed transport retains no sessions, learned routes, or handler refs.
         self._unicast_reassembler = _RxReassembler()
         self._remote_endpoints.clear()
         self._unicast_handler = None
@@ -1029,9 +1011,8 @@ class _UDPTransportImpl(UDPTransport):
             _logger.debug("Unicast rx cancelled iface=%d", iface_idx)
 
     async def _housekeeping_loop(self) -> None:
-        """Retire stale reassembly sessions periodically, independent of new traffic (the reference does
-        this from its poll), so a silent remote's session is reclaimed instead of lingering the full
-        session lifetime past the last frame."""
+        """Retire stale reassembly sessions periodically (the reference does this from its poll), so a
+        silent remote's session is reclaimed instead of lingering long past its last frame."""
         try:
             while not self._closed:
                 await asyncio.sleep(_HOUSEKEEPING_PERIOD)
@@ -1041,8 +1022,7 @@ class _UDPTransportImpl(UDPTransport):
                     for reassembler in list(self._reassemblers.values()):
                         reassembler.drop_stale_sessions(now_ns)
                 except Exception:
-                    # Traffic-driven retirement alone does not reclaim a silent remote's session, so this
-                    # loop must outlive a faulty sweep rather than dying with an unretrieved exception.
+                    # Retirement is not traffic-driven: a faulty sweep must not kill the loop.
                     _logger.exception("Stale session sweep failed; continuing")
         except asyncio.CancelledError:
             pass

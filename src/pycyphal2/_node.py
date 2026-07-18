@@ -48,7 +48,7 @@ ACK_BASELINE_DEFAULT_TIMEOUT = 0.016
 ACK_TX_TIMEOUT = 1.0
 SESSION_LIFETIME = 60.0
 IMPLICIT_TOPIC_TIMEOUT = 600.0
-HOUSEKEEPING_PERIOD = 1.0  # Aggregate stale-state sweep cadence (dedup/reordering), well inside SESSION_LIFETIME.
+HOUSEKEEPING_PERIOD = 1.0  # Stale-state sweep cadence; well inside SESSION_LIFETIME.
 REORDERING_CAPACITY = 16
 ASSOC_SLACK_LIMIT = 2
 DEDUP_HISTORY = 512
@@ -124,18 +124,15 @@ def _name_is_homeful(name: str) -> bool:
 
 
 def _name_has_pattern_tokens(name: str) -> bool:
-    """A name is a pattern iff some whole '/'-segment is a substitution token ('*' or '>'). Tokens embedded
-    within a longer segment (e.g. 'ab*cd') are literal characters, as in the reference classifier
-    (wkv_has_substitution_tokens), so such names are legal verbatim topics."""
+    """A name is a pattern iff a whole '/'-segment is a substitution token ('*' or '>'). Tokens inside a longer
+    segment (e.g. 'ab*cd') are literal, as in the reference classifier (wkv_has_substitution_tokens)."""
     return any(seg in ("*", ">") for seg in name.split("/"))
 
 
 def _is_valid_wire_name(name: str) -> bool:
-    """True if `name` is a well-formed *resolved* wire topic name, as required of names received in gossip:
-    nonempty, length-bounded, printable ASCII (33-126), already normalized (no leading/trailing/duplicate
-    '/'), verbatim (no whole-segment '*'/'>' pattern tokens), not homeful ('~'/'~/...'), and pin-free
-    (no '#<id>' suffix). The last two are stripped/expanded by resolve_name before a name reaches the wire,
-    so their presence means the gossip is unresolved/non-canonical and must not create a local topic."""
+    """True if `name` is a well-formed *resolved* wire topic name, as required of names received in gossip.
+    Homeful ('~'/'~/...') and pinned ('#<id>') forms are stripped/expanded by resolve_name before a name
+    reaches the wire, so their presence means the gossip is unresolved and must not create a local topic."""
     return (
         bool(name)
         and len(name) <= TOPIC_NAME_MAX
@@ -231,9 +228,8 @@ def is_valid_subject_id_modulus(modulus: int) -> bool:
     The quadratic probe (hash + evictions²) mod m covers the residue space only under these conditions;
     a degenerate modulus would make the synchronous displacement loop in topic_allocate effectively
     non-terminating, hard-blocking the event loop."""
-    # The reference modulus is a uint32, so anything above that is invalid by definition; the bound also
-    # keeps the trial division below ~65536 iterations, so an untrusted custom-transport value cannot make
-    # the primality test hang.
+    # The reference modulus is a uint32; that bound also caps the trial division at ~65536 iterations, so an
+    # untrusted custom-transport value cannot hang the primality test.
     if modulus < SUBJECT_ID_MODULUS_16bit or modulus > 0xFFFFFFFF or modulus % 4 != 3:
         return False
     d = 3
@@ -247,9 +243,8 @@ def is_valid_subject_id_modulus(modulus: int) -> bool:
 def compute_subject_id(topic_hash: int, evictions: int, modulus: int) -> int:
     if evictions >= EVICTIONS_PINNED_MIN:
         return 0xFFFFFFFF - evictions
-    # The sum wraps mod 2**64 before the reduction, matching the reference uint64 arithmetic bit-for-bit;
-    # without the wrap, a large hash plus a near-boundary eviction count (an untrusted gossip field) would
-    # place the same topic on different subject-IDs in Python and C.
+    # The sum wraps mod 2**64 before the reduction, matching the reference uint64 arithmetic; without the
+    # wrap, a large hash plus a near-boundary eviction count would diverge from C on the subject-ID.
     return SUBJECT_ID_PINNED_MAX + 1 + (((topic_hash + evictions * evictions) & U64_MASK) % modulus)
 
 
@@ -258,9 +253,8 @@ class Association:
     """Tracks a known remote subscriber for reliable delivery ACK tracking."""
 
     remote_id: int
-    # Diagnostics only -- deliberately NOT an eviction input, matching the reference association_t
-    # ("Not used for eviction, only for diagnostics and possibly API exposure", cy.c). Eviction is
-    # driven solely by `slack`; do not "fix" this field into a timeout.
+    # Diagnostics only, deliberately NOT an eviction input, matching the reference association_t ("Not used
+    # for eviction, only for diagnostics and possibly API exposure", cy.c). Eviction is driven by `slack`.
     last_seen: float
     slack: int = 0
     seqno_witness: int = 0
@@ -416,9 +410,8 @@ class TopicImpl(Topic):
         self.is_implicit = True
         # Unbounded by design, matching the reference, which carries an explicit TODO for the same gap
         # ("there should be a limit on the number of associations to prevent DoS ... ~500 might be a
-        # reasonable default", cy.c). Entries are created only by POSITIVE acks and retired via `slack`.
-        # Bounding this ahead of the reference would diverge on reliable-delivery accounting, so the fix
-        # belongs upstream first.
+        # reasonable default", cy.c). Bounding it ahead of the reference would diverge on reliable-delivery
+        # accounting, so the fix belongs upstream first.
         self.associations: dict[int, Association] = {}
         self.dedup: dict[int, DedupState] = {}
         self.publish_futures: dict[int, PublishTracker] = {}
@@ -483,9 +476,8 @@ class TopicImpl(Topic):
     def ensure_listener(self) -> None:
         if self.sub_listener is None and self.couplings:
             sid = self.subject_id(self._node.transport.subject_id_modulus)
-            # Repair model (cy.c topic_sync_subject_reader): a listener acquisition failure is logged and
-            # left for the next opportunity (topic sync, periodic gossip) to retry, rather than raising and
-            # tearing down a partly-built subscription. Keeps sync_listener()/sync_implicit() infallible.
+            # Repair model (cy.c topic_sync_subject_reader): an acquisition failure is left for the next
+            # opportunity (topic sync, periodic gossip) to retry, which keeps sync_listener() infallible.
             try:
                 self.sub_listener = self._node.acquire_subject_listener(self, sid)
             except Exception as ex:
@@ -512,10 +504,9 @@ class TopicImpl(Topic):
 
     def compute_is_implicit(self) -> bool:
         has_verbatim_sub = any(not c.root.is_pattern for c in self.couplings)
-        # An open response stream or an in-flight reliable publish keeps the topic explicit, so implicit
-        # GC cannot destroy a topic that still has outstanding request/publish state (closed "zombie"
-        # streams awaiting their dedup-cleanup timer do not count). Python must gate on these because,
-        # unlike the C API, it allows a stream/publish to outlive the publisher that issued it.
+        # An open response stream or in-flight reliable publish keeps the topic explicit so implicit GC
+        # cannot destroy it (closed "zombie" streams awaiting their dedup-cleanup timer do not count).
+        # Needed because, unlike the C API, Python lets a stream/publish outlive its publisher.
         has_open_stream = any(not s.closed for s in self.request_futures.values())
         has_pending_publish = bool(self.publish_futures)
         return self.pub_count == 0 and not has_verbatim_sub and not has_open_stream and not has_pending_publish
@@ -525,9 +516,8 @@ class TopicImpl(Topic):
         self._node.sync_topic_lifecycle(self)
 
     def drop_stale_dedup(self, now: float) -> None:
-        """Aggregate sweep of per-remote dedup state (mirrors the reference dedup_drop_stale). The
-        per-arrival prune only touches the arriving remote; this retires entries for departed remotes so
-        the map cannot grow without bound under untrusted traffic."""
+        """Aggregate sweep of per-remote dedup state (reference dedup_drop_stale). The per-arrival prune only
+        touches the arriving remote; this retires departed ones so the map cannot grow without bound."""
         stale = [rid for rid, st in self.dedup.items() if (st.last_active + SESSION_LIFETIME) < now]
         for rid in stale:
             del self.dedup[rid]
@@ -597,10 +587,8 @@ class NodeImpl(Node):
         self.shared_subject_writers: dict[int, SharedSubjectWriter] = {}
         self.shared_subject_listeners: dict[int, SharedSubjectListener] = {}
 
-        # The last fallible acquisition in the constructor. Both built-in transports implement this as a
-        # plain assignment that cannot raise, but a third-party one may not, and an unguarded failure here
-        # would strand the broadcast writer and listener acquired above -- nobody closes the transport on
-        # constructor failure, so those handles would leak.
+        # Nobody closes the transport on constructor failure, so an unguarded raise here would leak the
+        # broadcast writer and listener. Only third-party transports can raise here; the built-in ones cannot.
         try:
             transport.unicast_listen(self.on_unicast_arrival)
         except BaseException:
@@ -694,9 +682,8 @@ class NodeImpl(Node):
         if pin is not None and not verbatim:
             raise ValueError("Pattern names cannot be pinned")
 
-        # Acquire the two fallible resources first — the subscriber (reordering-window validation) and, for a
-        # verbatim name, its topic (transactional) — before committing any registry state, so a failure
-        # leaves no half-registered root or subscriber behind.
+        # Acquire the fallible resources first — the subscriber (reordering-window validation) and, for a
+        # verbatim name, its topic — so a failure leaves no half-registered root or subscriber behind.
         registry = self.sub_roots_verbatim if verbatim else self.sub_roots_pattern
         root = registry.get(resolved)
         new_root = root is None
@@ -763,8 +750,7 @@ class NodeImpl(Node):
         topic = TopicImpl(self, name, evictions, now)
         self.topics_by_name[name] = topic
         self.topics_by_hash[topic.hash] = topic
-        # Commit the index first so the rollback primitive (destroy_topic) can find and undo the topic;
-        # the fallible tail (gossip-shard acquisition) rolls the whole topic back on failure.
+        # Index first so that the rollback primitive (destroy_topic) can find and undo the topic.
         try:
             self.ensure_gossip_shard(self.gossip_shard_subject_id(topic.hash))
             self.touch_implicit_topic(topic)
@@ -828,11 +814,9 @@ class NodeImpl(Node):
                 self.topics_by_subject_id[new_sid] = t
                 if collider.pub_writer is not None:
                     # Winner acquires BEFORE the loser releases below, so the shared handle survives the
-                    # handover on its refcount -- the reference does the same thing by moving the writer
-                    # pointer outright ("the winner acquires first, then the loser releases"). Since the
-                    # collider still holds the writer for new_sid, this hits the existing registry entry
-                    # and is a pure refcount bump: no transport call, so the cascade cannot fail midway
-                    # and leave a displaced topic unreachable from topics_by_subject_id.
+                    # handover on its refcount ("the winner acquires first, then the loser releases" in the
+                    # reference). It is therefore a pure refcount bump on the existing registry entry: no
+                    # transport call, so the cascade cannot fail midway and strand a displaced topic.
                     t.pub_writer = self.acquire_subject_writer(t, new_sid)
                 t.sync_listener()
                 self.schedule_gossip_urgent(t)
@@ -842,10 +826,9 @@ class NodeImpl(Node):
                 work.append((t, ev + 1))
 
     def sync_topic_lifecycle(self, topic: TopicImpl) -> None:
-        # Reachable after close(): disposing a response stream cancels its publish task, whose finally
-        # clause releases the tracker and re-syncs implicitness on a later loop iteration -- by then the
-        # transport is closed and the gossip tasks are cancelled. Without this guard that tail would
-        # spawn an uncancellable gossip task on a dead node and call subject_listen on a closed transport.
+        # Reachable after close(): a disposed response stream's cancelled publish task re-syncs implicitness
+        # from its finally clause on a later loop iteration. Without this guard that tail would spawn an
+        # uncancellable gossip task on a dead node and call subject_listen on a closed transport.
         if self._closed:
             return
         implicit = topic.compute_is_implicit()
@@ -1057,8 +1040,7 @@ class NodeImpl(Node):
         await self.send_gossip(topic, broadcast=True)
 
     async def _gossip_event_periodic(self, topic: TopicImpl) -> None:
-        # Retry a previously-failed listener acquisition on the gossip cadence (reference
-        # topic_sync_subject_reader), so a verbatim subscription whose listener failed once recovers.
+        # Retry a previously-failed listener acquisition on the gossip cadence (reference topic_sync_subject_reader).
         topic.sync_listener()
         self._reschedule_gossip_periodic(topic, suppressed=False)
         broadcast = (topic.gossip_counter < GOSSIP_BROADCAST_RATIO) or (
@@ -1485,8 +1467,8 @@ class NodeImpl(Node):
             topic.ts_origin = now - lage_to_seconds(lage)
             self.topics_by_name[name] = topic
             self.topics_by_hash[topic_hash] = topic
-            # This is a wire-driven path: it must never raise (untrusted input). A transport failure mid-setup
-            # rolls the topic back and drops the gossip; a later gossip retries.
+            # Wire-driven path: must never raise (untrusted input). A mid-setup failure rolls the topic back
+            # and drops the gossip; a later gossip retries.
             try:
                 self.ensure_gossip_shard(self.gossip_shard_subject_id(topic.hash))
                 self.touch_implicit_topic(topic)
@@ -1537,9 +1519,9 @@ class NodeImpl(Node):
         return True
 
     def sweep_stale_states(self, now: float) -> None:
-        """Aggregate, time-driven retirement of per-remote dedup and reordering state, so neither grows
-        without bound after the traffic that created it stops (mirrors the reference poll's round-robin
-        dedup_drop_stale / reordering_drop_stale, done sweep-all here)."""
+        """Time-driven retirement of per-remote dedup and reordering state, so neither grows without bound
+        after the traffic that created it stops (reference poll's round-robin dedup_drop_stale /
+        reordering_drop_stale, done sweep-all here)."""
         from ._subscriber import SubscriberImpl
 
         for topic in list(self.topics_by_name.values()):
@@ -1567,17 +1549,15 @@ class NodeImpl(Node):
                 try:
                     self._retire_one_expired_implicit_topic(time.monotonic())
                 except Exception:
-                    # Same reasoning as _housekeeping_loop: a faulty retirement must not permanently
-                    # disable implicit-topic GC. Back off before retrying -- an expired topic yields a
-                    # zero delay, so retrying immediately would spin at full speed on a persistent fault.
+                    # A faulty retirement must not permanently disable implicit-topic GC. Back off first:
+                    # an expired topic yields a zero delay, so an immediate retry would spin on a hard fault.
                     _logger.exception("Implicit topic retirement failed; backing off")
                     await asyncio.sleep(HOUSEKEEPING_PERIOD)
         except asyncio.CancelledError:
             pass
 
     async def _housekeeping_loop(self) -> None:
-        # A dedicated periodic task: nothing can postpone asyncio.sleep in its own task, so the stale-state
-        # sweep runs on a steady cadence regardless of implicit-GC activity (matches the UDP/CAN transports).
+        # Dedicated task so the sweep keeps a steady cadence regardless of implicit-GC activity.
         try:
             while not self._closed:
                 await asyncio.sleep(HOUSEKEEPING_PERIOD)
@@ -1585,8 +1565,7 @@ class NodeImpl(Node):
                     self.sweep_stale_states(time.monotonic())
                 except Exception:
                     # This loop is the only bound on per-remote state growth, so it must outlive a faulty
-                    # sweep. Letting the exception escape would kill the task silently (nothing retrieves
-                    # its result) and leave the node unbounded for the rest of its life.
+                    # sweep; an escaping exception would kill the task silently and leave the node unbounded.
                     _logger.exception("Stale-state sweep failed; continuing")
         except asyncio.CancelledError:
             pass
@@ -1595,9 +1574,8 @@ class NodeImpl(Node):
         topic = self.topics_by_name.get(name)
         if topic is None:
             return
-        # Dispose any outstanding response streams first (before discard_implicit_topic): a stream's
-        # forced teardown cancels its zombie-cleanup timer and stops its iteration, and doing it here
-        # avoids a re-touch of the implicit list that could otherwise resurrect the topic mid-destroy.
+        # Dispose response streams before discard_implicit_topic, else a re-touch of the implicit list
+        # could resurrect the topic mid-destroy.
         for stream in list(topic.request_futures.values()):
             stream.dispose()
         if topic.gossip_task is not None:
@@ -1628,9 +1606,8 @@ class NodeImpl(Node):
         for root in list(self.sub_roots_verbatim.values()) + list(self.sub_roots_pattern.values()):
             for sub in list(root.subscribers):
                 sub.close()
-        # Dispose outstanding response streams: cancel each library-owned request-publish task and stop
-        # pending iteration, otherwise a stream with a far-off (or infinite) response timeout would keep
-        # its retry task and payload graph alive against the closed transport until that timeout.
+        # Likewise for response streams: a far-off (or infinite) response timeout would otherwise keep the
+        # retry task and payload graph alive against the closed transport until that timeout.
         for topic in list(self.topics_by_name.values()):
             for stream in list(topic.request_futures.values()):
                 stream.dispose()

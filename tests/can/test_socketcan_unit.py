@@ -20,8 +20,7 @@ _SOURCE = Path(__file__).resolve().parents[2] / "src/pycyphal2/can/socketcan.py"
 class _FakeRawSocket:
     def __init__(self) -> None:
         self.calls: list[tuple[object, ...]] = []
-        # A real fd, so close() can deregister it from the selector exactly as it would a real CAN
-        # socket. Fabricating a number here would risk deregistering an unrelated fd in this process.
+        # A real fd: a fabricated number would risk deregistering an unrelated fd in this process.
         self._rfd, self._wfd = os.pipe()
 
     def setblocking(self, enabled: bool) -> None:
@@ -63,8 +62,7 @@ class _FakeLoop:
         self.send = list(send or [])
         self.sent_frames: list[bytes] = []
         self.created_tasks: list[object] = []
-        # close() deregisters the fd from the selector before closing it; record the order so a test can
-        # assert the deregistration precedes the close rather than racing a deferred task cancellation.
+        # Records selector deregistration so a test can assert it happens before the fd is closed.
         self.deregistered: list[tuple[str, int]] = []
 
     def remove_reader(self, fd: int) -> bool:
@@ -288,7 +286,7 @@ async def test_rx_loop_decodes_skips_and_drops_cleanly_on_cancel(monkeypatch: py
 
     with pytest.raises(asyncio.CancelledError):
         await iface._rx_loop()
-    frame = iface._rx_queue.get_nowait()  # The good frame was queued; the undecodable one was dropped.
+    frame = iface._rx_queue.get_nowait()  # The undecodable frame was dropped, not queued.
     assert isinstance(frame, TimestampedFrame)
     assert frame.id == 0x123
     assert frame.data == b"ab"
@@ -303,7 +301,7 @@ async def test_rx_loop_failure_marks_interface_and_installs_sentinel(monkeypatch
     loop = _FakeLoop(recv=[err])
     monkeypatch.setattr(module.asyncio, "get_running_loop", lambda: loop)
 
-    await iface._rx_loop()  # Fails the interface via _fail(), then returns.
+    await iface._rx_loop()  # _fail()s the interface, then returns rather than raising.
     assert iface._closed is True
     assert iface._failure is err
     sentinel = iface._rx_queue.get_nowait()
@@ -311,8 +309,8 @@ async def test_rx_loop_failure_marks_interface_and_installs_sentinel(monkeypatch
 
 
 async def test_receive_raises_clean_close_without_recording_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An explicit close is surfaced to a parked receive() as a plain ClosedError and is not recorded as
-    an interface failure (only a receive-side error is)."""
+    """An explicit close reaches receive() as a plain ClosedError; only a receive-side error is recorded
+    as an interface failure."""
     fake_socket, _ = _make_socket_module()
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
     iface = _make_iface(module)
@@ -324,8 +322,8 @@ async def test_receive_raises_clean_close_without_recording_failure(monkeypatch:
 
 
 async def test_close_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> None:
-    """close() must wake a reader parked on the RX queue with a ClosedError sentinel, so interface loss
-    propagates instead of leaving the transport's reader hung (review finding #10)."""
+    """close() must wake a parked reader with a ClosedError sentinel; otherwise interface loss leaves the
+    transport's reader hung forever."""
     fake_socket, _ = _make_socket_module()
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
     iface = _make_iface(module)
@@ -343,10 +341,9 @@ async def test_close_wakes_parked_receiver(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 async def test_close_deregisters_the_fd_before_closing_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Task.cancel() is deferred to a later loop iteration but socket.close() takes effect immediately,
-    so relying on the cancelled reader to deregister itself tears down selector callbacks against an
-    already-closed fd -- and against a DIFFERENT socket if that fd number has been reused meanwhile.
-    close() must therefore deregister explicitly, before closing."""
+    """Task.cancel() is deferred while socket.close() is immediate, so leaving deregistration to the
+    cancelled reader tears down callbacks against a closed -- possibly already reused -- fd. close() must
+    deregister explicitly, first."""
     fake_socket, _ = _make_socket_module()
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
     iface = _make_iface(module)
@@ -359,15 +356,14 @@ async def test_close_deregisters_the_fd_before_closing_it(monkeypatch: pytest.Mo
     iface.close()
 
     assert loop.deregistered == [("reader", fd), ("writer", fd)]
-    # Ordering is the whole point: the fd must still be open when it is deregistered.
+    # The fd must still have been open at deregistration time.
     assert ("close",) in sock.calls
     assert loop.deregistered, "deregistration must not be left to the deferred task cancellation"
 
 
 async def test_close_tolerates_a_loop_without_reader_registration(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Windows' ProactorEventLoop drives sockets through overlapped I/O and raises NotImplementedError
-    from remove_reader/remove_writer. close() must treat that as "nothing to deregister" rather than
-    propagating it -- an unguarded call broke every Windows job while Linux and macOS stayed green."""
+    """ProactorEventLoop raises NotImplementedError from remove_reader/writer; close() must treat that
+    as "nothing to deregister". An unguarded call broke every Windows job."""
     fake_socket, _ = _make_socket_module()
     module = _load_socketcan_module(monkeypatch, socket_module=fake_socket)
     iface = _make_iface(module)
@@ -434,15 +430,13 @@ def test_encode_and_decode_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     encoded_fd = fd_iface._encode(456, b"012345678")
     assert len(encoded_fd) == module._FD_FRAME_SIZE
 
-    # The frame format follows the interface mode, not the payload length: a short payload on an FD
-    # interface is still emitted as an FD frame, as in the reference.
+    # Format follows the interface mode, not the payload length, as in the reference.
     encoded_fd_short = fd_iface._encode(456, b"abc")
     assert len(encoded_fd_short) == module._FD_FRAME_SIZE
 
-    # The flags byte must carry FDF (so the dual-use struct is unambiguous) and BRS (so the data phase
-    # actually runs at the FD bit rate) on EVERY FD frame, short payloads included. The literals are
-    # hardcoded from linux/can.h because CPython's socket module exposes neither; a getattr() fallback
-    # to 0 would silently emit flagless frames, which is what this assertion guards against.
+    # Every FD frame must carry FDF and BRS, short payloads included. The literals are hardcoded from
+    # linux/can.h (CPython's socket module exposes neither); a getattr() fallback to 0 would silently
+    # emit flagless frames.
     assert module._CANFD_FDF == 0x04
     assert module._CANFD_BRS == 0x01
     for encoded in (encoded_fd, encoded_fd_short):

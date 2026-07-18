@@ -63,10 +63,9 @@ class Endpoint:
 class Reassembler:
     @staticmethod
     def cleanup_sessions(endpoints: Iterable[Endpoint], now_ns: int) -> None:
-        # Slots are retained for RX_SESSION_RETENTION_NS (30 s), but a slot-free session is destroyed as
-        # soon as the transfer-ID timeout (2 s) elapses since the last admission, as in the reference
-        # (canard_poll): past that point the admission logic treats the session as stale anyway, so
-        # retaining it longer only delays cross-interface transfer-ID reuse after a redundant failover.
+        # A slot-free session dies at the transfer-ID timeout, not the slot retention timeout, as in the
+        # reference (canard_poll): the admission logic already treats it as stale, and retaining it longer
+        # only delays cross-interface transfer-ID reuse after a redundant failover.
         stale_deadline = now_ns - RX_SESSION_RETENTION_NS
         idle_deadline = now_ns - TRANSFER_ID_TIMEOUT_NS
         for endpoint in endpoints:

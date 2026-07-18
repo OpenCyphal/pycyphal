@@ -44,8 +44,8 @@ def test_compute_subject_id_non_pinned_zero_evictions():
 
 
 def test_compute_subject_id_non_pinned_with_evictions():
-    """Non-pinned formula: offset + ((hash + evictions^2) mod 2^64) % modulus; the modular-reduction form
-    used here for the expectation is equivalent whenever the sum does not overflow 64 bits."""
+    """Non-pinned formula: offset + ((hash + evictions^2) mod 2^64) % modulus; the reduced form used for
+    the expectation below is equivalent absent 64-bit overflow."""
     topic_hash = rapidhash("some/topic")
     for ev in (1, 2, 5, 100):
         sid = compute_subject_id(topic_hash, ev, DEFAULT_MODULUS)
@@ -61,9 +61,9 @@ def test_compute_subject_id_non_pinned_with_evictions():
 
 
 def test_compute_subject_id_wraps_uint64_sum():
-    """The hash + evictions² sum wraps mod 2^64 before reduction, matching the reference uint64 arithmetic
-    bit-for-bit. The eviction count is an untrusted uint32 gossip field, so the overflowing case is remotely
-    constructible; exact big-int arithmetic here would partition Python and C nodes onto different subject-IDs."""
+    """hash + evictions² must wrap mod 2^64 as the reference uint64 arithmetic does. Evictions is an
+    untrusted gossip field, so the overflow is remotely constructible; big-int arithmetic here would put
+    Python and C nodes on different subject-IDs."""
     topic_hash = (1 << 64) - 1
     evictions = EVICTIONS_PINNED_MIN - 1
     sid = compute_subject_id(topic_hash, evictions, DEFAULT_MODULUS)
@@ -111,9 +111,9 @@ def test_is_valid_subject_id_modulus_predicate():
 
 
 async def test_degenerate_subject_id_modulus_rejected():
-    """A modulus violating the reference predicate must be rejected at node construction: the quadratic
-    probe (hash + evictions²) mod m does not cover the residue space under a degenerate modulus, so the
-    synchronous displacement loop in topic_allocate would hard-block the event loop."""
+    """A degenerate modulus must be rejected at node construction: the quadratic probe (hash + evictions²)
+    mod m would not cover the residue space, so topic_allocate's synchronous displacement loop would
+    hard-block the event loop."""
     for bad in (3, 57202, 57205, 57207, 122744):
         tr = MockTransport(node_id=1, modulus=bad, network=MockNetwork())
         with pytest.raises(ValueError, match="subject_id_modulus"):
@@ -145,7 +145,7 @@ async def test_advertise_creates_topic():
 
 async def test_advertise_embedded_wildcard_char_is_verbatim():
     """'sensor/temp*raw' has no whole-segment substitution token, so it is a legal verbatim topic
-    (reference parity with the wkv classifier) and can be advertised."""
+    (parity with the wkv classifier)."""
     net = MockNetwork()
     tr = MockTransport(node_id=1, network=net)
     node = new_node(tr, home="n")

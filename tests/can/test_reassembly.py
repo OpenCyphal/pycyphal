@@ -5,9 +5,8 @@ from pycyphal2.can._wire import TransferKind
 
 
 def test_cleanup_drops_slot_free_session_at_transfer_id_timeout() -> None:
-    """A slot-free session is destroyed once the 2 s transfer-ID timeout elapses since the last
-    admission (reference: canard_poll), while slots themselves are retained for 30 s. A fresh
-    slot-free session is kept."""
+    """A slot-free session dies at the 2 s transfer-ID timeout since last admission (reference:
+    canard_poll); a session holding a slot lives for 30 s."""
     endpoint = Endpoint(kind=TransferKind.MESSAGE_16, port_id=7, on_transfer=lambda *_: None)
     stale = RxSession.new(0)
     stale.last_admission_ts_ns = 0
@@ -21,7 +20,7 @@ def test_cleanup_drops_slot_free_session_at_transfer_id_timeout() -> None:
     assert 42 not in endpoint.sessions
     assert 43 in endpoint.sessions
 
-    # A session with a live slot is retained regardless of admission staleness for up to 30 s.
+    # A live slot keeps the session alive despite admission staleness, up to 30 s.
     occupied = RxSession.new(0)
     occupied.last_admission_ts_ns = 0
     occupied.slots[0] = RxSlot(start_ts_ns=0, transfer_id=0, iface_index=0, expected_toggle=False)

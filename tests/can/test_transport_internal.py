@@ -101,8 +101,7 @@ async def test_writer_unicast_and_send_transfer_error_paths() -> None:
 
     live_if = MockCANInterface(bus, "if1")
     live = CANTransport.new(live_if)
-    # Node-ID 0 is a valid regular Cyphal/CAN v1 node, hence a legal unicast destination;
-    # the wire encoding must carry destination 0.
+    # Node-ID 0 is a legal unicast destination; the wire encoding must carry destination 0.
     await live.unicast(Instant.now() + 1.0, Priority.NOMINAL, 0, b"x")
     uni_id, uni_frames, _ = live_if.enqueue_history[-1]
     parsed = parse_frame(uni_id, uni_frames[0])

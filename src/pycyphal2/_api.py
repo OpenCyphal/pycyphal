@@ -282,8 +282,8 @@ class Publisher(Closable, ABC):
         from any subscriber that chooses to answer.
 
         ``response_timeout`` is the maximum idle gap (liveness timeout) between accepted responses,
-        so it applies both to one-off RPC and to streaming. It must be non-negative; positive infinity
-        (``inf``) disables the liveness timeout, and ``NaN`` or a negative value raises :class:`ValueError`.
+        so it applies both to one-off RPC and to streaming. Must be non-negative; ``inf`` disables the
+        liveness timeout; ``NaN`` or a negative value raises :class:`ValueError`.
         """
         raise NotImplementedError
 
@@ -555,8 +555,8 @@ class Node(Closable, ABC):
         which is the main intended use case. Direct assignment might be considered an anti-pattern in most cases.
 
         Raises :class:`ValueError` if ``transport.subject_id_modulus`` does not satisfy the reference
-        predicate (at least 57203, prime, and congruent to 3 modulo 4). The stock transports always do;
-        this only concerns custom ones. See :meth:`Transport.subject_id_modulus`.
+        predicate (at least 57203, prime, congruent to 3 modulo 4); only custom transports are affected.
+        See :meth:`Transport.subject_id_modulus`.
         """
         from ._node import NodeImpl
 

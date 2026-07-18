@@ -275,9 +275,9 @@ class TestRXReassembly:
         assert result2 is None  # Dedup
 
     def test_history_seed_sentinel_not_matchable_by_wire_id(self):
-        """A first-seen transfer-ID of 0 seeds the dedup history with (0 - 1) wrapped to 2^64-1, which no
-        48-bit wire transfer-ID can equal (the reference keeps the unmasked uint64). A 48-bit-masked seed
-        would equal 0xFFFF_FFFF_FFFF — a valid wire value — falsely rejecting a genuine such transfer."""
+        """A first-seen transfer-ID of 0 seeds the dedup history with (0 - 1) wrapped to 2^64-1, unmatchable
+        by any 48-bit wire ID (the reference keeps the unmasked uint64); a 48-bit-masked seed would equal
+        the valid wire value 0xFFFF_FFFF_FFFF and falsely reject it."""
         reasm = _RxReassembler()
         first = self._make_frames(b"first", mtu=1400, transfer_id=0)
         assert reasm.accept(first[0][0], first[0][1]) is not None
@@ -435,8 +435,8 @@ class TestRXReassembly:
         assert slot_transfer_ids == set(range(2, 10))
 
     def test_drop_stale_sessions_retires_idle_without_new_traffic(self):
-        """drop_stale_sessions retires every session past its lifetime, independent of new frames, so a
-        silent remote's session is reclaimed on the periodic tick (finding #3)."""
+        """Sessions past their lifetime are retired independently of new frames, so a silent remote is
+        reclaimed on the periodic tick (finding #3)."""
         reasm = _RxReassembler()
         old = self._make_frames(b"old", mtu=1400, sender_uid=100, transfer_id=1)
         reasm.accept(old[0][0], old[0][1], timestamp_ns=0)
@@ -450,7 +450,7 @@ class TestRXReassembly:
         assert 200 in reasm._sessions  # Still within its lifetime -> retained.
 
     def test_sessions_bounded_by_lru_capacity(self):
-        """Session count is capacity-bounded, so a burst of unique source UIDs within the lifetime window
+        """Session count is capacity-bounded: a burst of unique source UIDs within the lifetime window
         cannot grow the map without bound (finding #3)."""
         reasm = _RxReassembler()
         for uid in range(_RX_SESSION_CAPACITY + 20):
@@ -514,10 +514,9 @@ class TestTransferSlot:
         assert [(frag.offset, frag.data) for frag in slot.fragments] == [(0, b"AAAA"), (2, b"XXXXXX"), (6, b"CCCC")]
 
     def test_conflicting_overlap_evicted_via_inclusive_right_neighbor(self):
-        """A fragment starting exactly at the new fragment's end is its right neighbor (the reference's
-        cavl2_predecessor is an inclusive floor), so a conflicting overlapped fragment between them is
-        evicted and the transfer is delivered. A strict '<' lookup would keep the stale fragment and
-        fail the transfer CRC. Only observable when overlapping fragments carry conflicting data."""
+        """cavl2_predecessor is an inclusive floor, so a fragment starting exactly at the new one's end is
+        its right neighbor and the conflicting fragment between them is evicted; a strict '<' lookup would
+        keep the stale fragment and fail the transfer CRC."""
         payload = b"ABCDEFGH"
 
         def hdr(offset: int, crc: int = 0) -> _FrameHeader:
@@ -976,9 +975,8 @@ class TestIntegrationTransportClose:
 
     @pytest.mark.skipif(sys.platform != "linux", reason="IP_MULTICAST_ALL is a Linux-only socket option")
     def test_mcast_socket_disables_cross_interface_delivery(self, loopback_iface):
-        """On Linux the multicast RX socket must set IP_MULTICAST_ALL=0 so it only receives datagrams
-        matching its own (group, interface) membership - the kernel-level equivalent of the reference's
-        recvmsg+IP_PKTINFO ingress-interface filter (udp_wrapper.c)."""
+        """IP_MULTICAST_ALL=0 confines the RX socket to its own (group, interface) membership -- the kernel
+        equivalent of the reference's recvmsg+IP_PKTINFO ingress-interface filter (udp_wrapper.c)."""
         sock = _UDPTransportImpl._create_mcast_socket(5, loopback_iface)
         try:
             assert sock.getsockopt(socket.IPPROTO_IP, _IP_MULTICAST_ALL_LINUX) == 0
@@ -1228,9 +1226,8 @@ async def test_subject_send_succeeds_when_one_redundant_interface_fails() -> Non
 
 
 def test_collect_send_errors_counts_cancellation_as_a_failure() -> None:
-    """asyncio.gather(..., return_exceptions=True) reports an individually cancelled child as a
-    CancelledError INSTANCE, which derives from BaseException, not Exception. The old
-    isinstance(r, Exception) predicate therefore scored a cancelled interface as a delivery."""
+    """gather(return_exceptions=True) reports a cancelled child as a CancelledError instance (a
+    BaseException), so the old isinstance(r, Exception) test scored a cancelled interface as a delivery."""
     oserr = OSError("down")
     assert _collect_send_errors([None, None]) == []
     assert _collect_send_errors([None, oserr]) == [oserr]
@@ -1240,8 +1237,7 @@ def test_collect_send_errors_counts_cancellation_as_a_failure() -> None:
 
 
 async def test_send_cancelled_on_every_interface_is_not_reported_as_success() -> None:
-    """With every interface cancelled the send used to return normally, reporting a fully successful
-    transfer that never put a byte on the wire."""
+    """An all-cancelled send used to return normally, reporting a transfer that never hit the wire."""
     iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
     pub = UDPTransport.new(interfaces=[iface, iface])
     assert isinstance(pub, _UDPTransportImpl)
@@ -1270,8 +1266,8 @@ async def test_send_cancelled_on_every_interface_is_not_reported_as_success() ->
 
 @pytest.mark.asyncio
 async def test_redundant_interfaces_send_concurrently() -> None:
-    """A congested interface must not starve a healthy one of the shared deadline: interfaces are sent
-    to concurrently, so one transfer's wall-clock is ~max(per-iface), not the sum (finding #6)."""
+    """A congested interface must not starve a healthy one of the shared deadline: sends run concurrently,
+    so a transfer's wall-clock is ~max(per-iface), not the sum (finding #6)."""
     iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
     pub = UDPTransport.new(interfaces=[iface, iface, iface])
     assert isinstance(pub, _UDPTransportImpl)
@@ -1325,8 +1321,8 @@ async def test_concurrent_sends_on_shared_socket_are_serialized() -> None:
 
 @pytest.mark.asyncio
 async def test_short_deadline_send_fails_on_own_budget_behind_long_holder() -> None:
-    """A short-deadline sender queued behind a long-deadline holder of the same socket lock must fail on
-    its own deadline rather than waiting out the holder (the lock acquisition is deadline-bounded)."""
+    """A short-deadline sender queued behind a long-deadline holder of the same socket lock fails on its
+    own deadline rather than waiting out the holder: lock acquisition is deadline-bounded."""
     iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
     pub = UDPTransport.new(interfaces=[iface])
     assert isinstance(pub, _UDPTransportImpl)
@@ -1341,28 +1337,27 @@ async def test_short_deadline_send_fails_on_own_budget_behind_long_holder() -> N
         holder = pub.subject_advertise(10)
         waiter = pub.subject_advertise(11)  # Same interface -> same socket lock.
         holder_task = asyncio.create_task(holder(Instant.now() + 100.0, Priority.NOMINAL, b"hold"))
-        await holder_entered.wait()  # The holder now owns the lock and is parked in the send.
+        await holder_entered.wait()
         with pytest.raises(SendError):
             await waiter(Instant.now() + 0.15, Priority.NOMINAL, b"wait")
         holder_release.set()
-        await holder_task  # The holder still completes cleanly.
+        await holder_task
 
-    # The lock-acquisition timeout must not have leaked the socket lock: it is free and re-acquirable.
+    # The lock-acquisition timeout must not have leaked the socket lock.
     assert not pub._tx_locks[0].locked()
 
     async def ok_sendto(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
         pass  # Avoid a real multicast send (unroutable on Windows loopback); still re-acquires the lock.
 
     with patch.object(pub, "async_sendto", ok_sendto):
-        await waiter(Instant.now() + 2.0, Priority.NOMINAL, b"after")  # Succeeds via send_on_iface.
+        await waiter(Instant.now() + 2.0, Priority.NOMINAL, b"after")
     pub.close()
 
 
 @pytest.mark.asyncio
 async def test_close_during_send_raises_send_error_not_index_error() -> None:
     """A send suspended when close() empties the socket lists must surface a clean SendError, never an
-    IndexError (finding #9). The snapshotted socket is closed by then, so the resumed send fails on the
-    closed fd and is aggregated, exactly as a real EBADF would be."""
+    IndexError (finding #9); the resumed send fails on the by-then-closed fd, as a real EBADF would."""
     iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
     pub = UDPTransport.new(interfaces=[iface])
     assert isinstance(pub, _UDPTransportImpl)
@@ -1377,8 +1372,8 @@ async def test_close_during_send_raises_send_error_not_index_error() -> None:
     with patch.object(pub, "async_sendto", blocking_sendto):
         writer = pub.subject_advertise(10)
         send_task = asyncio.create_task(writer(Instant.now() + 5.0, Priority.NOMINAL, b"payload"))
-        await started.wait()  # The send is parked inside _send_on_iface.
-        pub.close()  # Clears _tx_socks/_tx_locks; the snapshot keeps the send index-safe.
+        await started.wait()
+        pub.close()  # Clears _tx_socks/_tx_locks; the snapshot keeps the parked send index-safe.
         release.set()
         with pytest.raises(SendError) as excinfo:
             await send_task
@@ -1389,7 +1384,7 @@ async def test_close_during_send_raises_send_error_not_index_error() -> None:
 
 @pytest.mark.asyncio
 async def test_subject_listen_rolls_back_partial_interface_setup() -> None:
-    """A per-interface socket failure mid-subject_listen must roll back the handler and every socket/task
+    """A per-interface socket failure mid-subject_listen rolls back the handler and every socket/task
     created so far, so a retry is not blocked by the duplicate-listener check (finding #11)."""
     iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
     t = UDPTransport.new(interfaces=[iface, iface])
@@ -1420,8 +1415,8 @@ async def test_subject_listen_rolls_back_partial_interface_setup() -> None:
 
 @pytest.mark.asyncio
 async def test_remote_endpoints_bounded_by_lru_capacity() -> None:
-    """The learned reverse-route cache is capacity-bounded with LRU eviction, so it cannot grow without
-    bound under untrusted traffic with spoofable source UIDs (finding #3)."""
+    """The learned reverse-route cache is LRU-bounded, so spoofable source UIDs cannot grow it without
+    bound (finding #3)."""
     t = UDPTransport.new_loopback()
     assert isinstance(t, _UDPTransportImpl)
     try:
@@ -1436,8 +1431,8 @@ async def test_remote_endpoints_bounded_by_lru_capacity() -> None:
 
 @pytest.mark.asyncio
 async def test_close_releases_unicast_and_endpoint_state() -> None:
-    """close() must release the state the finding flagged as surviving it: the unicast reassembler's
-    sessions, the learned endpoint cache, and the unicast handler reference (finding #3)."""
+    """close() must release the state that used to survive it: the unicast reassembler's sessions, the
+    learned endpoint cache, and the unicast handler reference (finding #3)."""
     t = UDPTransport.new_loopback()
     assert isinstance(t, _UDPTransportImpl)
     t.unicast_listen(lambda _a: None)
@@ -1469,9 +1464,8 @@ async def test_housekeeping_loop_retires_stale_sessions(monkeypatch: pytest.Monk
 
 
 async def test_housekeeping_loop_survives_a_raising_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Session retirement here is not traffic-driven, so the loop must outlive a faulty sweep. Catching
-    only CancelledError let one stray exception kill the task silently, leaking sessions for the rest of
-    the transport's life."""
+    """Session retirement is not traffic-driven, so the loop must outlive a faulty sweep: catching only
+    CancelledError let one stray exception kill the task silently, leaking sessions thereafter."""
     monkeypatch.setattr("pycyphal2.udp._HOUSEKEEPING_PERIOD", 0.02)
     monkeypatch.setattr("pycyphal2.udp._RX_SESSION_LIFETIME_NS", 1)
     t = UDPTransport.new_loopback()
@@ -1501,8 +1495,8 @@ async def test_housekeeping_loop_survives_a_raising_sweep(monkeypatch: pytest.Mo
 
 @pytest.mark.asyncio
 async def test_tx_socket_creation_failure_rolls_back_created_sockets() -> None:
-    """A TX-socket creation failure mid-construction must roll back the interface sockets created before
-    it, rather than leaking their file descriptors (finding #11 completeness)."""
+    """A TX-socket creation failure mid-construction rolls back the sockets created before it instead of
+    leaking their file descriptors (finding #11 completeness)."""
     iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
     real_create = _UDPTransportImpl._create_tx_socket
     created: list[socket.socket] = []

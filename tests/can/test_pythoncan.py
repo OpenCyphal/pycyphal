@@ -1186,9 +1186,8 @@ async def test_unit_mixed_fd_and_classic_payloads() -> None:
 
 
 async def test_unit_fd_flags_follow_interface_mode() -> None:
-    """Every frame on an FD interface carries is_fd AND bitrate_switch regardless of payload length;
-    a Classic interface sets neither. See the REFERENCE PARITY note in socketcan._encode: BRS is always
-    set on FD, which is a deliberate divergence from the reference."""
+    """Every FD-interface frame carries is_fd and bitrate_switch regardless of payload length; a Classic
+    interface sets neither. Always-on BRS is the deliberate divergence noted in socketcan._encode."""
     a, b = _virtual_pair(fd=True)
     sent: list[_can.Message] = []
     orig_send = a._bus.send
@@ -1306,14 +1305,13 @@ async def test_unit_rx_bus_error_propagates() -> None:
     with pytest.raises(ClosedError) as caught:
         await asyncio.wait_for(itf.receive(), timeout=2.0)
     assert itf._failure is err  # Recorded by _fail() in the RX thread's handoff, not by receive().
-    assert caught.value.__cause__ is err  # The sentinel carries the underlying cause.
+    assert caught.value.__cause__ is err
     itf.close()
 
 
 async def test_unit_clean_close_is_not_recorded_as_a_failure() -> None:
-    """close() must not be misrecorded as an interface failure. receive() used to feed EVERY sentinel --
-    including the plain ClosedError installed by an explicit close -- back through _fail(), so a clean
-    shutdown ended up reported as 'receive failed'. SocketCANInterface already got this right."""
+    """receive() used to feed EVERY sentinel back through _fail(), including the plain ClosedError from an
+    explicit close, so a clean shutdown got reported as 'receive failed'."""
     mock_bus = MagicMock(spec=_can.BusABC)
     mock_bus.recv.return_value = None  # Idle bus: the reader parks on the queue.
     mock_bus.channel_info = "mock:cleanclose"
@@ -1325,7 +1323,7 @@ async def test_unit_clean_close_is_not_recorded_as_a_failure() -> None:
     itf.close()
     with pytest.raises(ClosedError):
         await asyncio.wait_for(receiver, timeout=2.0)
-    assert itf._failure is None  # A clean close leaves no failure recorded.
+    assert itf._failure is None
 
 
 async def test_unit_multiple_close_with_failure() -> None:

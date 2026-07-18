@@ -250,8 +250,8 @@ class _CANTransportImpl(CANTransport):
     async def unicast(self, deadline: Instant, priority: Priority, remote_id: int, message: bytes | memoryview) -> None:
         if self._closed:
             raise ClosedError("CAN transport closed")
-        # Node-ID 0 is a valid regular node in Cyphal/CAN v1 (only v0 treated it as anonymous), so it is
-        # a legal unicast destination; rejecting it would make the ACK path unable to answer a node-0 peer.
+        # Node-ID 0 is a regular node in Cyphal/CAN v1 (only v0 treated it as anonymous); rejecting it
+        # would leave the ACK path unable to answer a node-0 peer.
         if not (0 <= remote_id <= NODE_ID_MAX):
             raise ValueError(f"Invalid remote node-ID: {remote_id}")
         transfer_id = self._unicast_tid[remote_id]
@@ -474,8 +474,7 @@ class _CANTransportImpl(CANTransport):
                 try:
                     Reassembler.cleanup_sessions(self._endpoints.values(), Instant.now().ns)
                 except Exception:
-                    # Session retirement is not traffic-driven, so this loop must outlive a faulty sweep
-                    # rather than dying silently and leaking sessions for the transport's lifetime.
+                    # Retirement is not traffic-driven: a faulty sweep must not kill the loop and leak sessions.
                     _logger.exception("Session cleanup failed; continuing")
         except asyncio.CancelledError:
             raise

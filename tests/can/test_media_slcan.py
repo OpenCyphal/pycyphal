@@ -53,8 +53,8 @@ def test_parse_classic_extended_frames() -> None:
 
     assert parser.feed(b"T000001232ABCD\r") == [Frame(id=0x123, data=b"\xab\xcd")]
     assert parser.feed(b"T000001232abCd\r") == [Frame(id=0x123, data=b"\xab\xcd")]
-    # Standard-ID 't' data frames are dropped: the Interface contract is extended-only, and Frame has
-    # no IDE discriminator, so forwarding them would alias extended frames with small IDs.
+    # Standard-ID 't' frames are dropped: Frame has no IDE discriminator, so forwarding them would alias
+    # extended frames with small IDs.
     assert parser.feed(b"t1231AA\r") == []
     assert parser.feed(b"t7FF1AA\r") == []
     assert parser.feed(b"t7FF0\r") == []

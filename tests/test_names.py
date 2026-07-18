@@ -80,8 +80,7 @@ def test_pin_non_digit_after_hash() -> None:
 
 
 def test_pin_unicode_digit_not_parsed() -> None:
-    # str.isdigit() is True for characters that int() rejects, e.g. '²' (U+00B2) or '②' (U+2461);
-    # the parser must treat them as non-digits and never raise.
+    # str.isdigit() is True for chars int() rejects, e.g. '²' (U+00B2) or '②' (U+2461); must not raise.
     assert _name_consume_pin_suffix("foo#²") == ("foo#²", None)
     assert _name_consume_pin_suffix("foo#1²") == ("foo#1²", None)
     assert _name_consume_pin_suffix("foo#²1") == ("foo#²1", None)
@@ -95,8 +94,8 @@ def test_wire_name_unicode_digit_pin_rejected() -> None:
 
 
 def test_resolve_embedded_token_is_verbatim() -> None:
-    # Only a whole segment equal to '*' or '>' is a substitution token (reference:
-    # wkv_has_substitution_tokens); embedded within a longer segment they are literal characters.
+    # Only a whole segment '*' or '>' is a substitution token (reference: wkv_has_substitution_tokens);
+    # embedded in a longer segment they are literal characters.
     resolved, _, verbatim = resolve_name("/sensor/temp*raw", "home", "ns")
     assert resolved == "sensor/temp*raw"
     assert verbatim
@@ -112,7 +111,7 @@ def test_resolve_whole_segment_tokens_are_patterns() -> None:
 
 
 def test_wire_name_embedded_token_is_valid() -> None:
-    # A legal verbatim C topic like 'ab*cd' must be accepted from gossip for interop.
+    # A verbatim C topic like 'ab*cd' must be accepted from gossip for interop.
     assert _is_valid_wire_name("ab*cd")
     assert _is_valid_wire_name("x/y>z")
     assert not _is_valid_wire_name("a/*/c")

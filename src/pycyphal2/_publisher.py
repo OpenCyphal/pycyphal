@@ -128,9 +128,8 @@ class PublisherImpl(Publisher):
         )
         self._topic.request_futures[tag] = stream
 
-        # Any failure after the stream is registered must close it (drop it from request_futures and
-        # re-sync implicitness), not just pop the tag -- otherwise a publisher closing concurrently could
-        # leave the topic permanently explicit. The tracker prep is inside the guard for the same reason.
+        # Any failure past registration must close() the stream, not just pop the tag; otherwise a
+        # concurrently closing publisher could leave the topic permanently explicit.
         tracker: PublishTracker | None = None
         try:
             tracker = self._prepare_reliable_publish_tracker(tag)
@@ -198,8 +197,8 @@ class PublisherImpl(Publisher):
     def _release_reliable_publish_tracker(self, tag: int, tracker: PublishTracker) -> None:
         self._topic.publish_futures.pop(tag, None)
         self._node.publish_tracker_release(self._topic, tracker)
-        # Re-evaluate implicitness: once the last pending reliable publish is released, a topic held
-        # explicit only by it can become implicit and be GC'd (otherwise it would gossip forever).
+        # A topic held explicit only by this publish can now become implicit and be GC'd; without this
+        # it would gossip forever.
         self._topic.sync_implicit()
 
     async def _send_reliable_publish(
@@ -322,8 +321,7 @@ class ResponseStreamImpl(ResponseStream):
         self.closed = False
         # Never pruned during the stream's life, matching the reference request_future_t.remote_by_id
         # ("States are never removed assuming that futures are short-lived and/or the responder set is
-        # mostly constant", cy.c). The bound is the stream's own lifetime. close() deliberately retains
-        # it to re-ack late duplicates via the zombie timer; dispose() drops it with the rest of teardown.
+        # mostly constant", cy.c). close() retains it to re-ack late duplicates via the zombie timer.
         self._reliable_remote_by_id: dict[int, ResponseRemoteState] = {}
         self._publish_task: asyncio.Task[None] | None = None
         self._cleanup_handle: asyncio.TimerHandle | None = None
@@ -334,7 +332,7 @@ class ResponseStreamImpl(ResponseStream):
     async def __anext__(self) -> Response:
         if self.closed:
             raise StopAsyncIteration
-        # A non-finite response timeout disables liveness (waits forever), mirroring Subscriber.timeout.
+        # inf disables liveness (waits forever), mirroring Subscriber.timeout.
         timeout = self._response_timeout if self._response_timeout != float("inf") else None
         try:
             item = await asyncio.wait_for(self.queue.get(), timeout=timeout)
@@ -419,22 +417,20 @@ class ResponseStreamImpl(ResponseStream):
         else:
             self._remove_from_topic()
         self.queue.put_nowait(StopAsyncIteration())
-        # Re-evaluate topic implicitness: this stream no longer keeps the topic explicit, so once the
-        # publisher is also gone the topic can become implicit and be GC'd (otherwise it would gossip
-        # forever). Safe during node teardown -- notify_implicit_gc() is a no-op when the node is closed.
+        # The stream no longer keeps the topic explicit, so it can now be GC'd instead of gossiping
+        # forever. Safe during node teardown -- notify_implicit_gc() is a no-op when the node is closed.
         self._topic.sync_implicit()
         _logger.debug("Response stream closed for tag=%d", self._message_tag)
 
     def dispose(self) -> None:
-        """Force-remove the stream during node/topic teardown: cancel its publish task and any pending
-        zombie-cleanup timer, drop it from the topic, and stop pending iteration. Unlike close(), this
-        never retains a zombie and does not re-sync implicitness (the topic is being torn down)."""
+        """Force-remove the stream during node/topic teardown. Unlike close(), retains no zombie and does
+        not re-sync implicitness, the topic being torn down anyway."""
         was_open = not self.closed
         self.closed = True
         if self._publish_task is not None:
             self._publish_task.cancel()
             self._publish_task = None
-        self._remove_from_topic()  # Cancels the cleanup timer and drops from request_futures.
-        self._reliable_remote_by_id.clear()  # No zombie is retained here, so the per-remote state goes too.
+        self._remove_from_topic()
+        self._reliable_remote_by_id.clear()
         if was_open:
             self.queue.put_nowait(StopAsyncIteration())

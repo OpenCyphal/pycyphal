@@ -1,6 +1,5 @@
 """Regression tests for finding #3: per-remote dedup and reordering state must be swept in aggregate on a
-time basis, not only when the arriving remote sends again, so neither grows without bound under untrusted
-traffic."""
+time basis, not only when the arriving remote sends again, so neither grows without bound."""
 
 from __future__ import annotations
 
@@ -28,9 +27,9 @@ async def test_sweep_drops_stale_dedup_for_departed_remotes() -> None:
     topic.dedup[12] = DedupState(tag_frontier=1, last_active=base + 10_000.0)  # Recently active.
 
     node.sweep_stale_states(base + SESSION_LIFETIME + 1.0)
-    assert 10 not in topic.dedup  # Departed remotes are swept in aggregate...
+    assert 10 not in topic.dedup
     assert 11 not in topic.dedup
-    assert 12 in topic.dedup  # ...while a recently-active remote is retained.
+    assert 12 in topic.dedup  # Recently active -> retained.
 
     sub.close()
     node.close()
@@ -47,16 +46,16 @@ async def test_sweep_drops_stale_reordering_states() -> None:
     sub._reordering[(11, 0xBBBB)] = ReorderingState(last_active_at=base + 10_000.0)
 
     node.sweep_stale_states(base + SESSION_LIFETIME + 1.0)
-    assert (10, 0xAAAA) not in sub._reordering  # Idle stream swept...
-    assert (11, 0xBBBB) in sub._reordering  # ...recently-active one retained.
+    assert (10, 0xAAAA) not in sub._reordering
+    assert (11, 0xBBBB) in sub._reordering  # Recently active -> retained.
 
     sub.close()
     node.close()
 
 
 async def test_housekeeping_loop_sweeps_without_new_traffic(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The background loop must retire stale state on its own schedule, even if the remote never sends
-    again (previously the sweep was only triggered by a new arrival)."""
+    """The background loop retires stale state on its own schedule even if the remote never sends again;
+    the sweep used to be triggered only by a new arrival."""
     monkeypatch.setattr(pycyphal2._node, "HOUSEKEEPING_PERIOD", 0.02)
     tr = MockTransport(node_id=1, network=MockNetwork())
     node = new_node(tr, home="n1")
@@ -68,16 +67,16 @@ async def test_housekeeping_loop_sweeps_without_new_traffic(monkeypatch: pytest.
         if 10 not in topic.dedup:
             break
         await asyncio.sleep(0.01)
-    assert 10 not in topic.dedup  # The loop swept it with no further traffic.
+    assert 10 not in topic.dedup
 
     sub.close()
     node.close()
 
 
 async def test_housekeeping_loop_survives_a_raising_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The sweep is the only bound on per-remote state growth, so the loop must outlive a faulty sweep.
-    Catching only CancelledError let one stray exception kill the task silently -- nothing retrieves its
-    result -- leaving the node unbounded for the rest of its life."""
+    """The sweep is the only bound on per-remote state growth, so the loop must outlive a faulty sweep:
+    catching only CancelledError let one stray exception kill the task silently (nothing retrieves its
+    result), leaving the node unbounded thereafter."""
     monkeypatch.setattr(pycyphal2._node, "HOUSEKEEPING_PERIOD", 0.02)
     tr = MockTransport(node_id=1, network=MockNetwork())
     node = new_node(tr, home="n1")
@@ -102,7 +101,7 @@ async def test_housekeeping_loop_survives_a_raising_sweep(monkeypatch: pytest.Mo
             break
         await asyncio.sleep(0.01)
     assert calls >= 2, "the loop died on the first faulty sweep"
-    assert 10 not in topic.dedup  # It recovered and swept on a later tick.
+    assert 10 not in topic.dedup  # Recovered and swept on a later tick.
     assert not node._housekeeping_task.done()
 
     sub.close()
@@ -135,7 +134,7 @@ async def test_implicit_gc_loop_survives_a_raising_retirement(monkeypatch: pytes
             break
         await asyncio.sleep(0.01)
     assert calls >= 2, "the loop died on the first faulty retirement"
-    assert "gc-me" not in node.topics_by_name  # It recovered and retired the topic.
+    assert "gc-me" not in node.topics_by_name  # Recovered and retired the topic.
     assert not node._gc_task.done()
 
     node.close()

@@ -144,7 +144,7 @@ async def test_gossip_crafted_unicode_pin_name_does_not_raise():
     node.on_subject_arrival(node.broadcast_subject_id, arrival)  # Must not raise.
     assert crafted not in node.topics_by_name
 
-    # The node must remain fully operational: a subsequent valid gossip is processed normally.
+    # The node must remain operational afterwards.
     topic_name = "sensor/temp"
     valid_hdr = GossipHeader(
         topic_log_age=5,

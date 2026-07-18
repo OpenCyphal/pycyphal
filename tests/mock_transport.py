@@ -72,9 +72,8 @@ class MockTransport(Transport):
         self.unicast_log: list[tuple[int, bytes]] = []
         self.closed = False
         self.fail_unicast = False
-        # Setup-path failure injection: a subject-ID present in either set makes the corresponding
-        # acquisition raise, to exercise transactional rollback. Sets are not auto-cleared, so a test
-        # controls exactly which retries fail.
+        # Setup-path failure injection for transactional-rollback tests: a subject-ID in either set makes
+        # that acquisition raise. Never auto-cleared, so a test controls exactly which retries fail.
         self.fail_subject_listen: set[int] = set()
         self.fail_subject_advertise: set[int] = set()
 

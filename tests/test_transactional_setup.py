@@ -1,6 +1,6 @@
-"""Regression tests for finding #11: setup paths must be transactional — a transport failure mid-setup
-must not leave unrepairable half-state, and subscribe-path listener failures follow the reference repair
-model (logged, retried) rather than raising."""
+"""Regression tests for finding #11: setup paths are transactional (a mid-setup transport failure leaves
+no unrepairable half-state), and subscribe-path listener failures follow the reference repair model
+(logged, retried) rather than raising."""
 
 from __future__ import annotations
 
@@ -27,15 +27,14 @@ async def test_node_init_rolls_back_broadcast_writer_on_listen_failure() -> None
     tr.fail_subject_listen.add(_broadcast_sid())
     with pytest.raises(RuntimeError, match="Simulated subject_listen"):
         new_node(tr, home="n")
-    assert tr.writers == {}  # The broadcast writer was rolled back, so a retry sees no duplicate.
+    assert tr.writers == {}  # Rolled back, so a retry sees no duplicate.
     assert tr.subject_handlers == {}
 
 
 async def test_node_init_rolls_back_broadcast_handles_on_unicast_listen_failure() -> None:
-    """unicast_listen is the LAST fallible acquisition in the constructor. Both built-in transports
-    implement it as a plain assignment, but a third-party one may not -- and nobody closes the transport
-    when the constructor raises, so an unguarded failure here strands the broadcast writer and listener
-    acquired just above it."""
+    """unicast_listen is the LAST fallible acquisition in the constructor -- a plain assignment in both
+    built-in transports but not necessarily in a third-party one -- and nobody closes the transport when
+    the constructor raises, so an unguarded failure here strands the broadcast writer and listener."""
     tr = MockTransport(node_id=1, network=MockNetwork())
 
     def failing_unicast_listen(_handler):  # type: ignore[no-untyped-def]
@@ -44,8 +43,8 @@ async def test_node_init_rolls_back_broadcast_handles_on_unicast_listen_failure(
     tr.unicast_listen = failing_unicast_listen  # type: ignore[method-assign]
     with pytest.raises(RuntimeError, match="Simulated unicast_listen"):
         new_node(tr, home="n")
-    assert tr.writers == {}  # Broadcast writer rolled back...
-    assert tr.subject_handlers == {}  # ...and so was the broadcast listener.
+    assert tr.writers == {}
+    assert tr.subject_handlers == {}
 
 
 async def test_advertise_rolls_back_pub_count_on_writer_failure() -> None:
@@ -63,7 +62,7 @@ async def test_advertise_rolls_back_pub_count_on_writer_failure() -> None:
     with pytest.raises(RuntimeError, match="Simulated subject_advertise"):
         node.advertise("/topic_a")
 
-    topic = node.topics_by_name["topic_a"]  # The topic exists but as an ordinary implicit topic.
+    topic = node.topics_by_name["topic_a"]  # Survives, but as an ordinary implicit topic.
     assert topic.pub_count == 0
     assert topic.is_implicit
     assert topic.pub_writer is None
@@ -88,7 +87,7 @@ async def test_subscribe_listener_failure_is_repaired_not_raised() -> None:
     tr.fail_subject_listen.add(topic_sid)
     sub = node.subscribe("/topic_v")  # Repair model: subscribe does not raise on listener failure.
     topic = node.topics_by_name["topic_v"]
-    assert topic.sub_listener is None  # Listener not yet acquired.
+    assert topic.sub_listener is None
     creations_before = tr.subject_listener_creations.get(topic_sid, 0)
 
     tr.fail_subject_listen.clear()  # The next sync opportunity repairs it.
@@ -112,7 +111,7 @@ async def test_topic_ensure_rolls_back_on_gossip_shard_failure() -> None:
     with pytest.raises(RuntimeError, match="Simulated subject_advertise"):
         node.advertise("/topic_s")
 
-    assert "topic_s" not in node.topics_by_name  # Fully rolled back, both registries clean.
+    assert "topic_s" not in node.topics_by_name  # Both registries rolled back.
     assert rapidhash("topic_s") not in node.topics_by_hash
 
     tr.fail_subject_advertise.clear()  # Retry succeeds.
