@@ -473,17 +473,20 @@ class _UDPSubjectWriter(SubjectWriter):
         self._transfer_id += 1
         _logger.debug("Subject tx start sid=%d tid=%d bytes=%d", self._subject_id, transfer_id, len(message))
 
-        errors: list[Exception] = []
-        success_count = 0
-        for i, iface in enumerate(self._transport.interfaces):
-            mtu = iface.mtu_cyphal
-            frames = _segment_transfer(priority, transfer_id, self._transport.uid, message, mtu)
-            try:
-                for frame in frames:
-                    await self._transport.async_sendto(self._transport.tx_socks[i], frame, (mcast_ip, port), deadline)
-                success_count += 1
-            except (OSError, SendError) as e:
-                errors.append(e)
+        addr = (mcast_ip, port)
+        # Snapshot (iface, sock, lock) elements before the first await so a concurrent close() clearing
+        # the socket lists cannot desync indices; a send racing close simply hits a closed socket and
+        # aggregates as a per-interface error rather than raising IndexError.
+        targets = list(zip(self._transport.interfaces, self._transport.tx_socks, self._transport.tx_locks))
+        coros = []
+        for iface, sock, lock in targets:
+            frames = _segment_transfer(priority, transfer_id, self._transport.uid, message, iface.mtu_cyphal)
+            coros.append(self._transport.send_on_iface(sock, lock, frames, addr, deadline))
+        # Send to all interfaces concurrently so a congested interface cannot starve a healthy one of the
+        # shared deadline (each interface's frames still go out in order under its own socket lock).
+        results = await asyncio.gather(*coros)
+        errors = [r for r in results if r is not None]
+        success_count = len(results) - len(errors)
 
         if errors and success_count == 0:
             _logger.error("Send failed on all interfaces for subject %d", self._subject_id)
@@ -630,10 +633,15 @@ class _UDPTransportImpl(UDPTransport):
             raise ValueError("At least one network interface is required")
 
         self._tx_socks: list[socket.socket] = []
+        # One lock per TX socket. asyncio's selector loop allows only one writer callback per fd, so
+        # concurrent senders on the same socket (subject writers, unicast, detached ACK sends) must be
+        # serialized; without it a displaced sock_sendto can hang until its deadline.
+        self._tx_locks: list[asyncio.Lock] = []
         self._self_endpoints: set[tuple[str, int]] = set()
         for iface in self._interfaces:
             sock = self._create_tx_socket(iface)
             self._tx_socks.append(sock)
+            self._tx_locks.append(asyncio.Lock())
             self._self_endpoints.add(sock.getsockname()[:2])
 
         self._subject_handlers: dict[int, Callable[[TransportArrival], None]] = {}
@@ -715,6 +723,30 @@ class _UDPTransportImpl(UDPTransport):
     def tx_socks(self) -> list[socket.socket]:
         return self._tx_socks
 
+    @property
+    def tx_locks(self) -> list[asyncio.Lock]:
+        return self._tx_locks
+
+    async def send_on_iface(
+        self,
+        sock: socket.socket,
+        lock: asyncio.Lock,
+        frames: list[bytes],
+        addr: tuple[str, int],
+        deadline: Instant,
+    ) -> Exception | None:
+        """Send every frame of one transfer on one interface, serialized on that socket's lock. Returns
+        the failure (never raised) so the caller can aggregate per-interface results, or None on success."""
+        async with lock:
+            if self._closed:
+                return ClosedError("Transport closed")
+            try:
+                for frame in frames:
+                    await self.async_sendto(sock, frame, addr, deadline)
+                return None
+            except (OSError, SendError) as e:
+                return e
+
     def __repr__(self) -> str:
         addrs = ", ".join(str(i.address) for i in self._interfaces)
         return f"UDPTransport(uid=0x{self._uid:016x}, interfaces=[{addrs}], modulus={self._subject_id_modulus_val})"
@@ -782,26 +814,27 @@ class _UDPTransportImpl(UDPTransport):
         self._next_unicast_transfer_id += 1
         _logger.debug("Unicast tx start rid=%016x tid=%d bytes=%d", remote_id, transfer_id, len(message))
 
-        errors: list[Exception] = []
-        success_count = 0
-        for i, iface in enumerate(self._interfaces):
+        # Snapshot targets (only interfaces with a known endpoint) before the first await, then send
+        # concurrently, as with the subject writer.
+        coros = []
+        for i, (iface, sock, lock) in enumerate(zip(self._interfaces, self._tx_socks, self._tx_locks)):
             ep = self._remote_endpoints.get((remote_id, i))
             if ep is None:
                 _logger.debug("Unicast tx skip rid=%016x iface=%d reason=no-endpoint", remote_id, i)
                 continue
             frames = _segment_transfer(priority, transfer_id, self._uid, message, iface.mtu_cyphal)
-            try:
-                for frame in frames:
-                    await self.async_sendto(self._tx_socks[i], frame, ep, deadline)
-                success_count += 1
-            except (OSError, SendError) as e:
-                errors.append(e)
+            coros.append(self.send_on_iface(sock, lock, frames, ep, deadline))
 
-        if success_count == 0:
-            if errors:
-                raise SendError("Unicast failed on all interfaces") from errors[0]
+        if not coros:
             _logger.warning("No endpoint known for remote_id=0x%016x", remote_id)
             raise SendError("No endpoint known for remote_id")
+
+        results = await asyncio.gather(*coros)
+        errors = [r for r in results if r is not None]
+        success_count = len(results) - len(errors)
+
+        if success_count == 0:
+            raise SendError("Unicast failed on all interfaces") from errors[0]
         if errors:
             # Redundant transport: delivery via at least one interface is a success. Warn but do not
             # raise, otherwise a delivered transfer would be reported as failed and retried (mirrors
@@ -831,6 +864,7 @@ class _UDPTransportImpl(UDPTransport):
             sock.close()
         self._mcast_socks.clear()
         self._tx_socks.clear()
+        self._tx_locks.clear()
         self._subject_handlers.clear()
         self._subject_writers.clear()
         self._reassemblers.clear()

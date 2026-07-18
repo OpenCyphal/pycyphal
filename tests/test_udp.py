@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
 import socket
 import struct
@@ -1193,6 +1194,90 @@ async def test_subject_send_succeeds_when_one_redundant_interface_fails() -> Non
                 await writer_all(Instant.now() + 2.0, Priority.NOMINAL, b"nope")
     finally:
         pub.close()
+
+
+@pytest.mark.asyncio
+async def test_redundant_interfaces_send_concurrently() -> None:
+    """A congested interface must not starve a healthy one of the shared deadline: interfaces are sent
+    to concurrently, so one transfer's wall-clock is ~max(per-iface), not the sum (finding #6)."""
+    iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
+    pub = UDPTransport.new(interfaces=[iface, iface, iface])
+    assert isinstance(pub, _UDPTransportImpl)
+    try:
+
+        async def slow_sendto(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
+            await asyncio.sleep(0.2)
+
+        with patch.object(pub, "async_sendto", slow_sendto):
+            writer = pub.subject_advertise(10)
+            start = asyncio.get_running_loop().time()
+            await writer(Instant.now() + 5.0, Priority.NOMINAL, b"x")
+            elapsed = asyncio.get_running_loop().time() - start
+        assert elapsed < 0.4, f"serial send would take >=0.6s across 3 interfaces, took {elapsed:.3f}s"
+    finally:
+        pub.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_sends_on_shared_socket_are_serialized() -> None:
+    """Two transfers racing on the same per-interface socket must be serialized by its lock, so they
+    never overlap inside sock_sendto (the selector loop allows only one writer per fd) (finding #7)."""
+    iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
+    pub = UDPTransport.new(interfaces=[iface])
+    assert isinstance(pub, _UDPTransportImpl)
+    try:
+        in_flight: set[int] = set()
+        overlap_detected = False
+
+        async def tracking_sendto(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
+            nonlocal overlap_detected
+            fd = sock.fileno()
+            if fd in in_flight:
+                overlap_detected = True
+            in_flight.add(fd)
+            await asyncio.sleep(0.02)
+            in_flight.discard(fd)
+
+        with patch.object(pub, "async_sendto", tracking_sendto):
+            w1 = pub.subject_advertise(10)
+            w2 = pub.subject_advertise(11)
+            await asyncio.gather(
+                w1(Instant.now() + 5.0, Priority.NOMINAL, b"a"),
+                w2(Instant.now() + 5.0, Priority.NOMINAL, b"b"),
+                w1(Instant.now() + 5.0, Priority.NOMINAL, b"c"),
+            )
+        assert not overlap_detected
+    finally:
+        pub.close()
+
+
+@pytest.mark.asyncio
+async def test_close_during_send_raises_send_error_not_index_error() -> None:
+    """A send suspended when close() empties the socket lists must surface a clean SendError, never an
+    IndexError (finding #9). The snapshotted socket is closed by then, so the resumed send fails on the
+    closed fd and is aggregated, exactly as a real EBADF would be."""
+    iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
+    pub = UDPTransport.new(interfaces=[iface])
+    assert isinstance(pub, _UDPTransportImpl)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def blocking_sendto(sock, data, addr, deadline):  # type: ignore[no-untyped-def]
+        started.set()
+        await release.wait()
+        raise OSError(errno.EBADF, "Bad file descriptor")  # What the real closed socket raises.
+
+    with patch.object(pub, "async_sendto", blocking_sendto):
+        writer = pub.subject_advertise(10)
+        send_task = asyncio.create_task(writer(Instant.now() + 5.0, Priority.NOMINAL, b"payload"))
+        await started.wait()  # The send is parked inside _send_on_iface.
+        pub.close()  # Clears _tx_socks/_tx_locks; the snapshot keeps the send index-safe.
+        release.set()
+        with pytest.raises(SendError) as excinfo:
+            await send_task
+    cause = excinfo.value.__cause__
+    causes = list(cause.exceptions) if isinstance(cause, BaseExceptionGroup) else [cause]
+    assert not any(isinstance(c, IndexError) for c in causes)
 
 
 def test_interface_rejects_subminimum_mtu() -> None:
