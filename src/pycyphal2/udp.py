@@ -684,27 +684,31 @@ class _UDPTransportImpl(UDPTransport):
     def _create_mcast_socket(subject_id: int, iface: Interface) -> socket.socket:
         mcast_ip, port = _make_subject_endpoint(subject_id)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setblocking(False)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, "SO_REUSEPORT"):
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        # Bind to multicast group address on Linux; INADDR_ANY on Windows
-        if sys.platform == "win32":
-            sock.bind(("", port))
-        else:
-            sock.bind((mcast_ip, port))
-        mreq = socket.inet_aton(mcast_ip) + socket.inet_aton(str(iface.address))
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-        # REFERENCE PARITY: the reference filters every received datagram by its ingress interface index
-        # via recvmsg+IP_PKTINFO (udp_wrapper.c). asyncio offers no sock_recvmsg, so on Linux the same
-        # delivery set is obtained at the kernel level with IP_MULTICAST_ALL=0: with it, this socket only
-        # receives datagrams matching its own (group, interface) membership above, instead of the default
-        # any-interface delivery that would mislearn reverse routes on multi-homed hosts. macOS/BSD scope
-        # multicast delivery per membership natively. On Windows the socket binds INADDR_ANY and Winsock
-        # may deliver cross-interface traffic; multi-homed Windows hosts should configure at most one
-        # transport interface per multicast-reachable network.
-        if sys.platform == "linux":
-            sock.setsockopt(socket.IPPROTO_IP, _IP_MULTICAST_ALL_LINUX, 0)
+        try:
+            sock.setblocking(False)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if hasattr(socket, "SO_REUSEPORT"):
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            # Bind to multicast group address on Linux; INADDR_ANY on Windows
+            if sys.platform == "win32":
+                sock.bind(("", port))
+            else:
+                sock.bind((mcast_ip, port))
+            mreq = socket.inet_aton(mcast_ip) + socket.inet_aton(str(iface.address))
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+            # REFERENCE PARITY: the reference filters every received datagram by its ingress interface index
+            # via recvmsg+IP_PKTINFO (udp_wrapper.c). asyncio offers no sock_recvmsg, so on Linux the same
+            # delivery set is obtained at the kernel level with IP_MULTICAST_ALL=0: with it, this socket only
+            # receives datagrams matching its own (group, interface) membership above, instead of the default
+            # any-interface delivery that would mislearn reverse routes on multi-homed hosts. macOS/BSD scope
+            # multicast delivery per membership natively. On Windows the socket binds INADDR_ANY and Winsock
+            # may deliver cross-interface traffic; multi-homed Windows hosts should configure at most one
+            # transport interface per multicast-reachable network.
+            if sys.platform == "linux":
+                sock.setsockopt(socket.IPPROTO_IP, _IP_MULTICAST_ALL_LINUX, 0)
+        except BaseException:
+            sock.close()  # Do not leak the fd if bind/join fails.
+            raise
         _logger.info("Multicast socket for subject %d on %s (%s:%d)", subject_id, iface.address, mcast_ip, port)
         return sock
 
@@ -799,12 +803,18 @@ class _UDPTransportImpl(UDPTransport):
             raise ValueError(f"Subject {subject_id} already has an active listener")
         _logger.info("Subscribing to subject %d", subject_id)
         self._subject_handlers[subject_id] = handler
-        for i, iface in enumerate(self._interfaces):
-            key = (subject_id, i)
-            sock = self._create_mcast_socket(subject_id, iface)
-            self._mcast_socks[key] = sock
-            task = self._loop.create_task(self._mcast_rx_loop(sock, subject_id, i))
-            self._mcast_rx_tasks[key] = task
+        try:
+            for i, iface in enumerate(self._interfaces):
+                key = (subject_id, i)
+                sock = self._create_mcast_socket(subject_id, iface)
+                self._mcast_socks[key] = sock
+                task = self._loop.create_task(self._mcast_rx_loop(sock, subject_id, i))
+                self._mcast_rx_tasks[key] = task
+        except BaseException:
+            # Roll back the handler and every per-interface socket/task created so far, so a later
+            # subject_listen for this subject is not blocked by the duplicate-handler check above.
+            self.remove_subject_listener(subject_id, handler)
+            raise
         return _UDPSubjectListener(self, subject_id, handler)
 
     def subject_advertise(self, subject_id: int) -> SubjectWriter:

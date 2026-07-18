@@ -1306,6 +1306,37 @@ async def test_close_during_send_raises_send_error_not_index_error() -> None:
     assert not any(isinstance(c, IndexError) for c in causes)
 
 
+@pytest.mark.asyncio
+async def test_subject_listen_rolls_back_partial_interface_setup() -> None:
+    """A per-interface socket failure mid-subject_listen must roll back the handler and every socket/task
+    created so far, so a retry is not blocked by the duplicate-listener check (finding #11)."""
+    iface = Interface(address=IPv4Address("127.0.0.1"), mtu_link=1500)
+    t = UDPTransport.new(interfaces=[iface, iface])
+    assert isinstance(t, _UDPTransportImpl)
+    try:
+        real_create = t._create_mcast_socket
+        calls = {"n": 0}
+
+        def flaky_create(subject_id, iface):  # type: ignore[no-untyped-def]
+            calls["n"] += 1
+            if calls["n"] == 2:  # Fail on the second interface, after the first has been set up.
+                raise OSError("second interface bind failed")
+            return real_create(subject_id, iface)
+
+        with patch.object(t, "_create_mcast_socket", flaky_create):
+            with pytest.raises(OSError):
+                t.subject_listen(42, lambda _a: None)
+
+        assert 42 not in t._subject_handlers
+        assert not any(sid == 42 for (sid, _i) in t._mcast_socks)
+        assert not any(sid == 42 for (sid, _i) in t._mcast_rx_tasks)
+
+        listener = t.subject_listen(42, lambda _a: None)  # Retry succeeds.
+        listener.close()
+    finally:
+        t.close()
+
+
 def test_interface_rejects_subminimum_mtu() -> None:
     """A link MTU below the Cyphal minimum is rejected at construction, not via a strippable assert."""
     with pytest.raises(ValueError, match="mtu_link must be"):

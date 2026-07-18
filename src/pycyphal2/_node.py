@@ -472,7 +472,14 @@ class TopicImpl(Topic):
     def ensure_listener(self) -> None:
         if self.sub_listener is None and self.couplings:
             sid = self.subject_id(self._node.transport.subject_id_modulus)
-            self.sub_listener = self._node.acquire_subject_listener(self, sid)
+            # Repair model (cy.c topic_sync_subject_reader): a listener acquisition failure is logged and
+            # left for the next opportunity (topic sync, periodic gossip) to retry, rather than raising and
+            # tearing down a partly-built subscription. Keeps sync_listener()/sync_implicit() infallible.
+            try:
+                self.sub_listener = self._node.acquire_subject_listener(self, sid)
+            except Exception as ex:
+                _logger.error("Listener acquisition failed for '%s' sid=%d; will retry: %s", self._name, sid, ex)
+                return
             _logger.info("Listener acquired for '%s' sid=%d", self._name, sid)
 
     def sync_listener(self) -> None:
@@ -554,7 +561,11 @@ class NodeImpl(Node):
         def broadcast_handler(arrival: TransportArrival) -> None:
             self.on_subject_arrival(self.broadcast_subject_id, arrival)
 
-        self.broadcast_listener = transport.subject_listen(self.broadcast_subject_id, broadcast_handler)
+        try:
+            self.broadcast_listener = transport.subject_listen(self.broadcast_subject_id, broadcast_handler)
+        except BaseException:
+            self.broadcast_writer.close()  # Roll back the writer so a retry does not see a duplicate.
+            raise
 
         self.gossip_shard_writers: dict[int, SubjectWriter] = {}
         self.gossip_shard_listeners: dict[int, Closable] = {}
@@ -627,9 +638,11 @@ class NodeImpl(Node):
         if not verbatim:
             raise ValueError("Cannot advertise on a pattern name")
         topic = self.topic_ensure(resolved, pin)
+        # Acquire the fallible writer before mutating publish state, so a failure leaves the topic as an
+        # ordinary implicit topic (GC'd) rather than a phantom publisher with no writer.
+        topic.ensure_writer()
         topic.pub_count += 1
         topic.sync_implicit()
-        topic.ensure_writer()
         _logger.info(
             "Advertise '%s' -> '%s' sid=%d",
             name,
@@ -646,24 +659,26 @@ class NodeImpl(Node):
         if pin is not None and not verbatim:
             raise ValueError("Pattern names cannot be pinned")
 
-        if verbatim:
-            root = self.sub_roots_verbatim.get(resolved)
-            if root is None:
-                root = SubscriberRoot(name=resolved, is_pattern=False)
-                self.sub_roots_verbatim[resolved] = root
-        else:
-            root = self.sub_roots_pattern.get(resolved)
-            if root is None:
-                root = SubscriberRoot(name=resolved, is_pattern=True, needs_scouting=True)
-                self.sub_roots_pattern[resolved] = root
-
+        # Acquire the two fallible resources first — the subscriber (reordering-window validation) and, for a
+        # verbatim name, its topic (transactional) — before committing any registry state, so a failure
+        # leaves no half-registered root or subscriber behind.
+        registry = self.sub_roots_verbatim if verbatim else self.sub_roots_pattern
+        root = registry.get(resolved)
+        new_root = root is None
+        if root is None:
+            root = SubscriberRoot(name=resolved, is_pattern=not verbatim, needs_scouting=not verbatim)
         subscriber = SubscriberImpl(self, root, resolved, verbatim, reordering_window)
+        verbatim_topic = self.topic_ensure(resolved, pin) if verbatim else None
+
+        # Commit — everything below is infallible.
+        if new_root:
+            registry[resolved] = root
         root.subscribers.append(subscriber)
 
         if verbatim:
-            topic = self.topic_ensure(resolved, pin)
-            self.couple_topic_root(topic, root)
-            topic.sync_implicit()
+            assert verbatim_topic is not None
+            self.couple_topic_root(verbatim_topic, root)
+            verbatim_topic.sync_implicit()
         else:
             for topic in list(self.topics_by_name.values()):
                 self.couple_topic_root(topic, root)
@@ -713,12 +728,18 @@ class NodeImpl(Node):
         topic = TopicImpl(self, name, evictions, now)
         self.topics_by_name[name] = topic
         self.topics_by_hash[topic.hash] = topic
-        self.ensure_gossip_shard(self.gossip_shard_subject_id(topic.hash))
-        self.touch_implicit_topic(topic)
-        self.topic_allocate(topic, evictions, now)
-        for root in self.sub_roots_pattern.values():
-            self.couple_topic_root(topic, root)
-        topic.sync_listener()
+        # Commit the index first so the rollback primitive (destroy_topic) can find and undo the topic;
+        # the fallible tail (gossip-shard acquisition) rolls the whole topic back on failure.
+        try:
+            self.ensure_gossip_shard(self.gossip_shard_subject_id(topic.hash))
+            self.touch_implicit_topic(topic)
+            self.topic_allocate(topic, evictions, now)
+            for root in self.sub_roots_pattern.values():
+                self.couple_topic_root(topic, root)
+            topic.sync_listener()
+        except BaseException:
+            self._rollback_topic(name)
+            raise
         self.notify_implicit_gc()
         _logger.info(
             "Topic created '%s' hash=%016x sid=%d",
@@ -727,6 +748,13 @@ class NodeImpl(Node):
             topic.subject_id(self.transport.subject_id_modulus),
         )
         return topic
+
+    def _rollback_topic(self, name: str) -> None:
+        """Undo a partially-built topic without masking the exception that triggered the rollback."""
+        try:
+            self.destroy_topic(name)
+        except Exception:
+            _logger.exception("Rollback of partially-built topic '%s' failed", name)
 
     def topic_allocate(self, topic: TopicImpl, new_evictions: int, now: float) -> None:
         """Iterative subject-ID allocation with collision resolution. Mirrors topic_allocate() in cy.c."""
@@ -867,7 +895,12 @@ class NodeImpl(Node):
             def handler(arrival: TransportArrival) -> None:
                 self.on_subject_arrival(shard_sid, arrival)
 
-            self.gossip_shard_listeners[shard_sid] = self.transport.subject_listen(shard_sid, handler)
+            try:
+                self.gossip_shard_listeners[shard_sid] = self.transport.subject_listen(shard_sid, handler)
+            except BaseException:
+                self.gossip_shard_writers.pop(shard_sid, None)  # Roll back the just-created writer.
+                writer.close()
+                raise
             _logger.debug("Gossip shard writer/listener for sid=%d", shard_sid)
         return writer
 
@@ -977,6 +1010,9 @@ class NodeImpl(Node):
         await self.send_gossip(topic, broadcast=True)
 
     async def _gossip_event_periodic(self, topic: TopicImpl) -> None:
+        # Retry a previously-failed listener acquisition on the gossip cadence (cy.c:1819), so a verbatim
+        # subscription whose listener failed once eventually recovers.
+        topic.sync_listener()
         self._reschedule_gossip_periodic(topic, suppressed=False)
         broadcast = (topic.gossip_counter < GOSSIP_BROADCAST_RATIO) or (
             (topic.gossip_counter % GOSSIP_BROADCAST_RATIO) == 0
@@ -1402,12 +1438,19 @@ class NodeImpl(Node):
             topic.ts_origin = now - lage_to_seconds(lage)
             self.topics_by_name[name] = topic
             self.topics_by_hash[topic_hash] = topic
-            self.ensure_gossip_shard(self.gossip_shard_subject_id(topic.hash))
-            self.touch_implicit_topic(topic)
-            self.topic_allocate(topic, evictions, now)
-            for root in matches:
-                self.couple_topic_root(topic, root)
-            topic.sync_listener()
+            # This is a wire-driven path: it must never raise (untrusted input). A transport failure mid-setup
+            # rolls the topic back and drops the gossip; a later gossip retries.
+            try:
+                self.ensure_gossip_shard(self.gossip_shard_subject_id(topic.hash))
+                self.touch_implicit_topic(topic)
+                self.topic_allocate(topic, evictions, now)
+                for root in matches:
+                    self.couple_topic_root(topic, root)
+                topic.sync_listener()
+            except Exception as ex:
+                self._rollback_topic(name)
+                _logger.warning("Implicit topic '%s' setup failed, dropped: %s", name, ex)
+                return None
             self.notify_implicit_gc()
             _logger.info("Implicit topic '%s' created from gossip", name)
             return topic
