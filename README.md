@@ -25,3 +25,5 @@ existing applications leveraging `pycyphal` should upgrade to the new API of `py
 📚 **Read the docs** at <https://opencyphal.github.io/pycyphal>.
 
 💡 **Runnable examples** at `examples/`.
+
+🛠️ For monitoring, diagnostic, and debugging of Cyphal networks use the [Cynic CLI tool](https://github.com/OpenCyphal-Garage/cynic)
