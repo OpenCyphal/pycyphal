@@ -99,6 +99,10 @@ class WebSerialSLCANInterface(Interface):
         if dropped > 0:
             _logger.debug("WebSerial SLCAN purge iface=%s dropped=%d", self._name, dropped)
 
+    async def wait_ready(self) -> None:
+        """Wait until the SLCAN adapter has been configured and opened."""
+        await self._ensure_initialized()
+
     async def receive(self) -> TimestampedFrame:
         self._raise_if_closed()
         if self._rx_task is None:
