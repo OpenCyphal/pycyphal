@@ -86,6 +86,7 @@ async def _start(
     for i in range(len(encode_init_sequence(bitrate))):
         await _wait_for(_writes_reach(port, i + 2))  # writes: [close, cmd_0, ..., cmd_i]
         port.feed(_ACK)
+    await iface.wait_ready()
     return iface
 
 
